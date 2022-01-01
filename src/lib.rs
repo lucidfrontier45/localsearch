@@ -18,5 +18,5 @@ pub trait OptModel {
     fn evaluate_state(&self, state: &Self::StateType) -> f64;
 }
 
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
