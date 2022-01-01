@@ -1,3 +1,5 @@
+mod hill_climbing;
+
 use crate::OptModel;
 
 pub trait Optimizer {
@@ -15,3 +17,5 @@ pub trait Optimizer {
         ModelType: OptModel<StateType = StateType> + Sync + Send,
         StateType: Clone + Sync + Send;
 }
+
+pub use hill_climbing::HillClimbingOptimizer;
