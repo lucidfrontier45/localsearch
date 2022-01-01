@@ -1,5 +1,7 @@
 use std::error::Error;
 
+pub const VERSION: &str = "0.1.0";
+
 pub mod optim;
 
 pub trait OptModel {
