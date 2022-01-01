@@ -1,8 +1,24 @@
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
+use std::error::Error;
+
+pub const VERSION: &str = "0.1.0";
+
+pub mod optim;
+
+pub trait OptModel {
+    type StateType;
+    type TransitionType;
+
+    fn generate_random_state<R: rand::Rng>(
+        &self,
+        rng: &mut R,
+    ) -> Result<Self::StateType, Box<dyn Error>>;
+    fn generate_trial_state<R: rand::Rng>(
+        &self,
+        current_state: &Self::StateType,
+        rng: &mut R,
+    ) -> (Self::StateType, Self::TransitionType);
+    fn evaluate_state(&self, state: &Self::StateType) -> f64;
 }
+
+#[cfg(test)]
+mod tests;
