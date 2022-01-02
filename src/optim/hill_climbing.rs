@@ -5,14 +5,14 @@ use crate::OptModel;
 
 use super::Optimizer;
 
-fn optimize<ModelType, StateType>(
+fn optimize<ModelType, StateType, TransitionType>(
     model: &ModelType,
     initial_state: Option<&StateType>,
     n_iter: usize,
     patience: usize,
 ) -> (StateType, f64)
 where
-    ModelType: OptModel<StateType = StateType>,
+    ModelType: OptModel<StateType, TransitionType>,
     StateType: Clone,
 {
     let mut rng = rand::thread_rng();
@@ -52,27 +52,42 @@ impl HillClimbingOptimizer {
     }
 }
 
-impl Optimizer for HillClimbingOptimizer {
-    type AdditionalArgType = ();
-    type AdditionalRetType = ();
-
-    fn optimize<ModelType, StateType>(
+impl<S, T, M> Optimizer<S, T, M, (), ()> for HillClimbingOptimizer
+where
+    M: OptModel<S, T> + Sync + Send,
+    S: Clone + Sync + Send,
+{
+    fn optimize(
         &self,
-        model: &ModelType,
-        initial_state: Option<&StateType>,
+        model: &M,
+        initial_state: Option<&S>,
         n_iter: usize,
-        _arg: &Self::AdditionalArgType,
-    ) -> (StateType, f64, Self::AdditionalRetType)
-    where
-        ModelType: OptModel<StateType = StateType> + Sync + Send,
-        StateType: Clone + Sync + Send,
-    {
+        _arg: (),
+    ) -> (S, f64, ()) {
         let (final_state, final_score) = (0..self.n_trials)
             .into_par_iter()
             .map(|_| optimize(model, initial_state, n_iter, self.patience))
             .min_by_key(|(_, score)| NotNan::new(*score).unwrap())
             .unwrap();
-
         (final_state, final_score, ())
     }
+    // fn optimize<ModelType, StateType>(
+    //     &self,
+    //     model: &ModelType,
+    //     initial_state: Option<&StateType>,
+    //     n_iter: usize,
+    //     _arg: &Self::AdditionalArgType,
+    // ) -> (StateType, f64, Self::AdditionalRetType)
+    // where
+    //     ModelType: OptModel<StateType> + Sync + Send,
+    //     StateType: Clone + Sync + Send,
+    // {
+    //     let (final_state, final_score) = (0..self.n_trials)
+    //         .into_par_iter()
+    //         .map(|_| optimize(model, initial_state, n_iter, self.patience))
+    //         .min_by_key(|(_, score)| NotNan::new(*score).unwrap())
+    //         .unwrap();
+
+    //     (final_state, final_score, ())
+    // }
 }
