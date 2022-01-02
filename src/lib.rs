@@ -3,6 +3,7 @@ use std::error::Error;
 pub const VERSION: &str = "0.1.0";
 
 pub mod optim;
+pub mod utils;
 
 pub trait OptModel<StateType, TransitionType> {
     fn generate_random_state<R: rand::Rng>(&self, rng: &mut R)

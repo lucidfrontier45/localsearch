@@ -1,7 +1,8 @@
 use std::error::Error;
 
 use metaheuristics_rs::{
-    optim::{HillClimbingOptimizer, Optimizer},
+    optim::{HillClimbingOptimizer, Optimizer, TabuList, TabuSearchOptimizer},
+    utils::RingBuffer,
     OptModel,
 };
 use rand::{self, distributions::Uniform, prelude::Distribution};
@@ -53,9 +54,44 @@ impl OptModel<StateType, TransitionType> for QuadraticModel {
     }
 }
 
+#[derive(Debug)]
+struct DequeTabuList {
+    buff: RingBuffer<TransitionType>,
+}
+
+impl DequeTabuList {
+    fn new(size: usize) -> Self {
+        let buff = RingBuffer::new(size);
+        Self { buff }
+    }
+}
+
+impl TabuList for DequeTabuList {
+    type Item = TransitionType;
+
+    fn contains(&self, item: &Self::Item) -> bool {
+        let &(k1, _, x) = item;
+        self.buff
+            .iter()
+            .any(|&(k2, y, _)| (k1 == k2) && (x - y).abs() < 0.0001)
+    }
+
+    fn append(&mut self, item: Self::Item) {
+        self.buff.append(item);
+    }
+}
+
 fn main() {
     let model = QuadraticModel::new(3, vec![2.0, 0.0, -3.5], (-10.0, 10.0));
+
+    println!("running Hill Climbing optimizer");
     let opt = HillClimbingOptimizer::new(1000, 10);
     let res = opt.optimize(&model, None, 10000, ());
     dbg!(res);
+
+    println!("running Tabu Search optimizer");
+    let opt = TabuSearchOptimizer::new(1000, 25);
+    let tabu_list = DequeTabuList::new(10);
+    let res = opt.optimize(&model, None, 10000, tabu_list);
+    dbg!((res.0, res.1));
 }

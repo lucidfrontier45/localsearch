@@ -53,3 +53,4 @@ impl OptModel<StateType, TransitionType> for QuadraticModel {
 
 #[cfg(test)]
 mod test_hill_climbing;
+mod test_tabu_search;
