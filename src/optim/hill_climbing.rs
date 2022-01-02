@@ -43,12 +43,15 @@ where
 #[derive(Clone, Copy)]
 pub struct HillClimbingOptimizer {
     patience: usize,
-    n_trials: usize,
+    n_restarts: usize,
 }
 
 impl HillClimbingOptimizer {
-    pub fn new(patience: usize, n_trials: usize) -> Self {
-        Self { patience, n_trials }
+    pub fn new(patience: usize, n_restarts: usize) -> Self {
+        Self {
+            patience,
+            n_restarts,
+        }
     }
 }
 
@@ -64,7 +67,7 @@ where
         n_iter: usize,
         _arg: (),
     ) -> (S, f64, ()) {
-        let (final_state, final_score) = (0..self.n_trials)
+        let (final_state, final_score) = (0..self.n_restarts)
             .into_par_iter()
             .map(|_| optimize(model, initial_state, n_iter, self.patience))
             .min_by_key(|(_, score)| NotNan::new(*score).unwrap())

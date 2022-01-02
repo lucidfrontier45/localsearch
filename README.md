@@ -4,6 +4,7 @@ Rust library for Metaheuristic optimization
 # Implemented Algorithms
 
 1. Hill Climbing with multi-restarts, parallelized by Rayon.
+2. Tabu Search, parallelized by Rayon.
 
 # How to use
 
