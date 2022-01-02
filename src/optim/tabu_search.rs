@@ -23,14 +23,21 @@ impl TabuSearchOptimizer {
     }
 }
 
-impl<S, T, M, L> Optimizer<S, T, M, L, L> for TabuSearchOptimizer
+impl<S, T, M, L, F> Optimizer<S, T, M, (L, Option<&F>), L> for TabuSearchOptimizer
 where
     S: Clone + Sync + Send,
     T: Clone + Sync + Send,
     M: OptModel<S, T> + Sync + Send,
     L: TabuList<Item = T>,
+    F: Fn(usize, Rc<RefCell<S>>, f64),
 {
-    fn optimize(&self, model: &M, initial_state: Option<&S>, n_iter: usize, arg: L) -> (S, f64, L) {
+    fn optimize(
+        &self,
+        model: &M,
+        initial_state: Option<&S>,
+        n_iter: usize,
+        arg: (L, Option<&F>),
+    ) -> (S, f64, L) {
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {
             s.clone()
@@ -40,10 +47,10 @@ where
         let current_score = model.evaluate_state(&current_state);
         let best_state = Rc::new(RefCell::new(current_state.clone()));
         let mut best_score = current_score;
-        let mut tabu_list = arg;
+        let (mut tabu_list, callback) = arg;
         let mut counter = 0;
 
-        for _ in 0..n_iter {
+        for it in 0..n_iter {
             let res = (0..self.n_trials)
                 .into_par_iter()
                 .map(|_| {
@@ -69,6 +76,10 @@ where
             counter += 1;
             if counter == self.patience {
                 break;
+            }
+
+            if let Some(f) = callback {
+                f(it, best_state.clone(), best_score);
             }
         }
 

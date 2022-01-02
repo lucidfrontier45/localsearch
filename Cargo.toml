@@ -13,3 +13,4 @@ rayon = "1.5.1"
 
 [dev-dependencies]
 approx = "0.5"
+indicatif = "0.16"
