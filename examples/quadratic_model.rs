@@ -21,23 +21,23 @@ impl QuadraticModel {
     }
 }
 
-impl OptModel for QuadraticModel {
-    type StateType = Vec<f64>;
-    type TransitionType = (usize, f64, f64);
+type StateType = Vec<f64>;
+type TransitionType = (usize, f64, f64);
 
+impl OptModel<StateType, TransitionType> for QuadraticModel {
     fn generate_random_state<R: rand::Rng>(
         &self,
         rng: &mut R,
-    ) -> Result<Self::StateType, Box<dyn Error>> {
+    ) -> Result<StateType, Box<dyn Error>> {
         let state = self.dist.sample_iter(rng).take(self.k).collect::<Vec<_>>();
         Ok(state)
     }
 
     fn generate_trial_state<R: rand::Rng>(
         &self,
-        current_state: &Self::StateType,
+        current_state: &StateType,
         rng: &mut R,
-    ) -> (Self::StateType, Self::TransitionType) {
+    ) -> (StateType, TransitionType) {
         let k = rng.gen_range(0..self.k);
         let v = self.dist.sample(rng);
         let mut new_state = current_state.clone();
@@ -45,7 +45,7 @@ impl OptModel for QuadraticModel {
         (new_state, (k, current_state[k], v))
     }
 
-    fn evaluate_state(&self, state: &Self::StateType) -> f64 {
+    fn evaluate_state(&self, state: &StateType) -> f64 {
         (0..self.k)
             .into_iter()
             .map(|i| (state[i] - self.centers[i]).powf(2.0))
@@ -56,6 +56,6 @@ impl OptModel for QuadraticModel {
 fn main() {
     let model = QuadraticModel::new(3, vec![2.0, 0.0, -3.5], (-10.0, 10.0));
     let opt = HillClimbingOptimizer::new(1000, 10);
-    let res = opt.optimize(&model, None, 10000, &());
+    let res = opt.optimize(&model, None, 10000, ());
     dbg!(res);
 }

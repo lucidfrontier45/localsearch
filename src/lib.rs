@@ -4,20 +4,15 @@ pub const VERSION: &str = "0.1.0";
 
 pub mod optim;
 
-pub trait OptModel {
-    type StateType;
-    type TransitionType;
-
-    fn generate_random_state<R: rand::Rng>(
-        &self,
-        rng: &mut R,
-    ) -> Result<Self::StateType, Box<dyn Error>>;
+pub trait OptModel<StateType, TransitionType> {
+    fn generate_random_state<R: rand::Rng>(&self, rng: &mut R)
+        -> Result<StateType, Box<dyn Error>>;
     fn generate_trial_state<R: rand::Rng>(
         &self,
-        current_state: &Self::StateType,
+        current_state: &StateType,
         rng: &mut R,
-    ) -> (Self::StateType, Self::TransitionType);
-    fn evaluate_state(&self, state: &Self::StateType) -> f64;
+    ) -> (StateType, TransitionType);
+    fn evaluate_state(&self, state: &StateType) -> f64;
 }
 
 #[cfg(test)]
