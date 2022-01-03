@@ -68,17 +68,17 @@ impl DequeTabuList {
 }
 
 impl TabuList for DequeTabuList {
-    type Item = TransitionType;
+    type Item = (StateType, TransitionType);
 
     fn contains(&self, item: &Self::Item) -> bool {
-        let &(k1, _, x) = item;
+        let (k1, _, x) = item.1;
         self.buff
             .iter()
             .any(|&(k2, y, _)| (k1 == k2) && (x - y).abs() < 0.0001)
     }
 
     fn append(&mut self, item: Self::Item) {
-        self.buff.append(item);
+        self.buff.append(item.1);
     }
 }
 
@@ -105,7 +105,7 @@ fn main() {
             .progress_chars("#>-"),
     );
 
-    let callback = move |it, state, score| {
+    let callback = move |it, _state, score| {
         pb.set_message(format!("best score {:e}", score));
         pb.set_position(it as u64);
     };

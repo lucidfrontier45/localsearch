@@ -74,23 +74,4 @@ where
             .unwrap();
         (final_state, final_score, ())
     }
-    // fn optimize<ModelType, StateType>(
-    //     &self,
-    //     model: &ModelType,
-    //     initial_state: Option<&StateType>,
-    //     n_iter: usize,
-    //     _arg: &Self::AdditionalArgType,
-    // ) -> (StateType, f64, Self::AdditionalRetType)
-    // where
-    //     ModelType: OptModel<StateType> + Sync + Send,
-    //     StateType: Clone + Sync + Send,
-    // {
-    //     let (final_state, final_score) = (0..self.n_trials)
-    //         .into_par_iter()
-    //         .map(|_| optimize(model, initial_state, n_iter, self.patience))
-    //         .min_by_key(|(_, score)| NotNan::new(*score).unwrap())
-    //         .unwrap();
-
-    //     (final_state, final_score, ())
-    // }
 }

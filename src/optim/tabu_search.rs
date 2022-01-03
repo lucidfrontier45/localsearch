@@ -28,7 +28,7 @@ where
     S: Clone + Sync + Send,
     T: Clone + Sync + Send,
     M: OptModel<S, T> + Sync + Send,
-    L: TabuList<Item = T>,
+    L: TabuList<Item = (S, T)>,
     F: Fn(usize, Rc<RefCell<S>>, f64),
 {
     fn optimize(
@@ -51,7 +51,8 @@ where
         let mut counter = 0;
 
         for it in 0..n_iter {
-            let res = (0..self.n_trials)
+            let mut res = vec![];
+            (0..self.n_trials)
                 .into_par_iter()
                 .map(|_| {
                     let mut rng = rand::thread_rng();
@@ -59,18 +60,25 @@ where
                     let score = model.evaluate_state(&state);
                     (state, transitions, score)
                 })
-                .min_by_key(|(_, _, score)| NotNan::new(*score).unwrap())
-                .unwrap();
-            let (best_trial_state, transitions, best_trial_score) = res;
+                .collect_into_vec(&mut res);
 
-            if best_trial_score < best_score {
-                current_state = best_trial_state.clone();
-                best_state.replace(best_trial_state.clone());
-                best_score = best_trial_score;
-                counter = 0;
-            } else if !tabu_list.contains(&transitions) {
-                current_state = best_trial_state.clone();
-                tabu_list.append(transitions);
+            res.sort_unstable_by_key(|(_, _, score)| NotNan::new(*score).unwrap());
+
+            for (state, transition, score) in res {
+                if score < best_score {
+                    current_state = state.clone();
+                    best_state.replace(state.clone());
+                    best_score = score;
+                    counter = 0;
+                    break;
+                } else {
+                    let item = (state, transition);
+                    if !tabu_list.contains(&item) {
+                        current_state = item.0.clone();
+                        tabu_list.append(item);
+                        break;
+                    }
+                }
             }
 
             counter += 1;
