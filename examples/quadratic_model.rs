@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use indicatif::{ProgressBar, ProgressStyle};
-use metaheuristics_rs::{
+use localsearch::{
     optim::{HillClimbingOptimizer, Optimizer, TabuList, TabuSearchOptimizer},
     utils::RingBuffer,
     OptModel,

@@ -1,5 +1,5 @@
-# metaheuristics_rs
-Rust library for Metaheuristic optimization
+# localsearch
+Rust library for local search optimization
 
 # Implemented Algorithms
 
