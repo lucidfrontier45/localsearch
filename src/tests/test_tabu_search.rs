@@ -3,7 +3,7 @@ use approx::assert_abs_diff_eq;
 use crate::optim::{Optimizer, TabuList, TabuSearchOptimizer};
 use crate::utils::RingBuffer;
 
-use super::{QuadraticModel, TransitionType};
+use super::{QuadraticModel, StateType, TransitionType};
 
 #[derive(Debug)]
 struct MyTabuList {
@@ -18,17 +18,17 @@ impl MyTabuList {
 }
 
 impl TabuList for MyTabuList {
-    type Item = TransitionType;
+    type Item = (StateType, TransitionType);
 
     fn contains(&self, item: &Self::Item) -> bool {
-        let &(k1, _, x) = item;
+        let (k1, _, x) = item.1;
         self.buff
             .iter()
             .any(|&(k2, y, _)| (k1 == k2) && (x - y).abs() < 0.005)
     }
 
     fn append(&mut self, item: Self::Item) {
-        self.buff.append(item);
+        self.buff.append(item.1);
     }
 }
 
