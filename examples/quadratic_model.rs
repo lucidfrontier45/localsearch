@@ -105,7 +105,7 @@ fn main() {
             .progress_chars("#>-"),
     );
 
-    let callback = move |it, state, score| {
+    let callback = move |it, _state, score| {
         pb.set_message(format!("best score {:e}", score));
         pb.set_position(it as u64);
     };
