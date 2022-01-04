@@ -1,7 +1,6 @@
 use std::error::Error;
 
-pub const VERSION: &str = "0.4.0";
-
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod optim;
 pub mod utils;
 
