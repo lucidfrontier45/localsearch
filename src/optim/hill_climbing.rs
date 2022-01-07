@@ -3,8 +3,6 @@ use rayon::prelude::*;
 
 use crate::OptModel;
 
-use super::Optimizer;
-
 fn optimize<ModelType, StateType, TransitionType>(
     model: &ModelType,
     initial_state: Option<&StateType>,
@@ -53,20 +51,18 @@ impl HillClimbingOptimizer {
             n_restarts,
         }
     }
-}
 
-impl<S, T, M> Optimizer<S, T, M, (), ()> for HillClimbingOptimizer
-where
-    M: OptModel<S, T> + Sync + Send,
-    S: Clone + Sync + Send,
-{
-    fn optimize(
+    pub fn optimize<S, T, M>(
         &self,
         model: &M,
         initial_state: Option<&S>,
         n_iter: usize,
         _arg: (),
-    ) -> (S, f64, ()) {
+    ) -> (S, f64, ())
+    where
+        M: OptModel<S, T> + Sync + Send,
+        S: Clone + Sync + Send,
+    {
         let (final_state, final_score) = (0..self.n_restarts)
             .into_par_iter()
             .map(|_| optimize(model, initial_state, n_iter, self.patience))
