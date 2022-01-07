@@ -1,6 +1,6 @@
 use approx::assert_abs_diff_eq;
 
-use crate::optim::{HillClimbingOptimizer, Optimizer};
+use crate::optim::HillClimbingOptimizer;
 
 use super::QuadraticModel;
 

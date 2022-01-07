@@ -2,7 +2,7 @@ use std::error::Error;
 
 use indicatif::{ProgressBar, ProgressStyle};
 use localsearch::{
-    optim::{HillClimbingOptimizer, Optimizer, TabuList, TabuSearchOptimizer},
+    optim::{HillClimbingOptimizer, TabuList, TabuSearchOptimizer},
     utils::RingBuffer,
     OptModel,
 };

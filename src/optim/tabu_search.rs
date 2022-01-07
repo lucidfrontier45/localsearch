@@ -2,7 +2,6 @@ use ordered_float::NotNan;
 use rayon::prelude::*;
 use std::{cell::RefCell, rc::Rc};
 
-use super::Optimizer;
 use crate::OptModel;
 
 pub trait TabuList {
@@ -21,23 +20,21 @@ impl TabuSearchOptimizer {
     pub fn new(patience: usize, n_trials: usize) -> Self {
         Self { patience, n_trials }
     }
-}
 
-impl<S, T, M, L, F> Optimizer<S, T, M, (L, Option<&F>), L> for TabuSearchOptimizer
-where
-    S: Clone + Sync + Send,
-    T: Clone + Sync + Send,
-    M: OptModel<S, T> + Sync + Send,
-    L: TabuList<Item = (S, T)>,
-    F: Fn(usize, Rc<RefCell<S>>, f64),
-{
-    fn optimize(
+    pub fn optimize<S, T, M, L, F>(
         &self,
         model: &M,
         initial_state: Option<&S>,
         n_iter: usize,
         arg: (L, Option<&F>),
-    ) -> (S, f64, L) {
+    ) -> (S, f64, L)
+    where
+        S: Clone + Sync + Send,
+        T: Clone + Sync + Send,
+        M: OptModel<S, T> + Sync + Send,
+        L: TabuList<Item = (S, T)>,
+        F: Fn(usize, Rc<RefCell<S>>, f64),
+    {
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {
             s.clone()
