@@ -86,8 +86,23 @@ fn main() {
     let model = QuadraticModel::new(3, vec![2.0, 0.0, -3.5], (-10.0, 10.0));
 
     println!("running Hill Climbing optimizer");
+    let n_iter = 10000;
+    let batch_size = 500;
     let opt = HillClimbingOptimizer::new(1000, 10);
-    let res = opt.optimize(&model, None, 10000, ());
+    let pb = ProgressBar::new(n_iter as u64);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template(
+                "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
+            )
+            .progress_chars("#>-"),
+    );
+
+    let callback = move |it, _state, score| {
+        pb.set_message(format!("best score {:e}", score));
+        pb.set_position(it as u64);
+    };
+    let res = opt.optimize(&model, None, n_iter, batch_size, Some(&callback));
     dbg!(res);
 
     println!("running Tabu Search optimizer");
