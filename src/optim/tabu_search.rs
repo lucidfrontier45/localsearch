@@ -53,8 +53,8 @@ impl TabuSearchOptimizer {
                 .into_par_iter()
                 .map(|_| {
                     let mut rng = rand::thread_rng();
-                    let (state, transitions) = model.generate_trial_state(&current_state, &mut rng);
-                    let score = model.evaluate_state(&state);
+                    let (state, transitions, score) =
+                        model.generate_trial_state(&current_state, &mut rng);
                     (state, transitions, score)
                 })
                 .collect_into_vec(&mut res);
