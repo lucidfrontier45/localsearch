@@ -11,7 +11,7 @@ pub trait OptModel<StateType, TransitionType> {
         &self,
         current_state: &StateType,
         rng: &mut R,
-    ) -> (StateType, TransitionType);
+    ) -> (StateType, TransitionType, f64);
     fn evaluate_state(&self, state: &StateType) -> f64;
 }
 
