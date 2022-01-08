@@ -41,7 +41,7 @@ impl TabuSearchOptimizer {
         } else {
             model.generate_random_state(&mut rng).unwrap()
         };
-        let current_score = model.evaluate_state(&current_state);
+        let mut current_score = model.evaluate_state(&current_state);
         let best_state = Rc::new(RefCell::new(current_state.clone()));
         let mut best_score = current_score;
         let (mut tabu_list, callback) = arg;
@@ -54,7 +54,7 @@ impl TabuSearchOptimizer {
                 .map(|_| {
                     let mut rng = rand::thread_rng();
                     let (state, transitions, score) =
-                        model.generate_trial_state(&current_state, &mut rng);
+                        model.generate_trial_state(&current_state, &mut rng, Some(current_score));
                     (state, transitions, score)
                 })
                 .collect_into_vec(&mut res);
@@ -64,6 +64,7 @@ impl TabuSearchOptimizer {
             for (state, transition, score) in res {
                 if score < best_score {
                     current_state = state.clone();
+                    current_score = score;
                     best_state.replace(state.clone());
                     best_score = score;
                     counter = 0;
@@ -72,6 +73,7 @@ impl TabuSearchOptimizer {
                     let item = (state, transition);
                     if !tabu_list.contains(&item) {
                         current_state = item.0.clone();
+                        current_score = score;
                         tabu_list.append(item);
                         break;
                     }

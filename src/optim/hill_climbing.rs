@@ -26,7 +26,8 @@ where
     let mut current_score = initial_score;
     let mut counter = 0;
     for _ in 0..n_iter {
-        let (trial_state, _, trial_score) = model.generate_trial_state(&current_state, &mut rng);
+        let (trial_state, _, trial_score) =
+            model.generate_trial_state(&current_state, &mut rng, Some(current_score));
         if trial_score < current_score {
             current_state = trial_state;
             current_score = trial_score;
