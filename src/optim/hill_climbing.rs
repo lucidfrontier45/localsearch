@@ -24,7 +24,7 @@ where
     let mut rng = rand::thread_rng();
     let mut current_state = initial_state;
     let mut current_score = initial_score;
-    let mut counter = 0;
+    let mut counter = counter;
     for _ in 0..n_iter {
         let (trial_state, _, trial_score) =
             model.generate_trial_state(&current_state, &mut rng, Some(current_score));
@@ -127,6 +127,10 @@ impl HillClimbingOptimizer {
 
             if let Some(f) = callback {
                 f(n_iter - remained_iter, final_state.clone(), final_score);
+            }
+
+            if counters.iter().all(|&c| c >= self.patience) {
+                break;
             }
         }
 
