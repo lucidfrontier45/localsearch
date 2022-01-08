@@ -39,6 +39,7 @@ impl OptModel<StateType, TransitionType> for QuadraticModel {
         &self,
         current_state: &StateType,
         rng: &mut R,
+        _current_score: Option<f64>,
     ) -> (StateType, TransitionType, f64) {
         let k = rng.gen_range(0..self.k);
         let v = self.dist.sample(rng);
