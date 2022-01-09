@@ -250,7 +250,7 @@ fn main() {
     let tabu_list = DequeTabuList::new(20);
     let optimizer = TabuSearchOptimizer::new(2000, 200, 10);
     let (final_state, final_score, _) =
-        optimizer.optimize(&tsp_model, None, n_iter, (tabu_list, Some(&callback)));
+        optimizer.optimize(&tsp_model, None, n_iter, tabu_list, Some(&callback));
     pb.finish_at_current_pos();
     println!(
         "final score = {}, num of cities {}",

@@ -116,7 +116,7 @@ fn main() {
     let opt = TabuSearchOptimizer::new(patiance, n_trials, 20);
     let tabu_list = DequeTabuList::new(2);
 
-    let res = opt.optimize(&model, None, n_iter as usize, (tabu_list, Some(&callback)));
+    let res = opt.optimize(&model, None, n_iter as usize, tabu_list, Some(&callback));
     pb.finish_at_current_pos();
     dbg!((res.0, res.1));
 }
