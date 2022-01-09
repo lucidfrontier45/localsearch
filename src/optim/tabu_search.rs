@@ -31,7 +31,8 @@ impl TabuSearchOptimizer {
         model: &M,
         initial_state: Option<&S>,
         n_iter: usize,
-        arg: (L, Option<&F>),
+        mut tabu_list: L,
+        callback: Option<&F>,
     ) -> (S, f64, L)
     where
         S: Clone + Sync + Send,
@@ -49,7 +50,6 @@ impl TabuSearchOptimizer {
         let mut current_score = model.evaluate_state(&current_state);
         let best_state = Rc::new(RefCell::new(current_state.clone()));
         let mut best_score = current_score;
-        let (mut tabu_list, callback) = arg;
         let mut counter = 0;
 
         for it in 0..n_iter {
