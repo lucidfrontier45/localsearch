@@ -35,12 +35,14 @@ impl OptModel<StateType, TransitionType> for QuadraticModel {
         &self,
         current_state: &StateType,
         rng: &mut R,
-    ) -> (StateType, TransitionType) {
+        _current_scre: Option<f64>,
+    ) -> (StateType, TransitionType, f64) {
         let k = rng.gen_range(0..self.k);
         let v = self.dist.sample(rng);
         let mut new_state = current_state.clone();
         new_state[k] = v;
-        (new_state, (k, current_state[k], v))
+        let score = self.evaluate_state(&new_state);
+        (new_state, (k, current_state[k], v), score)
     }
 
     fn evaluate_state(&self, state: &StateType) -> f64 {
