@@ -5,50 +5,6 @@ use rayon::prelude::*;
 
 use crate::OptModel;
 
-fn optimize<ModelType, StateType, TransitionType, F>(
-    model: &ModelType,
-    initial_state: StateType,
-    initial_score: f64,
-    n_iter: usize,
-    patience: usize,
-    n_trials: usize,
-    callback: Option<&F>,
-) -> (StateType, f64, usize)
-where
-    ModelType: OptModel<StateType, TransitionType> + Sync + Send,
-    StateType: Clone + Sync + Send,
-    F: Fn(usize, Rc<RefCell<StateType>>, f64),
-{
-    let mut rng = rand::thread_rng();
-    let mut current_state = initial_state;
-    let mut current_score = initial_score;
-    let mut counter = 0;
-    for _ in 0..n_iter {
-        let (trial_state, trial_score) = (0..n_trials)
-            .into_par_iter()
-            .map(|_| {
-                let mut rng = rand::thread_rng();
-                let (state, transitions, score) =
-                    model.generate_trial_state(&current_state, &mut rng, Some(current_score));
-                (state, score)
-            })
-            .min_by_key(|(_, score)| NotNan::new(*score).unwrap())
-            .unwrap();
-        // .sort_unstable_by_key(|(_, _, score)| NotNan::new(*score).unwrap());
-        if trial_score < current_score {
-            current_state = trial_state;
-            current_score = trial_score;
-            counter = 0;
-        } else {
-            counter += 1;
-            if counter >= patience {
-                break;
-            }
-        }
-    }
-    (current_state, current_score, counter)
-}
-
 #[derive(Clone, Copy)]
 pub struct HillClimbingOptimizer {
     patience: usize,
