@@ -14,11 +14,16 @@ pub trait TabuList {
 pub struct TabuSearchOptimizer {
     patience: usize,
     n_trials: usize,
+    return_iter: usize,
 }
 
 impl TabuSearchOptimizer {
-    pub fn new(patience: usize, n_trials: usize) -> Self {
-        Self { patience, n_trials }
+    pub fn new(patience: usize, n_trials: usize, return_iter: usize) -> Self {
+        Self {
+            patience,
+            n_trials,
+            return_iter,
+        }
     }
 
     pub fn optimize<S, T, M, L, F>(
@@ -68,6 +73,8 @@ impl TabuSearchOptimizer {
                     best_state.replace(state.clone());
                     best_score = score;
                     counter = 0;
+                    let item = (state, transition);
+                    tabu_list.append(item);
                     break;
                 } else {
                     let item = (state, transition);
@@ -81,6 +88,11 @@ impl TabuSearchOptimizer {
             }
 
             counter += 1;
+            if counter == self.return_iter {
+                current_state = best_state.borrow().clone();
+                current_score = best_score;
+            }
+
             if counter == self.patience {
                 break;
             }
