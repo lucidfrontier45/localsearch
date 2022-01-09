@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, rc::Rc};
 
 use indicatif::{ProgressBar, ProgressStyle};
 use localsearch::{
@@ -89,43 +89,34 @@ fn main() {
 
     println!("running Hill Climbing optimizer");
     let n_iter = 10000;
-    let batch_size = 500;
-    let opt = HillClimbingOptimizer::new(1000, 10);
-    let pb = ProgressBar::new(n_iter as u64);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template(
-                "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
-            )
-            .progress_chars("#>-"),
-    );
-
-    let callback = move |it, _state, score| {
+    let patiance = 1000;
+    let n_trials = 50;
+    let opt = HillClimbingOptimizer::new(patiance, n_trials);
+    let pb = {
+        let pb = ProgressBar::new(n_iter as u64);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template(
+                    "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
+                )
+                .progress_chars("#>-"),
+        );
+        Rc::new(pb)
+    };
+    let callback = |it, _state, score| {
         pb.set_message(format!("best score {:e}", score));
         pb.set_position(it as u64);
     };
-    let res = opt.optimize(&model, None, n_iter, batch_size, Some(&callback));
+
+    let res = opt.optimize(&model, None, n_iter, Some(&callback));
+    pb.finish_at_current_pos();
     dbg!(res);
 
     println!("running Tabu Search optimizer");
-    let n_iter = 10000;
-    let opt = TabuSearchOptimizer::new(1000, 25);
-    let tabu_list = DequeTabuList::new(10);
+    let opt = TabuSearchOptimizer::new(patiance, n_trials, 20);
+    let tabu_list = DequeTabuList::new(2);
 
-    let pb = ProgressBar::new(n_iter);
-    pb.set_draw_delta(n_iter / 100);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template(
-                "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
-            )
-            .progress_chars("#>-"),
-    );
-
-    let callback = move |it, _state, score| {
-        pb.set_message(format!("best score {:e}", score));
-        pb.set_position(it as u64);
-    };
     let res = opt.optimize(&model, None, n_iter as usize, (tabu_list, Some(&callback)));
+    pb.finish_at_current_pos();
     dbg!((res.0, res.1));
 }

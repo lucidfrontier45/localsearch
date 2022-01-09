@@ -35,7 +35,7 @@ impl TabuList for MyTabuList {
 #[test]
 fn test() {
     let model = QuadraticModel::new(3, vec![2.0, 0.0, -3.5], (-10.0, 10.0));
-    let opt = TabuSearchOptimizer::new(1000, 25);
+    let opt = TabuSearchOptimizer::new(1000, 25, 5);
     let tabu_list = MyTabuList::new(10);
     let null_closure = None::<&fn(_, _, _)>;
     let (final_state, final_score, _) =
