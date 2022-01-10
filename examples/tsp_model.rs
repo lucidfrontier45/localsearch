@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
     error::Error,
     fs::File,
@@ -204,6 +205,18 @@ where
     Ok(io::BufReader::new(file).lines())
 }
 
+fn create_pbar(n_iter: u64) -> ProgressBar {
+    let pb = ProgressBar::new(n_iter as u64);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template(
+                "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
+            )
+            .progress_chars("#>-"),
+    );
+    pb
+}
+
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
     let input_file = args.get(1).unwrap();
@@ -222,36 +235,27 @@ fn main() {
 
     let tsp_model = TSPModel::from_coords(&coords);
 
-    let n_iter = 100000;
+    let n_iter: usize = 100000;
 
-    let pb = {
-        let pb = ProgressBar::new(n_iter as u64);
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template(
-                    "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
-                )
-                .progress_chars("#>-"),
-        );
-        Rc::new(pb)
-    };
+    let pb = Rc::new(RefCell::new(create_pbar(n_iter as u64)));
     let callback = |it, _state, score| {
-        pb.set_message(format!("best score {:e}", score));
-        pb.set_position(it as u64);
+        pb.borrow().set_message(format!("best score {:e}", score));
+        pb.borrow().set_position(it as u64);
     };
 
     println!("run hill climbing");
     let optimizer = HillClimbingOptimizer::new(2000, 200);
     let (_, final_score) = optimizer.optimize(&tsp_model, None, n_iter, Some(&callback));
-    pb.finish_at_current_pos();
+    pb.borrow().finish_at_current_pos();
     println!("final score = {}", final_score);
 
     println!("run tabu search");
+    pb.replace(create_pbar(n_iter as u64));
     let tabu_list = DequeTabuList::new(20);
     let optimizer = TabuSearchOptimizer::new(2000, 200, 10);
     let (final_state, final_score, _) =
         optimizer.optimize(&tsp_model, None, n_iter, tabu_list, Some(&callback));
-    pb.finish_at_current_pos();
+    pb.borrow().finish_at_current_pos();
     println!(
         "final score = {}, num of cities {}",
         final_score,
