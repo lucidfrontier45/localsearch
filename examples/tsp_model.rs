@@ -8,7 +8,7 @@ use std::{
 
 use indicatif::{ProgressBar, ProgressStyle};
 use localsearch::{
-    optim::{HillClimbingOptimizer, TabuList, TabuSearchOptimizer},
+    optim::{HillClimbingOptimizer, SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer},
     utils::RingBuffer,
     OptModel,
 };
@@ -266,6 +266,12 @@ fn main() {
         final_score,
         final_state.len()
     );
+
+    println!("run annealing");
+    let optimizer = SimulatedAnnealingOptimizer::new(2000, 200);
+    let (_, final_score) = optimizer.optimize(&tsp_model, None, n_iter, Some(&callback));
+    pb.borrow().finish_at_current_pos();
+    println!("final score = {}", final_score);
 
     let opt_route_file = args.get(2).unwrap();
     let opt_state = read_lines(opt_route_file)
