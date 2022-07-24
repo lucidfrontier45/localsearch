@@ -1,4 +1,4 @@
-use std::{error::Error, rc::Rc};
+use std::error::Error;
 
 use indicatif::{ProgressBar, ProgressStyle};
 use localsearch::{
@@ -92,18 +92,16 @@ fn main() {
     let patiance = 1000;
     let n_trials = 50;
     let opt = HillClimbingOptimizer::new(patiance, n_trials);
-    let pb = {
-        let pb = ProgressBar::new(n_iter as u64);
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template(
-                    "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
-                )
-                .progress_chars("#>-"),
-        );
-        Rc::new(pb)
-    };
+    let pb = ProgressBar::new(n_iter as u64);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template(
+                "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
+            )
+            .progress_chars("#>-"),
+    );
     let callback = |it, _state, score| {
+        let pb = pb.clone();
         pb.set_message(format!("best score {:e}", score));
         pb.set_position(it as u64);
     };
@@ -112,6 +110,8 @@ fn main() {
     pb.finish_at_current_pos();
     dbg!(res);
 
+    pb.finish_and_clear();
+    pb.reset();
     println!("running Tabu Search optimizer");
     let opt = TabuSearchOptimizer::new(patiance, n_trials, 20);
     let tabu_list = DequeTabuList::new(2);

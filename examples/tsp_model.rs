@@ -1,11 +1,9 @@
 use std::{
-    cell::RefCell,
     collections::{HashMap, HashSet},
     error::Error,
     fs::File,
     io::{self, BufRead},
     path::Path,
-    rc::Rc,
 };
 
 use indicatif::{ProgressBar, ProgressStyle};
@@ -237,25 +235,27 @@ fn main() {
 
     let n_iter: usize = 100000;
 
-    let pb = Rc::new(RefCell::new(create_pbar(n_iter as u64)));
+    let pb = create_pbar(n_iter as u64);
     let callback = |it, _state, score| {
-        pb.borrow().set_message(format!("best score {:e}", score));
-        pb.borrow().set_position(it as u64);
+        let pb = pb.clone();
+        pb.set_message(format!("best score {:e}", score));
+        pb.set_position(it as u64);
     };
 
     println!("run hill climbing");
     let optimizer = HillClimbingOptimizer::new(2000, 200);
     let (_, final_score) = optimizer.optimize(&tsp_model, None, n_iter, Some(&callback));
-    pb.borrow().finish_at_current_pos();
+    pb.finish_at_current_pos();
     println!("final score = {}", final_score);
 
+    pb.finish_and_clear();
+    pb.reset();
     println!("run tabu search");
-    pb.replace(create_pbar(n_iter as u64));
     let tabu_list = DequeTabuList::new(20);
     let optimizer = TabuSearchOptimizer::new(2000, 200, 10);
     let (final_state, final_score, _) =
         optimizer.optimize(&tsp_model, None, n_iter, tabu_list, Some(&callback));
-    pb.borrow().finish_at_current_pos();
+    pb.finish_at_current_pos();
     println!(
         "final score = {}, num of cities {}",
         final_score,
