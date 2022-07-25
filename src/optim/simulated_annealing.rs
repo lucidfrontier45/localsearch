@@ -6,6 +6,8 @@ use rayon::prelude::*;
 
 use crate::OptModel;
 
+use super::callback::{OptCallbackFn, OptProgress};
+
 #[derive(Clone, Copy)]
 pub struct SimulatedAnnealingOptimizer {
     patience: usize,
@@ -22,12 +24,14 @@ impl SimulatedAnnealingOptimizer {
         model: &M,
         initial_state: Option<S>,
         n_iter: usize,
+        max_temperature: f64,
+        min_temperature: f64,
         callback: Option<&F>,
     ) -> (S, f64)
     where
         M: OptModel<S, T> + Sync + Send,
         S: Clone + Sync + Send,
-        F: Fn(usize, Rc<RefCell<S>>, f64),
+        F: OptCallbackFn<S>,
     {
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {
@@ -38,8 +42,9 @@ impl SimulatedAnnealingOptimizer {
         let mut current_score = model.evaluate_state(&current_state);
         let best_state = Rc::new(RefCell::new(current_state.clone()));
         let mut best_score = current_score;
-        let mut counter = 0;
-        let mut temperature = current_score;
+        let mut accepted_counter = 0;
+        let mut temperature = max_temperature;
+        let t_factor = (min_temperature / max_temperature).ln();
 
         for it in 0..n_iter {
             let (trial_state, trial_score) = (0..self.n_trials)
@@ -60,24 +65,20 @@ impl SimulatedAnnealingOptimizer {
             if p > r {
                 current_state = trial_state;
                 current_score = trial_score;
+                accepted_counter += 1;
             }
 
             if current_score < best_score {
                 best_state.replace(current_state.clone());
                 best_score = current_score;
-                counter = 0;
             }
-            // else {
-            //     counter += 1;
-            //     if counter >= self.patience {
-            //         break;
-            //     }
-            // }
 
-            temperature = temperature / 1.00001;
+            temperature = max_temperature * (t_factor * (it as f64 / n_iter as f64)).exp();
 
             if let Some(f) = callback {
-                f(it, best_state.clone(), best_score);
+                let progress =
+                    OptProgress::new(it, accepted_counter, best_state.clone(), best_score);
+                f(progress);
             }
         }
 

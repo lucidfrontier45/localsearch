@@ -4,6 +4,8 @@ use rayon::prelude::*;
 
 use crate::OptModel;
 
+use super::callback::{OptCallbackFn, OptProgress};
+
 #[derive(Clone, Copy)]
 pub struct HillClimbingOptimizer {
     patience: usize,
@@ -24,8 +26,8 @@ impl HillClimbingOptimizer {
     ) -> (M::StateType, M::ScoreType)
     where
         M: OptModel<StateType = S> + Sync + Send,
-        F: Fn(usize, Rc<RefCell<M::StateType>>, M::ScoreType),
         S: Clone + Sync + Send,
+        F: OptCallbackFn<S>,
     {
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {
@@ -37,6 +39,7 @@ impl HillClimbingOptimizer {
         let best_state = Rc::new(RefCell::new(current_state.clone()));
         let mut best_score = current_score;
         let mut counter = 0;
+        let mut accepted_counter = 0;
         for it in 0..n_iter {
             let (trial_state, trial_score) = (0..self.n_trials)
                 .into_par_iter()
@@ -55,6 +58,7 @@ impl HillClimbingOptimizer {
                 best_state.replace(current_state.clone());
                 best_score = current_score;
                 counter = 0;
+                accepted_counter += 1;
             } else {
                 counter += 1;
                 if counter >= self.patience {
@@ -63,7 +67,9 @@ impl HillClimbingOptimizer {
             }
 
             if let Some(f) = callback {
-                f(it, best_state.clone(), best_score);
+                let progress =
+                    OptProgress::new(it, accepted_counter, best_state.clone(), best_score);
+                f(progress);
             }
         }
 

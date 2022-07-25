@@ -8,7 +8,10 @@ use std::{
 
 use indicatif::{ProgressBar, ProgressStyle};
 use localsearch::{
-    optim::{HillClimbingOptimizer, SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer},
+    optim::{
+        callback::OptProgress, HillClimbingOptimizer, SimulatedAnnealingOptimizer, TabuList,
+        TabuSearchOptimizer,
+    },
     utils::RingBuffer,
     OptModel,
 };
@@ -241,17 +244,25 @@ fn main() {
     let n_iter: usize = 100000;
 
     let pb = create_pbar(n_iter as u64);
-    let callback = |it, _state, score: NotNan<f64>| {
+    let callback = |op: OptProgress<_>| {
         let pb = pb.clone();
-        pb.set_message(format!("best score {:e}", score.into_inner()));
-        pb.set_position(it as u64);
+        let ratio = op.accepted_count as f64 / op.iter as f64;
+        pb.set_message(format!(
+            "best score {:.4e}, count = {}, acceptance ratio {:.2e}",
+            op.score, op.accepted_count, ratio
+        ));
+        pb.set_position(op.iter as u64);
     };
 
     println!("run hill climbing");
     let optimizer = HillClimbingOptimizer::new(2000, 200);
-    let (_, final_score) = optimizer.optimize(&tsp_model, None, n_iter, Some(&callback));
+    let (final_state, final_score) = optimizer.optimize(&tsp_model, None, n_iter, Some(&callback));
     pb.finish_at_current_pos();
-    println!("final score = {}", final_score);
+    println!(
+        "final score = {}, num of cities {}",
+        final_score,
+        final_state.len()
+    );
 
     pb.finish_and_clear();
     pb.reset();
@@ -267,11 +278,19 @@ fn main() {
         final_state.len()
     );
 
+    pb.finish_and_clear();
+    pb.reset();
+
     println!("run annealing");
     let optimizer = SimulatedAnnealingOptimizer::new(2000, 200);
-    let (_, final_score) = optimizer.optimize(&tsp_model, None, n_iter, Some(&callback));
-    pb.borrow().finish_at_current_pos();
-    println!("final score = {}", final_score);
+    let (final_state, final_score) =
+        optimizer.optimize(&tsp_model, None, n_iter, 10.0, 1.0, Some(&callback));
+    pb.finish_at_current_pos();
+    println!(
+        "final score = {}, num of cities {}",
+        final_score,
+        final_state.len()
+    );
 
     let opt_route_file = args.get(2).unwrap();
     let opt_state = read_lines(opt_route_file)

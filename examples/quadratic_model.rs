@@ -2,7 +2,7 @@ use std::error::Error;
 
 use indicatif::{ProgressBar, ProgressStyle};
 use localsearch::{
-    optim::{HillClimbingOptimizer, TabuList, TabuSearchOptimizer},
+    optim::{callback::OptProgress, HillClimbingOptimizer, TabuList, TabuSearchOptimizer},
     utils::RingBuffer,
     OptModel,
 };
@@ -105,10 +105,10 @@ fn main() {
             )
             .progress_chars("#>-"),
     );
-    let callback = |it, _state, score: NotNan<f64>| {
+    let callback = |op: OptProgress<_>| {
         let pb = pb.clone();
-        pb.set_message(format!("best score {:e}", score.into_inner()));
-        pb.set_position(it as u64);
+        pb.set_message(format!("best score {:e}", op.score));
+        pb.set_position(op.iter as u64);
     };
 
     let res = opt.optimize(&model, None, n_iter, Some(&callback));
