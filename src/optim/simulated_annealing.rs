@@ -20,7 +20,7 @@ impl SimulatedAnnealingOptimizer {
     pub fn optimize<S, T, M, F>(
         &self,
         model: &M,
-        initial_state: Option<&S>,
+        initial_state: Option<S>,
         n_iter: usize,
         callback: Option<&F>,
     ) -> (S, f64)
@@ -31,7 +31,7 @@ impl SimulatedAnnealingOptimizer {
     {
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {
-            s.clone()
+            s
         } else {
             model.generate_random_state(&mut rng).unwrap()
         };
