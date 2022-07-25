@@ -1,4 +1,5 @@
 mod hill_climbing;
+pub mod callback;
 pub use hill_climbing::HillClimbingOptimizer;
 
 mod tabu_search;

@@ -4,6 +4,8 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::OptModel;
 
+use super::callback::{OptCallbackFn, OptProgress};
+
 pub trait TabuList {
     type Item;
 
@@ -63,7 +65,7 @@ impl TabuSearchOptimizer {
         T: Clone + Sync + Send,
         M: OptModel<S, T> + Sync + Send,
         L: TabuList<Item = (S, T)>,
-        F: Fn(usize, Rc<RefCell<S>>, f64),
+        F: OptCallbackFn<S>,
     {
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {
@@ -75,6 +77,7 @@ impl TabuSearchOptimizer {
         let best_state = Rc::new(RefCell::new(current_state.clone()));
         let mut best_score = current_score;
         let mut counter = 0;
+        let mut accepted_counter = 0;
 
         for it in 0..n_iter {
             let mut samples = vec![];
@@ -101,6 +104,7 @@ impl TabuSearchOptimizer {
                 current_score = score;
                 current_state = state.clone();
                 tabu_list.append((state, trans));
+                accepted_counter += 1;
             }
 
             counter += 1;
@@ -114,7 +118,9 @@ impl TabuSearchOptimizer {
             }
 
             if let Some(f) = callback {
-                f(it, best_state.clone(), best_score);
+                let progress =
+                    OptProgress::new(it, accepted_counter, best_state.clone(), best_score);
+                f(progress);
             }
         }
 
