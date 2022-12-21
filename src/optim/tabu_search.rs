@@ -1,4 +1,3 @@
-use ordered_float::NotNan;
 use rayon::prelude::*;
 use std::{cell::RefCell, rc::Rc};
 
@@ -17,13 +16,14 @@ pub struct TabuSearchOptimizer {
     return_iter: usize,
 }
 
-fn find_accepted_solution<S, T, L>(
-    samples: Vec<(S, T, f64)>,
+fn find_accepted_solution<S, T, L, O>(
+    samples: Vec<(S, T, O)>,
     tabu_list: &L,
-    best_score: f64,
-) -> Option<(S, T, f64)>
+    best_score: O,
+) -> Option<(S, T, O)>
 where
     L: TabuList<Item = (S, T)>,
+    O: Ord,
 {
     for (state, transition, score) in samples.into_iter() {
         // Aspiration Criterion
@@ -50,20 +50,20 @@ impl TabuSearchOptimizer {
         }
     }
 
-    pub fn optimize<S, T, M, L, F>(
+    pub fn optimize<M, L, F, S, T>(
         &self,
         model: &M,
-        initial_state: Option<S>,
+        initial_state: Option<M::StateType>,
         n_iter: usize,
         mut tabu_list: L,
         callback: Option<&F>,
-    ) -> (S, f64, L)
+    ) -> (M::StateType, M::ScoreType, L)
     where
+        M: OptModel<StateType = S, TransitionType = T> + Sync + Send,
+        L: TabuList<Item = (M::StateType, M::TransitionType)>,
+        F: Fn(usize, Rc<RefCell<M::StateType>>, M::ScoreType),
         S: Clone + Sync + Send,
         T: Clone + Sync + Send,
-        M: OptModel<S, T> + Sync + Send,
-        L: TabuList<Item = (S, T)>,
-        F: Fn(usize, Rc<RefCell<S>>, f64),
     {
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {
@@ -88,7 +88,7 @@ impl TabuSearchOptimizer {
                 })
                 .collect_into_vec(&mut samples);
 
-            samples.sort_unstable_by_key(|(_, _, score)| NotNan::new(*score).unwrap());
+            samples.sort_unstable_by_key(|(_, _, score)| *score);
 
             let res = find_accepted_solution(samples, &tabu_list, best_score);
 

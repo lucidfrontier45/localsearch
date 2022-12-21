@@ -13,5 +13,5 @@ fn test() {
     assert_abs_diff_eq!(2.0, final_state[0], epsilon = 0.05);
     assert_abs_diff_eq!(0.0, final_state[1], epsilon = 0.05);
     assert_abs_diff_eq!(-3.5, final_state[2], epsilon = 0.05);
-    assert_abs_diff_eq!(0.0, final_score, epsilon = 0.05);
+    assert_abs_diff_eq!(0.0, final_score.into_inner(), epsilon = 0.05);
 }
