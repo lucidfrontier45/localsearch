@@ -12,6 +12,7 @@ use localsearch::{
     utils::RingBuffer,
     OptModel,
 };
+use ordered_float::NotNan;
 use rand::seq::SliceRandom;
 
 fn min_sorted(c1: usize, c2: usize) -> (usize, usize) {
@@ -85,7 +86,7 @@ fn select_two_indides<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize
 // remvoed edges and inserted edges
 type TransitionType = ([Edge; 2], [Edge; 2]);
 
-impl OptModel<StateType, TransitionType> for TSPModel {
+impl OptModel<StateType, TransitionType, NotNan<f64>> for TSPModel {
     fn generate_random_state<R: rand::Rng>(
         &self,
         rng: &mut R,
@@ -115,8 +116,8 @@ impl OptModel<StateType, TransitionType> for TSPModel {
         &self,
         current_state: &StateType,
         rng: &mut R,
-        current_score: Option<f64>,
-    ) -> (StateType, TransitionType, f64) {
+        current_score: Option<NotNan<f64>>,
+    ) -> (StateType, TransitionType, NotNan<f64>) {
         let (ind1, ind2) = select_two_indides(1, current_state.len() - 1, rng);
 
         let mut new_state = current_state.clone();
@@ -151,13 +152,14 @@ impl OptModel<StateType, TransitionType> for TSPModel {
         (new_state, trans, new_score)
     }
 
-    fn evaluate_state(&self, state: &StateType) -> f64 {
-        (0..state.len() - 1)
+    fn evaluate_state(&self, state: &StateType) -> NotNan<f64> {
+        let score = (0..state.len() - 1)
             .map(|i| {
                 let key = min_sorted(state[i], state[i + 1]);
                 self.get_distance(&key, true)
             })
-            .sum()
+            .sum();
+        NotNan::new(score).unwrap()
     }
 }
 
@@ -236,9 +238,9 @@ fn main() {
     let n_iter: usize = 100000;
 
     let pb = create_pbar(n_iter as u64);
-    let callback = |it, _state, score| {
+    let callback = |it, _state, score: NotNan<f64>| {
         let pb = pb.clone();
-        pb.set_message(format!("best score {:e}", score));
+        pb.set_message(format!("best score {:e}", score.into_inner()));
         pb.set_position(it as u64);
     };
 

@@ -1,6 +1,5 @@
 use std::{cell::RefCell, rc::Rc};
 
-use ordered_float::NotNan;
 use rayon::prelude::*;
 
 use crate::OptModel;
@@ -16,17 +15,18 @@ impl HillClimbingOptimizer {
         Self { patience, n_trials }
     }
 
-    pub fn optimize<S, T, M, F>(
+    pub fn optimize<S, T, M, F, O>(
         &self,
         model: &M,
         initial_state: Option<S>,
         n_iter: usize,
         callback: Option<&F>,
-    ) -> (S, f64)
+    ) -> (S, O)
     where
-        M: OptModel<S, T> + Sync + Send,
+        M: OptModel<S, T, O> + Sync + Send,
         S: Clone + Sync + Send,
-        F: Fn(usize, Rc<RefCell<S>>, f64),
+        F: Fn(usize, Rc<RefCell<S>>, O),
+        O: Ord + Send + Sync + Copy,
     {
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {
@@ -47,7 +47,7 @@ impl HillClimbingOptimizer {
                         model.generate_trial_state(&current_state, &mut rng, Some(current_score));
                     (state, score)
                 })
-                .min_by_key(|(_, score)| NotNan::new(*score).unwrap())
+                .min_by_key(|(_, score)| *score)
                 .unwrap();
             // .sort_unstable_by_key(|(_, _, score)| NotNan::new(*score).unwrap());
             if trial_score < current_score {
