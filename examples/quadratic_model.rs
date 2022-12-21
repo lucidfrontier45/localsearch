@@ -1,4 +1,4 @@
-use std::{error::Error, rc::Rc};
+use std::error::Error;
 
 use indicatif::{ProgressBar, ProgressStyle};
 use localsearch::{
@@ -6,6 +6,7 @@ use localsearch::{
     utils::RingBuffer,
     OptModel,
 };
+use ordered_float::NotNan;
 use rand::{self, distributions::Uniform, prelude::Distribution};
 
 #[derive(Clone)]
@@ -26,7 +27,10 @@ impl QuadraticModel {
 type StateType = Vec<f64>;
 type TransitionType = (usize, f64, f64);
 
-impl OptModel<StateType, TransitionType> for QuadraticModel {
+impl OptModel for QuadraticModel {
+    type StateType = StateType;
+    type TransitionType = TransitionType;
+    type ScoreType = NotNan<f64>;
     fn generate_random_state<R: rand::Rng>(
         &self,
         rng: &mut R,
@@ -39,8 +43,8 @@ impl OptModel<StateType, TransitionType> for QuadraticModel {
         &self,
         current_state: &StateType,
         rng: &mut R,
-        _current_score: Option<f64>,
-    ) -> (StateType, TransitionType, f64) {
+        _current_score: Option<NotNan<f64>>,
+    ) -> (StateType, TransitionType, NotNan<f64>) {
         let k = rng.gen_range(0..self.k);
         let v = self.dist.sample(rng);
         let mut new_state = current_state.clone();
@@ -49,11 +53,12 @@ impl OptModel<StateType, TransitionType> for QuadraticModel {
         (new_state, (k, current_state[k], v), score)
     }
 
-    fn evaluate_state(&self, state: &StateType) -> f64 {
-        (0..self.k)
+    fn evaluate_state(&self, state: &StateType) -> NotNan<f64> {
+        let score = (0..self.k)
             .into_iter()
             .map(|i| (state[i] - self.centers[i]).powf(2.0))
-            .sum()
+            .sum();
+        NotNan::new(score).unwrap()
     }
 }
 
@@ -92,19 +97,17 @@ fn main() {
     let patiance = 1000;
     let n_trials = 50;
     let opt = HillClimbingOptimizer::new(patiance, n_trials);
-    let pb = {
-        let pb = ProgressBar::new(n_iter as u64);
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template(
-                    "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
-                )
-                .progress_chars("#>-"),
-        );
-        Rc::new(pb)
-    };
-    let callback = |it, _state, score| {
-        pb.set_message(format!("best score {:e}", score));
+    let pb = ProgressBar::new(n_iter as u64);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template(
+                "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
+            )
+            .progress_chars("#>-"),
+    );
+    let callback = |it, _state, score: NotNan<f64>| {
+        let pb = pb.clone();
+        pb.set_message(format!("best score {:e}", score.into_inner()));
         pb.set_position(it as u64);
     };
 
@@ -112,6 +115,8 @@ fn main() {
     pb.finish_at_current_pos();
     dbg!(res);
 
+    pb.finish_and_clear();
+    pb.reset();
     println!("running Tabu Search optimizer");
     let opt = TabuSearchOptimizer::new(patiance, n_trials, 20);
     let tabu_list = DequeTabuList::new(2);

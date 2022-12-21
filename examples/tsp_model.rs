@@ -4,7 +4,6 @@ use std::{
     fs::File,
     io::{self, BufRead},
     path::Path,
-    rc::Rc,
 };
 
 use indicatif::{ProgressBar, ProgressStyle};
@@ -13,6 +12,7 @@ use localsearch::{
     utils::RingBuffer,
     OptModel,
 };
+use ordered_float::NotNan;
 use rand::seq::SliceRandom;
 
 fn min_sorted(c1: usize, c2: usize) -> (usize, usize) {
@@ -86,7 +86,10 @@ fn select_two_indides<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize
 // remvoed edges and inserted edges
 type TransitionType = ([Edge; 2], [Edge; 2]);
 
-impl OptModel<StateType, TransitionType> for TSPModel {
+impl OptModel for TSPModel {
+    type StateType = StateType;
+    type TransitionType = TransitionType;
+    type ScoreType = NotNan<f64>;
     fn generate_random_state<R: rand::Rng>(
         &self,
         rng: &mut R,
@@ -116,8 +119,8 @@ impl OptModel<StateType, TransitionType> for TSPModel {
         &self,
         current_state: &StateType,
         rng: &mut R,
-        current_score: Option<f64>,
-    ) -> (StateType, TransitionType, f64) {
+        current_score: Option<NotNan<f64>>,
+    ) -> (StateType, TransitionType, NotNan<f64>) {
         let (ind1, ind2) = select_two_indides(1, current_state.len() - 1, rng);
 
         let mut new_state = current_state.clone();
@@ -152,13 +155,14 @@ impl OptModel<StateType, TransitionType> for TSPModel {
         (new_state, trans, new_score)
     }
 
-    fn evaluate_state(&self, state: &StateType) -> f64 {
-        (0..state.len() - 1)
+    fn evaluate_state(&self, state: &StateType) -> NotNan<f64> {
+        let score = (0..state.len() - 1)
             .map(|i| {
                 let key = min_sorted(state[i], state[i + 1]);
                 self.get_distance(&key, true)
             })
-            .sum()
+            .sum();
+        NotNan::new(score).unwrap()
     }
 }
 
@@ -204,6 +208,18 @@ where
     Ok(io::BufReader::new(file).lines())
 }
 
+fn create_pbar(n_iter: u64) -> ProgressBar {
+    let pb = ProgressBar::new(n_iter as u64);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template(
+                "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
+            )
+            .progress_chars("#>-"),
+    );
+    pb
+}
+
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
     let input_file = args.get(1).unwrap();
@@ -222,21 +238,12 @@ fn main() {
 
     let tsp_model = TSPModel::from_coords(&coords);
 
-    let n_iter = 100000;
+    let n_iter: usize = 100000;
 
-    let pb = {
-        let pb = ProgressBar::new(n_iter as u64);
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template(
-                    "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
-                )
-                .progress_chars("#>-"),
-        );
-        Rc::new(pb)
-    };
-    let callback = |it, _state, score| {
-        pb.set_message(format!("best score {:e}", score));
+    let pb = create_pbar(n_iter as u64);
+    let callback = |it, _state, score: NotNan<f64>| {
+        let pb = pb.clone();
+        pb.set_message(format!("best score {:e}", score.into_inner()));
         pb.set_position(it as u64);
     };
 
@@ -246,6 +253,8 @@ fn main() {
     pb.finish_at_current_pos();
     println!("final score = {}", final_score);
 
+    pb.finish_and_clear();
+    pb.reset();
     println!("run tabu search");
     let tabu_list = DequeTabuList::new(20);
     let optimizer = TabuSearchOptimizer::new(2000, 200, 10);

@@ -1,5 +1,6 @@
 use std::error::Error;
 
+use ordered_float::NotNan;
 use rand::{distributions::Uniform, prelude::Distribution};
 
 use crate::OptModel;
@@ -22,21 +23,24 @@ impl QuadraticModel {
 type StateType = Vec<f64>;
 type TransitionType = (usize, f64, f64);
 
-impl OptModel<StateType, TransitionType> for QuadraticModel {
+impl OptModel for QuadraticModel {
+    type StateType = StateType;
+    type TransitionType = TransitionType;
+    type ScoreType = NotNan<f64>;
     fn generate_random_state<R: rand::Rng>(
         &self,
         rng: &mut R,
-    ) -> Result<StateType, Box<dyn Error>> {
+    ) -> Result<Self::StateType, Box<dyn Error>> {
         let state = self.dist.sample_iter(rng).take(self.k).collect::<Vec<_>>();
         Ok(state)
     }
 
     fn generate_trial_state<R: rand::Rng>(
         &self,
-        current_state: &StateType,
+        current_state: &Self::StateType,
         rng: &mut R,
-        _current_scre: Option<f64>,
-    ) -> (StateType, TransitionType, f64) {
+        _current_score: Option<NotNan<f64>>,
+    ) -> (Self::StateType, Self::TransitionType, NotNan<f64>) {
         let k = rng.gen_range(0..self.k);
         let v = self.dist.sample(rng);
         let mut new_state = current_state.clone();
@@ -45,11 +49,12 @@ impl OptModel<StateType, TransitionType> for QuadraticModel {
         (new_state, (k, current_state[k], v), score)
     }
 
-    fn evaluate_state(&self, state: &StateType) -> f64 {
-        (0..self.k)
+    fn evaluate_state(&self, state: &Self::StateType) -> NotNan<f64> {
+        let score = (0..self.k)
             .into_iter()
             .map(|i| (state[i] - self.centers[i]).powf(2.0))
-            .sum()
+            .sum();
+        NotNan::new(score).unwrap()
     }
 }
 

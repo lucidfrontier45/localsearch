@@ -1,4 +1,3 @@
-use ordered_float::NotNan;
 use rayon::prelude::*;
 use std::{cell::RefCell, rc::Rc};
 
@@ -17,6 +16,31 @@ pub struct TabuSearchOptimizer {
     return_iter: usize,
 }
 
+fn find_accepted_solution<S, T, L, O>(
+    samples: Vec<(S, T, O)>,
+    tabu_list: &L,
+    best_score: O,
+) -> Option<(S, T, O)>
+where
+    L: TabuList<Item = (S, T)>,
+    O: Ord,
+{
+    for (state, transition, score) in samples.into_iter() {
+        // Aspiration Criterion
+        if score < best_score {
+            return Some((state, transition, score));
+        }
+
+        // Not Tabu
+        let item = (state, transition);
+        if !tabu_list.contains(&item) {
+            return Some((item.0, item.1, score));
+        }
+    }
+
+    None
+}
+
 impl TabuSearchOptimizer {
     pub fn new(patience: usize, n_trials: usize, return_iter: usize) -> Self {
         Self {
@@ -26,24 +50,24 @@ impl TabuSearchOptimizer {
         }
     }
 
-    pub fn optimize<S, T, M, L, F>(
+    pub fn optimize<M, L, F, S, T>(
         &self,
         model: &M,
-        initial_state: Option<&S>,
+        initial_state: Option<M::StateType>,
         n_iter: usize,
         mut tabu_list: L,
         callback: Option<&F>,
-    ) -> (S, f64, L)
+    ) -> (M::StateType, M::ScoreType, L)
     where
+        M: OptModel<StateType = S, TransitionType = T> + Sync + Send,
+        L: TabuList<Item = (M::StateType, M::TransitionType)>,
+        F: Fn(usize, Rc<RefCell<M::StateType>>, M::ScoreType),
         S: Clone + Sync + Send,
         T: Clone + Sync + Send,
-        M: OptModel<S, T> + Sync + Send,
-        L: TabuList<Item = (S, T)>,
-        F: Fn(usize, Rc<RefCell<S>>, f64),
     {
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {
-            s.clone()
+            s
         } else {
             model.generate_random_state(&mut rng).unwrap()
         };
@@ -53,7 +77,7 @@ impl TabuSearchOptimizer {
         let mut counter = 0;
 
         for it in 0..n_iter {
-            let mut res = vec![];
+            let mut samples = vec![];
             (0..self.n_trials)
                 .into_par_iter()
                 .map(|_| {
@@ -62,29 +86,21 @@ impl TabuSearchOptimizer {
                         model.generate_trial_state(&current_state, &mut rng, Some(current_score));
                     (state, transitions, score)
                 })
-                .collect_into_vec(&mut res);
+                .collect_into_vec(&mut samples);
 
-            res.sort_unstable_by_key(|(_, _, score)| NotNan::new(*score).unwrap());
+            samples.sort_unstable_by_key(|(_, _, score)| *score);
 
-            for (state, transition, score) in res {
+            let res = find_accepted_solution(samples, &tabu_list, best_score);
+
+            if let Some((state, trans, score)) = res {
                 if score < best_score {
-                    current_state = state.clone();
-                    current_score = score;
-                    best_state.replace(state.clone());
                     best_score = score;
+                    best_state.replace(state.clone());
                     counter = 0;
-                    let item = (state, transition);
-                    tabu_list.append(item);
-                    break;
-                } else {
-                    let item = (state, transition);
-                    if !tabu_list.contains(&item) {
-                        current_state = item.0.clone();
-                        current_score = score;
-                        tabu_list.append(item);
-                        break;
-                    }
                 }
+                current_score = score;
+                current_state = state.clone();
+                tabu_list.append((state, trans));
             }
 
             counter += 1;
