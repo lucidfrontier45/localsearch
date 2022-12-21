@@ -27,7 +27,10 @@ impl QuadraticModel {
 type StateType = Vec<f64>;
 type TransitionType = (usize, f64, f64);
 
-impl OptModel<StateType, TransitionType, NotNan<f64>> for QuadraticModel {
+impl OptModel for QuadraticModel {
+    type StateType = StateType;
+    type TransitionType = TransitionType;
+    type ScoreType = NotNan<f64>;
     fn generate_random_state<R: rand::Rng>(
         &self,
         rng: &mut R,

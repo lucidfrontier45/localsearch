@@ -15,18 +15,17 @@ impl HillClimbingOptimizer {
         Self { patience, n_trials }
     }
 
-    pub fn optimize<S, T, M, F, O>(
+    pub fn optimize<M, F, S>(
         &self,
         model: &M,
-        initial_state: Option<S>,
+        initial_state: Option<M::StateType>,
         n_iter: usize,
         callback: Option<&F>,
-    ) -> (S, O)
+    ) -> (M::StateType, M::ScoreType)
     where
-        M: OptModel<S, T, O> + Sync + Send,
+        M: OptModel<StateType = S> + Sync + Send,
+        F: Fn(usize, Rc<RefCell<M::StateType>>, M::ScoreType),
         S: Clone + Sync + Send,
-        F: Fn(usize, Rc<RefCell<S>>, O),
-        O: Ord + Send + Sync + Copy,
     {
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {

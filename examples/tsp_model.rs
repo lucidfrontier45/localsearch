@@ -86,7 +86,10 @@ fn select_two_indides<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize
 // remvoed edges and inserted edges
 type TransitionType = ([Edge; 2], [Edge; 2]);
 
-impl OptModel<StateType, TransitionType, NotNan<f64>> for TSPModel {
+impl OptModel for TSPModel {
+    type StateType = StateType;
+    type TransitionType = TransitionType;
+    type ScoreType = NotNan<f64>;
     fn generate_random_state<R: rand::Rng>(
         &self,
         rng: &mut R,

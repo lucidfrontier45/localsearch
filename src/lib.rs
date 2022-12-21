@@ -4,16 +4,24 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod optim;
 pub mod utils;
 
-pub trait OptModel<StateType, TransitionType, O: Ord + Copy + Send + Sync> {
-    fn generate_random_state<R: rand::Rng>(&self, rng: &mut R)
-        -> Result<StateType, Box<dyn Error>>;
+pub trait OptModel
+where
+    Self::ScoreType: Ord + Copy + Sync + Send,
+{
+    type StateType;
+    type TransitionType;
+    type ScoreType;
+    fn generate_random_state<R: rand::Rng>(
+        &self,
+        rng: &mut R,
+    ) -> Result<Self::StateType, Box<dyn Error>>;
     fn generate_trial_state<R: rand::Rng>(
         &self,
-        current_state: &StateType,
+        current_state: &Self::StateType,
         rng: &mut R,
-        current_score: Option<O>,
-    ) -> (StateType, TransitionType, O);
-    fn evaluate_state(&self, state: &StateType) -> O;
+        current_score: Option<Self::ScoreType>,
+    ) -> (Self::StateType, Self::TransitionType, Self::ScoreType);
+    fn evaluate_state(&self, state: &Self::StateType) -> Self::ScoreType;
 }
 
 #[cfg(test)]

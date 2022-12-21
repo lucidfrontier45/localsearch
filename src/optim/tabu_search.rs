@@ -50,21 +50,20 @@ impl TabuSearchOptimizer {
         }
     }
 
-    pub fn optimize<S, T, M, L, F, O>(
+    pub fn optimize<M, L, F, S, T>(
         &self,
         model: &M,
-        initial_state: Option<S>,
+        initial_state: Option<M::StateType>,
         n_iter: usize,
         mut tabu_list: L,
         callback: Option<&F>,
-    ) -> (S, O, L)
+    ) -> (M::StateType, M::ScoreType, L)
     where
+        M: OptModel<StateType = S, TransitionType = T> + Sync + Send,
+        L: TabuList<Item = (M::StateType, M::TransitionType)>,
+        F: Fn(usize, Rc<RefCell<M::StateType>>, M::ScoreType),
         S: Clone + Sync + Send,
         T: Clone + Sync + Send,
-        M: OptModel<S, T, O> + Sync + Send,
-        L: TabuList<Item = (S, T)>,
-        F: Fn(usize, Rc<RefCell<S>>, O),
-        O: Ord + Copy + Sync + Send,
     {
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {
