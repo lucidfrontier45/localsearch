@@ -1,6 +1,5 @@
 use std::{cell::RefCell, rc::Rc};
 
-use ordered_float::NotNan;
 use rand::Rng;
 use rayon::prelude::*;
 
@@ -9,14 +8,19 @@ use crate::OptModel;
 use super::callback::{OptCallbackFn, OptProgress};
 
 #[derive(Clone, Copy)]
-pub struct SimulatedAnnealingOptimizer {
+pub struct EpsilonGreedyOptimizer {
     patience: usize,
     n_trials: usize,
+    epsilon: f64,
 }
 
-impl SimulatedAnnealingOptimizer {
-    pub fn new(patience: usize, n_trials: usize) -> Self {
-        Self { patience, n_trials }
+impl EpsilonGreedyOptimizer {
+    pub fn new(patience: usize, n_trials: usize, epsilon: f64) -> Self {
+        Self {
+            patience,
+            n_trials,
+            epsilon,
+        }
     }
 
     pub fn optimize<M, F>(
@@ -24,12 +28,10 @@ impl SimulatedAnnealingOptimizer {
         model: &M,
         initial_state: Option<M::StateType>,
         n_iter: usize,
-        max_temperature: f64,
-        min_temperature: f64,
         callback: Option<&F>,
     ) -> (M::StateType, M::ScoreType)
     where
-        M: OptModel<ScoreType = NotNan<f64>> + Sync + Send,
+        M: OptModel + Sync + Send,
         F: OptCallbackFn<M::StateType, M::ScoreType>,
     {
         let mut rng = rand::thread_rng();
@@ -41,11 +43,8 @@ impl SimulatedAnnealingOptimizer {
         let mut current_score = model.evaluate_state(&current_state);
         let best_state = Rc::new(RefCell::new(current_state.clone()));
         let mut best_score = current_score;
-        let mut accepted_counter = 0;
-        let mut temperature = max_temperature;
-        let t_factor = (min_temperature / max_temperature).ln();
         let mut counter = 0;
-
+        let mut accepted_counter = 0;
         for it in 0..n_iter {
             let (trial_state, trial_score) = (0..self.n_trials)
                 .into_par_iter()
@@ -58,11 +57,9 @@ impl SimulatedAnnealingOptimizer {
                 .min_by_key(|(_, score)| *score)
                 .unwrap();
 
-            let ds = trial_score - current_score;
-            let p = (-ds / temperature).exp();
             let r: f64 = rng.gen();
 
-            if p > r {
+            if trial_score < current_score || self.epsilon > r {
                 current_state = trial_state;
                 current_score = trial_score;
                 accepted_counter += 1;
@@ -73,8 +70,6 @@ impl SimulatedAnnealingOptimizer {
                 best_score = current_score;
                 counter = 0;
             }
-
-            temperature = max_temperature * (t_factor * (it as f64 / n_iter as f64)).exp();
 
             counter += 1;
             if counter == self.patience {

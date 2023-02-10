@@ -50,7 +50,7 @@ impl HillClimbingOptimizer {
                 })
                 .min_by_key(|(_, score)| *score)
                 .unwrap();
-            // .sort_unstable_by_key(|(_, _, score)| NotNan::new(*score).unwrap());
+
             if trial_score < current_score {
                 current_state = trial_state;
                 current_score = trial_score;

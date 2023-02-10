@@ -9,8 +9,8 @@ use std::{
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     optim::{
-        callback::OptProgress, HillClimbingOptimizer, SimulatedAnnealingOptimizer, TabuList,
-        TabuSearchOptimizer,
+        callback::OptProgress, EpsilonGreedyOptimizer, HillClimbingOptimizer,
+        SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
     },
     utils::RingBuffer,
     OptModel,
@@ -265,9 +265,9 @@ fn main() {
         final_score,
         final_state.len()
     );
-
     pb.finish_and_clear();
     pb.reset();
+
     println!("run tabu search");
     let tabu_list = DequeTabuList::new(20);
     let optimizer = TabuSearchOptimizer::new(2000, 200, 10);
@@ -278,7 +278,6 @@ fn main() {
         final_score,
         final_state.len()
     );
-
     pb.finish_and_clear();
     pb.reset();
 
@@ -286,6 +285,17 @@ fn main() {
     let optimizer = SimulatedAnnealingOptimizer::new(n_iter / 10, 200);
     let (final_state, final_score) =
         optimizer.optimize(&tsp_model, None, n_iter, 200.0, 50.0, Some(&callback));
+    println!(
+        "final score = {}, num of cities {}",
+        final_score,
+        final_state.len()
+    );
+    pb.finish_and_clear();
+    pb.reset();
+
+    println!("run epsilon greedy");
+    let optimizer = EpsilonGreedyOptimizer::new(n_iter / 10, 200, 0.3);
+    let (final_state, final_score) = optimizer.optimize(&tsp_model, None, n_iter, Some(&callback));
     println!(
         "final score = {}, num of cities {}",
         final_score,
