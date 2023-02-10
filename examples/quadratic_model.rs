@@ -2,7 +2,7 @@ use std::error::Error;
 
 use indicatif::{ProgressBar, ProgressStyle};
 use localsearch::{
-    optim::{HillClimbingOptimizer, TabuList, TabuSearchOptimizer},
+    optim::{callback::OptProgress, HillClimbingOptimizer, TabuList, TabuSearchOptimizer},
     utils::RingBuffer,
     OptModel,
 };
@@ -26,11 +26,12 @@ impl QuadraticModel {
 
 type StateType = Vec<f64>;
 type TransitionType = (usize, f64, f64);
+type ScoreType = NotNan<f64>;
 
 impl OptModel for QuadraticModel {
     type StateType = StateType;
     type TransitionType = TransitionType;
-    type ScoreType = NotNan<f64>;
+    type ScoreType = ScoreType;
     fn generate_random_state<R: rand::Rng>(
         &self,
         rng: &mut R,
@@ -105,10 +106,10 @@ fn main() {
             )
             .progress_chars("#>-"),
     );
-    let callback = |it, _state, score: NotNan<f64>| {
+    let callback = |op: OptProgress<StateType, ScoreType>| {
         let pb = pb.clone();
-        pb.set_message(format!("best score {:e}", score.into_inner()));
-        pb.set_position(it as u64);
+        pb.set_message(format!("best score {:e}", op.score.into_inner()));
+        pb.set_position(op.iter as u64);
     };
 
     let res = opt.optimize(&model, None, n_iter, Some(&callback));
@@ -121,7 +122,7 @@ fn main() {
     let opt = TabuSearchOptimizer::new(patiance, n_trials, 20);
     let tabu_list = DequeTabuList::new(2);
 
-    let res = opt.optimize(&model, None, n_iter as usize, tabu_list, Some(&callback));
+    let res = opt.optimize(&model, None, n_iter, tabu_list, Some(&callback));
     pb.finish_at_current_pos();
     dbg!((res.0, res.1));
 }

@@ -4,13 +4,11 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod optim;
 pub mod utils;
 
-pub trait OptModel
-where
-    Self::ScoreType: Ord + Copy + Sync + Send,
-{
-    type StateType;
-    type TransitionType;
-    type ScoreType;
+pub trait OptModel {
+    type ScoreType: Ord + Copy + Sync + Send;
+    type StateType: Clone + Sync + Send;
+    type TransitionType: Clone + Sync + Send;
+
     fn generate_random_state<R: rand::Rng>(
         &self,
         rng: &mut R,

@@ -8,7 +8,10 @@ use std::{
 
 use indicatif::{ProgressBar, ProgressStyle};
 use localsearch::{
-    optim::{HillClimbingOptimizer, TabuList, TabuSearchOptimizer},
+    optim::{
+        callback::OptProgress, HillClimbingOptimizer, SimulatedAnnealingOptimizer, TabuList,
+        TabuSearchOptimizer,
+    },
     utils::RingBuffer,
     OptModel,
 };
@@ -70,8 +73,6 @@ impl TSPModel {
     }
 }
 
-type StateType = Vec<usize>;
-
 fn select_two_indides<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize, usize) {
     let n1 = rng.gen_range(lb..ub);
     let n2 = loop {
@@ -83,13 +84,15 @@ fn select_two_indides<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize
     min_sorted(n1, n2)
 }
 
+type StateType = Vec<usize>;
 // remvoed edges and inserted edges
 type TransitionType = ([Edge; 2], [Edge; 2]);
+type ScoreType = NotNan<f64>;
 
 impl OptModel for TSPModel {
     type StateType = StateType;
     type TransitionType = TransitionType;
-    type ScoreType = NotNan<f64>;
+    type ScoreType = ScoreType;
     fn generate_random_state<R: rand::Rng>(
         &self,
         rng: &mut R,
@@ -209,7 +212,7 @@ where
 }
 
 fn create_pbar(n_iter: u64) -> ProgressBar {
-    let pb = ProgressBar::new(n_iter as u64);
+    let pb = ProgressBar::new(n_iter);
     pb.set_style(
         ProgressStyle::default_bar()
             .template(
@@ -241,17 +244,27 @@ fn main() {
     let n_iter: usize = 100000;
 
     let pb = create_pbar(n_iter as u64);
-    let callback = |it, _state, score: NotNan<f64>| {
+    let callback = |op: OptProgress<StateType, ScoreType>| {
         let pb = pb.clone();
-        pb.set_message(format!("best score {:e}", score.into_inner()));
-        pb.set_position(it as u64);
+        let ratio = op.accepted_count as f64 / op.iter as f64;
+        pb.set_message(format!(
+            "best score {:.4e}, count = {}, acceptance ratio {:.2e}",
+            op.score.into_inner(),
+            op.accepted_count,
+            ratio
+        ));
+        pb.set_position(op.iter as u64);
     };
 
     println!("run hill climbing");
     let optimizer = HillClimbingOptimizer::new(2000, 200);
-    let (_, final_score) = optimizer.optimize(&tsp_model, None, n_iter, Some(&callback));
+    let (final_state, final_score) = optimizer.optimize(&tsp_model, None, n_iter, Some(&callback));
     pb.finish_at_current_pos();
-    println!("final score = {}", final_score);
+    println!(
+        "final score = {}, num of cities {}",
+        final_score,
+        final_state.len()
+    );
 
     pb.finish_and_clear();
     pb.reset();
@@ -260,6 +273,20 @@ fn main() {
     let optimizer = TabuSearchOptimizer::new(2000, 200, 10);
     let (final_state, final_score, _) =
         optimizer.optimize(&tsp_model, None, n_iter, tabu_list, Some(&callback));
+    pb.finish_at_current_pos();
+    println!(
+        "final score = {}, num of cities {}",
+        final_score,
+        final_state.len()
+    );
+
+    pb.finish_and_clear();
+    pb.reset();
+
+    println!("run annealing");
+    let optimizer = SimulatedAnnealingOptimizer::new(n_iter / 10, 200);
+    let (final_state, final_score) =
+        optimizer.optimize(&tsp_model, None, n_iter, 200.0, 50.0, Some(&callback));
     pb.finish_at_current_pos();
     println!(
         "final score = {}, num of cities {}",
