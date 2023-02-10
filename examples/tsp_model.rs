@@ -6,7 +6,7 @@ use std::{
     path::Path,
 };
 
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     optim::{
         callback::OptProgress, HillClimbingOptimizer, SimulatedAnnealingOptimizer, TabuList,
@@ -217,9 +217,10 @@ fn create_pbar(n_iter: u64) -> ProgressBar {
         ProgressStyle::default_bar()
             .template(
                 "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
-            )
-            .progress_chars("#>-"),
+            ).unwrap()
+            .progress_chars("#>-")
     );
+    pb.set_draw_target(ProgressDrawTarget::stderr_with_hz(10));
     pb
 }
 
@@ -259,7 +260,6 @@ fn main() {
     println!("run hill climbing");
     let optimizer = HillClimbingOptimizer::new(2000, 200);
     let (final_state, final_score) = optimizer.optimize(&tsp_model, None, n_iter, Some(&callback));
-    pb.finish_at_current_pos();
     println!(
         "final score = {}, num of cities {}",
         final_score,
@@ -273,7 +273,6 @@ fn main() {
     let optimizer = TabuSearchOptimizer::new(2000, 200, 10);
     let (final_state, final_score, _) =
         optimizer.optimize(&tsp_model, None, n_iter, tabu_list, Some(&callback));
-    pb.finish_at_current_pos();
     println!(
         "final score = {}, num of cities {}",
         final_score,
@@ -287,7 +286,6 @@ fn main() {
     let optimizer = SimulatedAnnealingOptimizer::new(n_iter / 10, 200);
     let (final_state, final_score) =
         optimizer.optimize(&tsp_model, None, n_iter, 200.0, 50.0, Some(&callback));
-    pb.finish_at_current_pos();
     println!(
         "final score = {}, num of cities {}",
         final_score,

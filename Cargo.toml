@@ -7,10 +7,10 @@ edition = "2021"
 
 [dependencies]
 
-rand = "0.8.4"
-ordered-float = "3.0.0"
-rayon = "1.5.1"
+rand = "0.8"
+ordered-float = "3.4"
+rayon = "1.5"
 
 [dev-dependencies]
 approx = "0.5"
-indicatif = "0.16"
+indicatif = "0.17"
