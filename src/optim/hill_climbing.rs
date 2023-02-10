@@ -17,7 +17,7 @@ impl HillClimbingOptimizer {
         Self { patience, n_trials }
     }
 
-    pub fn optimize<M, F, S>(
+    pub fn optimize<M, F>(
         &self,
         model: &M,
         initial_state: Option<M::StateType>,
@@ -25,8 +25,7 @@ impl HillClimbingOptimizer {
         callback: Option<&F>,
     ) -> (M::StateType, M::ScoreType)
     where
-        M: OptModel<StateType = S> + Sync + Send,
-        S: Clone + Sync + Send,
+        M: OptModel + Sync + Send,
         F: OptCallbackFn<M::StateType, M::ScoreType>,
     {
         let mut rng = rand::thread_rng();

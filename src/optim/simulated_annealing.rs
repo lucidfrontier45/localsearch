@@ -44,6 +44,7 @@ impl SimulatedAnnealingOptimizer {
         let mut accepted_counter = 0;
         let mut temperature = max_temperature;
         let t_factor = (min_temperature / max_temperature).ln();
+        let mut counter = 0;
 
         for it in 0..n_iter {
             let (trial_state, trial_score) = (0..self.n_trials)
@@ -70,9 +71,15 @@ impl SimulatedAnnealingOptimizer {
             if current_score < best_score {
                 best_state.replace(current_state.clone());
                 best_score = current_score;
+                counter = 0;
             }
 
             temperature = max_temperature * (t_factor * (it as f64 / n_iter as f64)).exp();
+
+            counter += 1;
+            if counter == self.patience {
+                break;
+            }
 
             if let Some(f) = callback {
                 let progress =

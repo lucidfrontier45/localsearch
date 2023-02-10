@@ -284,9 +284,9 @@ fn main() {
     pb.reset();
 
     println!("run annealing");
-    let optimizer = SimulatedAnnealingOptimizer::new(2000, 200);
+    let optimizer = SimulatedAnnealingOptimizer::new(n_iter / 10, 200);
     let (final_state, final_score) =
-        optimizer.optimize(&tsp_model, None, n_iter, 10.0, 1.0, Some(&callback));
+        optimizer.optimize(&tsp_model, None, n_iter, 200.0, 50.0, Some(&callback));
     pb.finish_at_current_pos();
     println!(
         "final score = {}, num of cities {}",
