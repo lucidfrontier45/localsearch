@@ -1,15 +1,15 @@
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Debug, Clone)]
-pub struct OptProgress<S> {
+pub struct OptProgress<S, SC> {
     pub iter: usize,
     pub accepted_count: usize,
     pub state: Rc<RefCell<S>>,
-    pub score: f64,
+    pub score: SC,
 }
 
-impl<S> OptProgress<S> {
-    pub fn new(iter: usize, accepted_count: usize, state: Rc<RefCell<S>>, score: f64) -> Self {
+impl<S, SC: Ord> OptProgress<S, SC> {
+    pub fn new(iter: usize, accepted_count: usize, state: Rc<RefCell<S>>, score: SC) -> Self {
         Self {
             iter,
             accepted_count,
@@ -19,6 +19,6 @@ impl<S> OptProgress<S> {
     }
 }
 
-pub trait OptCallbackFn<S>: Fn(OptProgress<S>) {}
+pub trait OptCallbackFn<S, SC: Ord>: Fn(OptProgress<S, SC>) {}
 
-impl<T: Fn(OptProgress<S>), S> OptCallbackFn<S> for T {}
+impl<T: Fn(OptProgress<S, SC>), S, SC: Ord> OptCallbackFn<S, SC> for T {}

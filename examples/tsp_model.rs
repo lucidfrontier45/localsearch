@@ -73,8 +73,6 @@ impl TSPModel {
     }
 }
 
-type StateType = Vec<usize>;
-
 fn select_two_indides<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize, usize) {
     let n1 = rng.gen_range(lb..ub);
     let n2 = loop {
@@ -86,13 +84,15 @@ fn select_two_indides<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize
     min_sorted(n1, n2)
 }
 
+type StateType = Vec<usize>;
 // remvoed edges and inserted edges
 type TransitionType = ([Edge; 2], [Edge; 2]);
+type ScoreType = NotNan<f64>;
 
 impl OptModel for TSPModel {
     type StateType = StateType;
     type TransitionType = TransitionType;
-    type ScoreType = NotNan<f64>;
+    type ScoreType = ScoreType;
     fn generate_random_state<R: rand::Rng>(
         &self,
         rng: &mut R,
@@ -212,7 +212,7 @@ where
 }
 
 fn create_pbar(n_iter: u64) -> ProgressBar {
-    let pb = ProgressBar::new(n_iter as u64);
+    let pb = ProgressBar::new(n_iter);
     pb.set_style(
         ProgressStyle::default_bar()
             .template(
@@ -244,12 +244,14 @@ fn main() {
     let n_iter: usize = 100000;
 
     let pb = create_pbar(n_iter as u64);
-    let callback = |op: OptProgress<_>| {
+    let callback = |op: OptProgress<StateType, ScoreType>| {
         let pb = pb.clone();
         let ratio = op.accepted_count as f64 / op.iter as f64;
         pb.set_message(format!(
             "best score {:.4e}, count = {}, acceptance ratio {:.2e}",
-            op.score, op.accepted_count, ratio
+            op.score.into_inner(),
+            op.accepted_count,
+            ratio
         ));
         pb.set_position(op.iter as u64);
     };

@@ -27,7 +27,7 @@ impl HillClimbingOptimizer {
     where
         M: OptModel<StateType = S> + Sync + Send,
         S: Clone + Sync + Send,
-        F: OptCallbackFn<S>,
+        F: OptCallbackFn<M::StateType, M::ScoreType>,
     {
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {

@@ -8,7 +8,7 @@ pub trait OptModel
 where
     Self::ScoreType: Ord + Copy + Sync + Send,
 {
-    type StateType;
+    type StateType: Clone + Sync + Send;
     type TransitionType;
     type ScoreType;
     fn generate_random_state<R: rand::Rng>(

@@ -19,19 +19,18 @@ impl SimulatedAnnealingOptimizer {
         Self { patience, n_trials }
     }
 
-    pub fn optimize<S, T, M, F>(
+    pub fn optimize<M, F>(
         &self,
         model: &M,
-        initial_state: Option<S>,
+        initial_state: Option<M::StateType>,
         n_iter: usize,
         max_temperature: f64,
         min_temperature: f64,
         callback: Option<&F>,
-    ) -> (S, f64)
+    ) -> (M::StateType, M::ScoreType)
     where
-        M: OptModel<S, T> + Sync + Send,
-        S: Clone + Sync + Send,
-        F: OptCallbackFn<S>,
+        M: OptModel<ScoreType = NotNan<f64>> + Sync + Send,
+        F: OptCallbackFn<M::StateType, M::ScoreType>,
     {
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {
@@ -55,7 +54,7 @@ impl SimulatedAnnealingOptimizer {
                         model.generate_trial_state(&current_state, &mut rng, Some(current_score));
                     (state, score)
                 })
-                .min_by_key(|(_, score)| NotNan::new(*score).unwrap())
+                .min_by_key(|(_, score)| *score)
                 .unwrap();
             // .sort_unstable_by_key(|(_, _, score)| NotNan::new(*score).unwrap());
             let ds = trial_score - current_score;

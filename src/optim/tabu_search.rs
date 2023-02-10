@@ -63,7 +63,7 @@ impl TabuSearchOptimizer {
     where
         M: OptModel<StateType = S, TransitionType = T> + Sync + Send,
         L: TabuList<Item = (M::StateType, M::TransitionType)>,
-        F: Fn(usize, Rc<RefCell<M::StateType>>, M::ScoreType),
+        F: OptCallbackFn<M::StateType, M::ScoreType>,
         S: Clone + Sync + Send,
         T: Clone + Sync + Send,
     {
