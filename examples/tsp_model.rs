@@ -10,7 +10,7 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     optim::{
         callback::OptProgress, EpsilonGreedyOptimizer, HillClimbingOptimizer,
-        SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
+        LogisticAnnealingOptimizer, SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
     },
     utils::RingBuffer,
     OptModel,
@@ -242,7 +242,11 @@ fn main() {
 
     let tsp_model = TSPModel::from_coords(&coords);
 
-    let n_iter: usize = 100000;
+    let n_iter: usize = 20000;
+    let patience = n_iter;
+
+    let mut rng = rand::thread_rng();
+    let initial_state = tsp_model.generate_random_state(&mut rng).ok();
 
     let pb = create_pbar(n_iter as u64);
     let callback = |op: OptProgress<StateType, ScoreType>| {
@@ -258,8 +262,9 @@ fn main() {
     };
 
     println!("run hill climbing");
-    let optimizer = HillClimbingOptimizer::new(2000, 200);
-    let (final_state, final_score) = optimizer.optimize(&tsp_model, None, n_iter, Some(&callback));
+    let optimizer = HillClimbingOptimizer::new(patience, 200);
+    let (final_state, final_score) =
+        optimizer.optimize(&tsp_model, initial_state.clone(), n_iter, Some(&callback));
     println!(
         "final score = {}, num of cities {}",
         final_score,
@@ -270,9 +275,14 @@ fn main() {
 
     println!("run tabu search");
     let tabu_list = DequeTabuList::new(20);
-    let optimizer = TabuSearchOptimizer::new(2000, 200, 10);
-    let (final_state, final_score, _) =
-        optimizer.optimize(&tsp_model, None, n_iter, tabu_list, Some(&callback));
+    let optimizer = TabuSearchOptimizer::new(patience, 200, 10);
+    let (final_state, final_score, _) = optimizer.optimize(
+        &tsp_model,
+        initial_state.clone(),
+        n_iter,
+        tabu_list,
+        Some(&callback),
+    );
     println!(
         "final score = {}, num of cities {}",
         final_score,
@@ -282,9 +292,15 @@ fn main() {
     pb.reset();
 
     println!("run annealing");
-    let optimizer = SimulatedAnnealingOptimizer::new(n_iter / 10, 200);
-    let (final_state, final_score) =
-        optimizer.optimize(&tsp_model, None, n_iter, 200.0, 50.0, Some(&callback));
+    let optimizer = SimulatedAnnealingOptimizer::new(patience, 200);
+    let (final_state, final_score) = optimizer.optimize(
+        &tsp_model,
+        initial_state.clone(),
+        n_iter,
+        200.0,
+        50.0,
+        Some(&callback),
+    );
     println!(
         "final score = {}, num of cities {}",
         final_score,
@@ -294,8 +310,21 @@ fn main() {
     pb.reset();
 
     println!("run epsilon greedy");
-    let optimizer = EpsilonGreedyOptimizer::new(n_iter / 10, 200, 0.3);
-    let (final_state, final_score) = optimizer.optimize(&tsp_model, None, n_iter, Some(&callback));
+    let optimizer = EpsilonGreedyOptimizer::new(patience, 200, 0.3);
+    let (final_state, final_score) =
+        optimizer.optimize(&tsp_model, initial_state.clone(), n_iter, Some(&callback));
+    println!(
+        "final score = {}, num of cities {}",
+        final_score,
+        final_state.len()
+    );
+    pb.finish_and_clear();
+    pb.reset();
+
+    println!("run logistic annealing");
+    let optimizer = LogisticAnnealingOptimizer::new(patience, 200, 1e5);
+    let (final_state, final_score) =
+        optimizer.optimize(&tsp_model, initial_state, n_iter, Some(&callback));
     println!(
         "final score = {}, num of cities {}",
         final_score,

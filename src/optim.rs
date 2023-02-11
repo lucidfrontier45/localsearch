@@ -1,13 +1,13 @@
 pub mod callback;
 
-mod hill_climbing;
-pub use hill_climbing::HillClimbingOptimizer;
-
-mod tabu_search;
-pub use tabu_search::{TabuList, TabuSearchOptimizer};
-
-mod simulated_annealing;
-pub use simulated_annealing::SimulatedAnnealingOptimizer;
-
 mod epsilon_greedy;
+mod hill_climbing;
+mod logistic_annealing;
+mod simulated_annealing;
+mod tabu_search;
+
 pub use epsilon_greedy::EpsilonGreedyOptimizer;
+pub use hill_climbing::HillClimbingOptimizer;
+pub use logistic_annealing::LogisticAnnealingOptimizer;
+pub use simulated_annealing::SimulatedAnnealingOptimizer;
+pub use tabu_search::{TabuList, TabuSearchOptimizer};
