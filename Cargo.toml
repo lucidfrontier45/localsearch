@@ -1,5 +1,12 @@
 [package]
 name = "localsearch"
+authors = ["Du Shiqiao <lucidfrontier.45@gmail.com>"]
+description = "A Library of Local Search based Metaheuristics"
+keywords = ["optimization", "metaheuristics", "localsearch"]
+categories = ["algorithms"]
+repository = "https://github.com/lucidfrontier45/localsearch"
+license-file = "LICENSE"
+readme = "README.md"
 version = "0.7.0"
 edition = "2021"
 
@@ -14,3 +21,6 @@ rayon = "1.5"
 [dev-dependencies]
 approx = "0.5"
 indicatif = "0.17"
+
+[lib]
+name = "localsearch"
