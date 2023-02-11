@@ -7,17 +7,14 @@ use rayon::prelude::*;
 use super::callback::{OptCallbackFn, OptProgress};
 use crate::OptModel;
 
-fn logistic_sigmoid(x: f64) -> f64 {
-    1.0 / (1.0 + (-x).exp())
-}
-
 fn calc_transition_score(trial_score: f64, current_score: f64, w: f64) -> f64 {
     let ds = (trial_score - current_score) / current_score;
 
     if ds < 0.0 {
         1.0
     } else {
-        logistic_sigmoid(-ds * w) + 0.5
+        let z = ds * w;
+        2.0 / (1.0 + z.exp())
     }
 }
 
@@ -113,7 +110,7 @@ mod test {
 
     #[test]
     fn test_calc_transition_score() {
-        let w = 1000.0;
+        let w = 1e1;
         assert_abs_diff_eq!(calc_transition_score(0.9, 1.0, w), 1.0, epsilon = 0.01);
 
         let p1 = calc_transition_score(1.1, 1.0, w);

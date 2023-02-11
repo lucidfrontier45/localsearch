@@ -243,7 +243,7 @@ fn main() {
     let tsp_model = TSPModel::from_coords(&coords);
 
     let n_iter: usize = 20000;
-    let patience = n_iter;
+    let patience = n_iter / 2;
 
     let mut rng = rand::thread_rng();
     let initial_state = tsp_model.generate_random_state(&mut rng).ok();
@@ -262,7 +262,7 @@ fn main() {
     };
 
     println!("run hill climbing");
-    let optimizer = HillClimbingOptimizer::new(patience, 200);
+    let optimizer = HillClimbingOptimizer::new(1000, 200);
     let (final_state, final_score) =
         optimizer.optimize(&tsp_model, initial_state.clone(), n_iter, Some(&callback));
     println!(
@@ -322,7 +322,7 @@ fn main() {
     pb.reset();
 
     println!("run logistic annealing");
-    let optimizer = LogisticAnnealingOptimizer::new(patience, 200, 1e5);
+    let optimizer = LogisticAnnealingOptimizer::new(patience, 200, 1e3);
     let (final_state, final_score) =
         optimizer.optimize(&tsp_model, initial_state, n_iter, Some(&callback));
     println!(
