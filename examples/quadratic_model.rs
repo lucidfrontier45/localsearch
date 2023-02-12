@@ -2,9 +2,9 @@ use std::error::Error;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
-    optim::{callback::OptProgress, HillClimbingOptimizer, TabuList, TabuSearchOptimizer},
+    optim::{HillClimbingOptimizer, TabuList, TabuSearchOptimizer},
     utils::RingBuffer,
-    OptModel,
+    OptModel, OptProgress,
 };
 use ordered_float::NotNan;
 use rand::{self, distributions::Uniform, prelude::Distribution};
@@ -113,7 +113,6 @@ fn main() {
     let opt = HillClimbingOptimizer::new(patiance, n_trials);
     let pb = create_pbar(n_iter as u64);
     let callback = |op: OptProgress<StateType, ScoreType>| {
-        let pb = pb.clone();
         pb.set_message(format!("best score {:e}", op.score.into_inner()));
         pb.set_position(op.iter as u64);
     };

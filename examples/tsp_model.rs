@@ -9,11 +9,11 @@ use std::{
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     optim::{
-        callback::OptProgress, EpsilonGreedyOptimizer, HillClimbingOptimizer,
-        LogisticAnnealingOptimizer, SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
+        EpsilonGreedyOptimizer, HillClimbingOptimizer, LogisticAnnealingOptimizer,
+        SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
     },
     utils::RingBuffer,
-    OptModel,
+    OptModel, OptProgress,
 };
 use ordered_float::NotNan;
 use rand::seq::SliceRandom;
@@ -243,14 +243,13 @@ fn main() {
     let tsp_model = TSPModel::from_coords(&coords);
 
     let n_iter: usize = 20000;
-    let patience = n_iter;
+    let patience = n_iter / 2;
 
     let mut rng = rand::thread_rng();
     let initial_state = tsp_model.generate_random_state(&mut rng).ok();
 
     let pb = create_pbar(n_iter as u64);
     let callback = |op: OptProgress<StateType, ScoreType>| {
-        let pb = pb.clone();
         let ratio = op.accepted_count as f64 / op.iter as f64;
         pb.set_message(format!(
             "best score {:.4e}, count = {}, acceptance ratio {:.2e}",
@@ -262,7 +261,7 @@ fn main() {
     };
 
     println!("run hill climbing");
-    let optimizer = HillClimbingOptimizer::new(patience, 200);
+    let optimizer = HillClimbingOptimizer::new(1000, 200);
     let (final_state, final_score) =
         optimizer.optimize(&tsp_model, initial_state.clone(), n_iter, Some(&callback));
     println!(
@@ -322,7 +321,7 @@ fn main() {
     pb.reset();
 
     println!("run logistic annealing");
-    let optimizer = LogisticAnnealingOptimizer::new(patience, 200, 1e5);
+    let optimizer = LogisticAnnealingOptimizer::new(patience, 200, 1e3);
     let (final_state, final_score) =
         optimizer.optimize(&tsp_model, initial_state, n_iter, Some(&callback));
     println!(

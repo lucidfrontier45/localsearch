@@ -3,10 +3,12 @@ use std::{cell::RefCell, rc::Rc};
 use rand::Rng;
 use rayon::prelude::*;
 
+use crate::callback::{OptCallbackFn, OptProgress};
 use crate::OptModel;
 
-use super::callback::{OptCallbackFn, OptProgress};
-
+/// Optimizer that implements epsilon-greedy algorithm.
+/// Unlike a total greedy algorithm such as hill climbing,
+/// it allows transitions that worsens the score with a fixed probability
 #[derive(Clone, Copy)]
 pub struct EpsilonGreedyOptimizer {
     patience: usize,
@@ -15,6 +17,12 @@ pub struct EpsilonGreedyOptimizer {
 }
 
 impl EpsilonGreedyOptimizer {
+    /// Constructor of EpsilonGreedyOptimizer
+    ///
+    /// - `patience` : the optimizer will give up
+    ///   if there is no improvement of the score after this number of iterations
+    /// - `n_trials` : number of trial states to generate and evaluate at each iteration
+    /// - `epsilon` : probability to accept a transition that worsens the score. Must be in [0, 1].
     pub fn new(patience: usize, n_trials: usize, epsilon: f64) -> Self {
         Self {
             patience,
@@ -23,6 +31,12 @@ impl EpsilonGreedyOptimizer {
         }
     }
 
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
+    /// - `n_iter`: maximum iterations
+    /// - `callback` : callback function that will be invoked at the end of each iteration
     pub fn optimize<M, F>(
         &self,
         model: &M,
