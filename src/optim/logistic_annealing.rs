@@ -18,6 +18,15 @@ fn calc_transition_score(trial_score: f64, current_score: f64, w: f64) -> f64 {
     }
 }
 
+/// Optimizer that implements logistic annealing algorithm
+/// In this model, wether accept the trial state or not is decided by the following criterion
+///
+/// d <- (trial_score / current_score) / current_score
+/// if d < 0:
+///     accept
+/// else:
+///     p <- sigmoid(-w * d) * 2.0
+///     accept if p > rand(0, 1)
 #[derive(Clone, Copy)]
 pub struct LogisticAnnealingOptimizer {
     patience: usize,
@@ -26,6 +35,12 @@ pub struct LogisticAnnealingOptimizer {
 }
 
 impl LogisticAnnealingOptimizer {
+    /// Constructor of LogisticAnnealingOptimizer
+    ///
+    /// - `patience` : the optimizer will give up
+    ///   if there is no improvement of the score after this number of iterations
+    /// - `n_trials` : number of trial states to generate and evaluate at each iteration
+    /// - `w` : positive weight parameter to be multiplied to relative difference.
     pub fn new(patience: usize, n_trials: usize, w: f64) -> Self {
         Self {
             patience,
@@ -34,6 +49,12 @@ impl LogisticAnnealingOptimizer {
         }
     }
 
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
+    /// - `n_iter`: maximum iterations
+    /// - `callback` : callback function that will be invoked at the end of each iteration
     pub fn optimize<M, F>(
         &self,
         model: &M,

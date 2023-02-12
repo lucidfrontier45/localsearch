@@ -28,6 +28,33 @@ impl<S, SC: Ord> OptProgress<S, SC> {
 }
 
 /// OptCallbackFn is a trait of a callback function for optimization
+/// Typical usage is to show progress bar and save current result to the file
+///
+/// Example
+///
+/// ```rust
+/// let pb = ProgressBar::new(n_iter);
+/// pb.set_style(
+///        ProgressStyle::default_bar()
+///             .template(
+///                 "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
+///             ).unwrap()
+///             .progress_chars("#>-")
+///     );
+///     pb.set_draw_target(ProgressDrawTarget::stderr_with_hz(10));
+///     pb
+/// };
+/// let callback = |op: OptProgress<StateType, ScoreType>| {
+///     let ratio = op.accepted_count as f64 / op.iter as f64;
+///     pb.set_message(format!(
+///         "best score {:.4e}, count = {}, acceptance ratio {:.2e}",
+///         op.score.into_inner(),
+///         op.accepted_count,
+///         ratio
+///     ));
+///     pb.set_position(op.iter as u64);
+/// };
+/// ```
 pub trait OptCallbackFn<S, SC: Ord>: Fn(OptProgress<S, SC>) {}
 
 impl<T: Fn(OptProgress<S, SC>), S, SC: Ord> OptCallbackFn<S, SC> for T {}

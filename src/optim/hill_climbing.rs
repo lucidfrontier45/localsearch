@@ -26,6 +26,8 @@ impl HillClimbingOptimizer {
     ///
     /// - `model` : the model to optimize
     /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
+    /// - `n_iter`: maximum iterations
+    /// - `callback` : callback function that will be invoked at the end of each iteration
     pub fn optimize<M, F>(
         &self,
         model: &M,

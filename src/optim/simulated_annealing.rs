@@ -7,6 +7,7 @@ use rayon::prelude::*;
 use crate::callback::{OptCallbackFn, OptProgress};
 use crate::OptModel;
 
+/// Optimizer that implements the simulated annealing algorithm
 #[derive(Clone, Copy)]
 pub struct SimulatedAnnealingOptimizer {
     patience: usize,
@@ -14,10 +15,23 @@ pub struct SimulatedAnnealingOptimizer {
 }
 
 impl SimulatedAnnealingOptimizer {
+    /// Constructor of SimulatedAnnealingOptimizer
+    ///
+    /// - `patience` : the optimizer will give up
+    ///   if there is no improvement of the score after this number of iterations
+    /// - `n_trials` : number of trial states to generate and evaluate at each iteration
     pub fn new(patience: usize, n_trials: usize) -> Self {
         Self { patience, n_trials }
     }
 
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
+    /// - `n_iter`: maximum iterations
+    /// - `max_temperature` : the initial temperature at the begining of the optimization
+    /// - `min_temperature` : the final temperature at the end of the optimization
+    /// - `callback` : callback function that will be invoked at the end of each iteration
     pub fn optimize<M, F>(
         &self,
         model: &M,

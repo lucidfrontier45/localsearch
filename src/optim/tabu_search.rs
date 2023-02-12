@@ -4,13 +4,19 @@ use std::{cell::RefCell, rc::Rc};
 use crate::callback::{OptCallbackFn, OptProgress};
 use crate::OptModel;
 
+/// Trait that a tabu list must satisfies
 pub trait TabuList {
+    /// Item type of the likst
     type Item;
 
+    /// Check if the item is a Tabu
     fn contains(&self, item: &Self::Item) -> bool;
+
+    /// Append the item to the list
     fn append(&mut self, item: Self::Item);
 }
 
+/// Optimizer that implements the tabu search algorithm
 pub struct TabuSearchOptimizer {
     patience: usize,
     n_trials: usize,
@@ -43,6 +49,12 @@ where
 }
 
 impl TabuSearchOptimizer {
+    /// Constructor of TabuSearchOptimizer
+    ///
+    /// - `patience` : the optimizer will give up
+    ///   if there is no improvement of the score after this number of iterations
+    /// - `n_trials` : number of trial states to generate and evaluate at each iteration
+    /// - `return_iter` : returns to the current best state if there is no improvement after this number of iterations.
     pub fn new(patience: usize, n_trials: usize, return_iter: usize) -> Self {
         Self {
             patience,
@@ -51,6 +63,13 @@ impl TabuSearchOptimizer {
         }
     }
 
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
+    /// - `n_iter`: maximum iterations
+    /// - `tabu_list` : initial tabu list
+    /// - `callback` : callback function that will be invoked at the end of each iteration
     pub fn optimize<M, L, F>(
         &self,
         model: &M,
