@@ -1,10 +1,10 @@
 use std::error::Error;
 
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     optim::{HillClimbingOptimizer, TabuList, TabuSearchOptimizer},
     utils::RingBuffer,
-    OptModel,
+    OptModel, OptProgress,
 };
 use ordered_float::NotNan;
 use rand::{self, distributions::Uniform, prelude::Distribution};
@@ -26,11 +26,12 @@ impl QuadraticModel {
 
 type StateType = Vec<f64>;
 type TransitionType = (usize, f64, f64);
+type ScoreType = NotNan<f64>;
 
 impl OptModel for QuadraticModel {
     type StateType = StateType;
     type TransitionType = TransitionType;
-    type ScoreType = NotNan<f64>;
+    type ScoreType = ScoreType;
     fn generate_random_state<R: rand::Rng>(
         &self,
         rng: &mut R,
@@ -89,6 +90,19 @@ impl TabuList for DequeTabuList {
     }
 }
 
+fn create_pbar(n_iter: u64) -> ProgressBar {
+    let pb = ProgressBar::new(n_iter);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template(
+                "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
+            ).unwrap()
+            .progress_chars("#>-")
+    );
+    pb.set_draw_target(ProgressDrawTarget::stderr_with_hz(10));
+    pb
+}
+
 fn main() {
     let model = QuadraticModel::new(3, vec![2.0, 0.0, -3.5], (-10.0, 10.0));
 
@@ -97,22 +111,14 @@ fn main() {
     let patiance = 1000;
     let n_trials = 50;
     let opt = HillClimbingOptimizer::new(patiance, n_trials);
-    let pb = ProgressBar::new(n_iter as u64);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template(
-                "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
-            )
-            .progress_chars("#>-"),
-    );
-    let callback = |it, _state, score: NotNan<f64>| {
-        let pb = pb.clone();
-        pb.set_message(format!("best score {:e}", score.into_inner()));
-        pb.set_position(it as u64);
+    let pb = create_pbar(n_iter as u64);
+    let callback = |op: OptProgress<StateType, ScoreType>| {
+        pb.set_message(format!("best score {:e}", op.score.into_inner()));
+        pb.set_position(op.iter as u64);
     };
 
     let res = opt.optimize(&model, None, n_iter, Some(&callback));
-    pb.finish_at_current_pos();
+    pb.finish();
     dbg!(res);
 
     pb.finish_and_clear();
@@ -121,7 +127,7 @@ fn main() {
     let opt = TabuSearchOptimizer::new(patiance, n_trials, 20);
     let tabu_list = DequeTabuList::new(2);
 
-    let res = opt.optimize(&model, None, n_iter as usize, tabu_list, Some(&callback));
-    pb.finish_at_current_pos();
+    let res = opt.optimize(&model, None, n_iter, tabu_list, Some(&callback));
+    pb.finish();
     dbg!((res.0, res.1));
 }

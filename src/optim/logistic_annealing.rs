@@ -1,25 +1,52 @@
 use std::{cell::RefCell, rc::Rc};
 
+use ordered_float::NotNan;
+use rand::Rng;
 use rayon::prelude::*;
 
 use crate::callback::{OptCallbackFn, OptProgress};
 use crate::OptModel;
 
-/// Optimizer that implements simple hill climbing algorithm
-#[derive(Clone, Copy)]
-pub struct HillClimbingOptimizer {
-    patience: usize,
-    n_trials: usize,
+fn calc_transition_score(trial_score: f64, current_score: f64, w: f64) -> f64 {
+    let ds = (trial_score - current_score) / current_score;
+
+    if ds < 0.0 {
+        1.0
+    } else {
+        let z = ds * w;
+        2.0 / (1.0 + z.exp())
+    }
 }
 
-impl HillClimbingOptimizer {
-    /// Constructor of HillClimbingOPtimizer
+/// Optimizer that implements logistic annealing algorithm
+/// In this model, wether accept the trial state or not is decided by the following criterion
+///
+/// d <- (trial_score / current_score) / current_score
+/// if d < 0:
+///     accept
+/// else:
+///     p <- sigmoid(-w * d) * 2.0
+///     accept if p > rand(0, 1)
+#[derive(Clone, Copy)]
+pub struct LogisticAnnealingOptimizer {
+    patience: usize,
+    n_trials: usize,
+    w: f64,
+}
+
+impl LogisticAnnealingOptimizer {
+    /// Constructor of LogisticAnnealingOptimizer
     ///
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial states to generate and evaluate at each iteration
-    pub fn new(patience: usize, n_trials: usize) -> Self {
-        Self { patience, n_trials }
+    /// - `w` : positive weight parameter to be multiplied to relative difference.
+    pub fn new(patience: usize, n_trials: usize, w: f64) -> Self {
+        Self {
+            patience,
+            n_trials,
+            w,
+        }
     }
 
     /// Start optimization
@@ -36,7 +63,7 @@ impl HillClimbingOptimizer {
         callback: Option<&F>,
     ) -> (M::StateType, M::ScoreType)
     where
-        M: OptModel + Sync + Send,
+        M: OptModel<ScoreType = NotNan<f64>> + Sync + Send,
         F: OptCallbackFn<M::StateType, M::ScoreType>,
     {
         let mut rng = rand::thread_rng();
@@ -48,8 +75,9 @@ impl HillClimbingOptimizer {
         let mut current_score = model.evaluate_state(&current_state);
         let best_state = Rc::new(RefCell::new(current_state.clone()));
         let mut best_score = current_score;
-        let mut counter = 0;
         let mut accepted_counter = 0;
+        let mut counter = 0;
+
         for it in 0..n_iter {
             let (trial_state, trial_score) = (0..self.n_trials)
                 .into_par_iter()
@@ -62,18 +90,25 @@ impl HillClimbingOptimizer {
                 .min_by_key(|(_, score)| *score)
                 .unwrap();
 
-            if trial_score < current_score {
+            let p =
+                calc_transition_score(trial_score.into_inner(), current_score.into_inner(), self.w);
+            let r: f64 = rng.gen();
+
+            if p > r {
                 current_state = trial_state;
                 current_score = trial_score;
+                accepted_counter += 1;
+            }
+
+            if current_score < best_score {
                 best_state.replace(current_state.clone());
                 best_score = current_score;
                 counter = 0;
-                accepted_counter += 1;
-            } else {
-                counter += 1;
-                if counter >= self.patience {
-                    break;
-                }
+            }
+
+            counter += 1;
+            if counter == self.patience {
+                break;
             }
 
             if let Some(f) = callback {
@@ -83,6 +118,24 @@ impl HillClimbingOptimizer {
             }
         }
 
-        (current_state, current_score)
+        let best_state = (*best_state.borrow()).clone();
+        (best_state, best_score)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use approx::assert_abs_diff_eq;
+
+    use super::calc_transition_score;
+
+    #[test]
+    fn test_calc_transition_score() {
+        let w = 1e1;
+        assert_abs_diff_eq!(calc_transition_score(0.9, 1.0, w), 1.0, epsilon = 0.01);
+
+        let p1 = calc_transition_score(1.1, 1.0, w);
+        let p2 = calc_transition_score(1.2, 1.0, w);
+        assert!(p1 > p2);
     }
 }

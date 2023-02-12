@@ -6,11 +6,14 @@ use std::{
     path::Path,
 };
 
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
-    optim::{HillClimbingOptimizer, TabuList, TabuSearchOptimizer},
+    optim::{
+        EpsilonGreedyOptimizer, HillClimbingOptimizer, LogisticAnnealingOptimizer,
+        SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
+    },
     utils::RingBuffer,
-    OptModel,
+    OptModel, OptProgress,
 };
 use ordered_float::NotNan;
 use rand::seq::SliceRandom;
@@ -70,8 +73,6 @@ impl TSPModel {
     }
 }
 
-type StateType = Vec<usize>;
-
 fn select_two_indides<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize, usize) {
     let n1 = rng.gen_range(lb..ub);
     let n2 = loop {
@@ -83,13 +84,15 @@ fn select_two_indides<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize
     min_sorted(n1, n2)
 }
 
+type StateType = Vec<usize>;
 // remvoed edges and inserted edges
 type TransitionType = ([Edge; 2], [Edge; 2]);
+type ScoreType = NotNan<f64>;
 
 impl OptModel for TSPModel {
     type StateType = StateType;
     type TransitionType = TransitionType;
-    type ScoreType = NotNan<f64>;
+    type ScoreType = ScoreType;
     fn generate_random_state<R: rand::Rng>(
         &self,
         rng: &mut R,
@@ -209,14 +212,15 @@ where
 }
 
 fn create_pbar(n_iter: u64) -> ProgressBar {
-    let pb = ProgressBar::new(n_iter as u64);
+    let pb = ProgressBar::new(n_iter);
     pb.set_style(
         ProgressStyle::default_bar()
             .template(
                 "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
-            )
-            .progress_chars("#>-"),
+            ).unwrap()
+            .progress_chars("#>-")
     );
+    pb.set_draw_target(ProgressDrawTarget::stderr_with_hz(10));
     pb
 }
 
@@ -238,29 +242,88 @@ fn main() {
 
     let tsp_model = TSPModel::from_coords(&coords);
 
-    let n_iter: usize = 100000;
+    let n_iter: usize = 20000;
+    let patience = n_iter / 2;
+
+    let mut rng = rand::thread_rng();
+    let initial_state = tsp_model.generate_random_state(&mut rng).ok();
 
     let pb = create_pbar(n_iter as u64);
-    let callback = |it, _state, score: NotNan<f64>| {
-        let pb = pb.clone();
-        pb.set_message(format!("best score {:e}", score.into_inner()));
-        pb.set_position(it as u64);
+    let callback = |op: OptProgress<StateType, ScoreType>| {
+        let ratio = op.accepted_count as f64 / op.iter as f64;
+        pb.set_message(format!(
+            "best score {:.4e}, count = {}, acceptance ratio {:.2e}",
+            op.score.into_inner(),
+            op.accepted_count,
+            ratio
+        ));
+        pb.set_position(op.iter as u64);
     };
 
     println!("run hill climbing");
-    let optimizer = HillClimbingOptimizer::new(2000, 200);
-    let (_, final_score) = optimizer.optimize(&tsp_model, None, n_iter, Some(&callback));
-    pb.finish_at_current_pos();
-    println!("final score = {}", final_score);
-
+    let optimizer = HillClimbingOptimizer::new(1000, 200);
+    let (final_state, final_score) =
+        optimizer.optimize(&tsp_model, initial_state.clone(), n_iter, Some(&callback));
+    println!(
+        "final score = {}, num of cities {}",
+        final_score,
+        final_state.len()
+    );
     pb.finish_and_clear();
     pb.reset();
+
     println!("run tabu search");
     let tabu_list = DequeTabuList::new(20);
-    let optimizer = TabuSearchOptimizer::new(2000, 200, 10);
-    let (final_state, final_score, _) =
-        optimizer.optimize(&tsp_model, None, n_iter, tabu_list, Some(&callback));
-    pb.finish_at_current_pos();
+    let optimizer = TabuSearchOptimizer::new(patience, 200, 10);
+    let (final_state, final_score, _) = optimizer.optimize(
+        &tsp_model,
+        initial_state.clone(),
+        n_iter,
+        tabu_list,
+        Some(&callback),
+    );
+    println!(
+        "final score = {}, num of cities {}",
+        final_score,
+        final_state.len()
+    );
+    pb.finish_and_clear();
+    pb.reset();
+
+    println!("run annealing");
+    let optimizer = SimulatedAnnealingOptimizer::new(patience, 200);
+    let (final_state, final_score) = optimizer.optimize(
+        &tsp_model,
+        initial_state.clone(),
+        n_iter,
+        200.0,
+        50.0,
+        Some(&callback),
+    );
+    println!(
+        "final score = {}, num of cities {}",
+        final_score,
+        final_state.len()
+    );
+    pb.finish_and_clear();
+    pb.reset();
+
+    println!("run epsilon greedy");
+    let optimizer = EpsilonGreedyOptimizer::new(patience, 200, 0.3);
+    let (final_state, final_score) =
+        optimizer.optimize(&tsp_model, initial_state.clone(), n_iter, Some(&callback));
+    println!(
+        "final score = {}, num of cities {}",
+        final_score,
+        final_state.len()
+    );
+    pb.finish_and_clear();
+    pb.reset();
+
+    println!("run logistic annealing");
+    let optimizer = LogisticAnnealingOptimizer::new(patience, 200, 1e3);
+    let (final_state, final_score) =
+        optimizer.optimize(&tsp_model, initial_state, n_iter, Some(&callback));
     println!(
         "final score = {}, num of cities {}",
         final_score,

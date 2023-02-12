@@ -1,19 +1,21 @@
 use std::{cell::RefCell, rc::Rc};
 
+use ordered_float::NotNan;
+use rand::Rng;
 use rayon::prelude::*;
 
 use crate::callback::{OptCallbackFn, OptProgress};
 use crate::OptModel;
 
-/// Optimizer that implements simple hill climbing algorithm
+/// Optimizer that implements the simulated annealing algorithm
 #[derive(Clone, Copy)]
-pub struct HillClimbingOptimizer {
+pub struct SimulatedAnnealingOptimizer {
     patience: usize,
     n_trials: usize,
 }
 
-impl HillClimbingOptimizer {
-    /// Constructor of HillClimbingOPtimizer
+impl SimulatedAnnealingOptimizer {
+    /// Constructor of SimulatedAnnealingOptimizer
     ///
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
@@ -27,16 +29,20 @@ impl HillClimbingOptimizer {
     /// - `model` : the model to optimize
     /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
     /// - `n_iter`: maximum iterations
+    /// - `max_temperature` : the initial temperature at the begining of the optimization
+    /// - `min_temperature` : the final temperature at the end of the optimization
     /// - `callback` : callback function that will be invoked at the end of each iteration
     pub fn optimize<M, F>(
         &self,
         model: &M,
         initial_state: Option<M::StateType>,
         n_iter: usize,
+        max_temperature: f64,
+        min_temperature: f64,
         callback: Option<&F>,
     ) -> (M::StateType, M::ScoreType)
     where
-        M: OptModel + Sync + Send,
+        M: OptModel<ScoreType = NotNan<f64>> + Sync + Send,
         F: OptCallbackFn<M::StateType, M::ScoreType>,
     {
         let mut rng = rand::thread_rng();
@@ -48,8 +54,11 @@ impl HillClimbingOptimizer {
         let mut current_score = model.evaluate_state(&current_state);
         let best_state = Rc::new(RefCell::new(current_state.clone()));
         let mut best_score = current_score;
-        let mut counter = 0;
         let mut accepted_counter = 0;
+        let mut temperature = max_temperature;
+        let t_factor = (min_temperature / max_temperature).ln();
+        let mut counter = 0;
+
         for it in 0..n_iter {
             let (trial_state, trial_score) = (0..self.n_trials)
                 .into_par_iter()
@@ -62,18 +71,27 @@ impl HillClimbingOptimizer {
                 .min_by_key(|(_, score)| *score)
                 .unwrap();
 
-            if trial_score < current_score {
+            let ds = trial_score - current_score;
+            let p = (-ds / temperature).exp();
+            let r: f64 = rng.gen();
+
+            if p > r {
                 current_state = trial_state;
                 current_score = trial_score;
+                accepted_counter += 1;
+            }
+
+            if current_score < best_score {
                 best_state.replace(current_state.clone());
                 best_score = current_score;
                 counter = 0;
-                accepted_counter += 1;
-            } else {
-                counter += 1;
-                if counter >= self.patience {
-                    break;
-                }
+            }
+
+            temperature = max_temperature * (t_factor * (it as f64 / n_iter as f64)).exp();
+
+            counter += 1;
+            if counter == self.patience {
+                break;
             }
 
             if let Some(f) = callback {
@@ -83,6 +101,7 @@ impl HillClimbingOptimizer {
             }
         }
 
-        (current_state, current_score)
+        let best_state = (*best_state.borrow()).clone();
+        (best_state, best_score)
     }
 }

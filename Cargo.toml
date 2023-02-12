@@ -1,16 +1,26 @@
 [package]
 name = "localsearch"
-version = "0.6.0"
+authors = ["Du Shiqiao <lucidfrontier.45@gmail.com>"]
+description = "A Library of Local Search based Metaheuristics"
+keywords = ["optimization", "metaheuristics", "localsearch"]
+categories = ["algorithms"]
+repository = "https://github.com/lucidfrontier45/localsearch"
+license-file = "LICENSE"
+readme = "README.md"
+version = "0.7.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 
-rand = "0.8.4"
-ordered-float = "3.0.0"
-rayon = "1.5.1"
+rand = "0.8"
+ordered-float = "3.4"
+rayon = "1.5"
 
 [dev-dependencies]
 approx = "0.5"
-indicatif = "0.16"
+indicatif = "0.17"
+
+[lib]
+name = "localsearch"

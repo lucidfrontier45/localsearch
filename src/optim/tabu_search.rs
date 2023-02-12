@@ -1,15 +1,22 @@
 use rayon::prelude::*;
 use std::{cell::RefCell, rc::Rc};
 
+use crate::callback::{OptCallbackFn, OptProgress};
 use crate::OptModel;
 
+/// Trait that a tabu list must satisfies
 pub trait TabuList {
+    /// Item type of the likst
     type Item;
 
+    /// Check if the item is a Tabu
     fn contains(&self, item: &Self::Item) -> bool;
+
+    /// Append the item to the list
     fn append(&mut self, item: Self::Item);
 }
 
+/// Optimizer that implements the tabu search algorithm
 pub struct TabuSearchOptimizer {
     patience: usize,
     n_trials: usize,
@@ -42,6 +49,12 @@ where
 }
 
 impl TabuSearchOptimizer {
+    /// Constructor of TabuSearchOptimizer
+    ///
+    /// - `patience` : the optimizer will give up
+    ///   if there is no improvement of the score after this number of iterations
+    /// - `n_trials` : number of trial states to generate and evaluate at each iteration
+    /// - `return_iter` : returns to the current best state if there is no improvement after this number of iterations.
     pub fn new(patience: usize, n_trials: usize, return_iter: usize) -> Self {
         Self {
             patience,
@@ -50,7 +63,14 @@ impl TabuSearchOptimizer {
         }
     }
 
-    pub fn optimize<M, L, F, S, T>(
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
+    /// - `n_iter`: maximum iterations
+    /// - `tabu_list` : initial tabu list
+    /// - `callback` : callback function that will be invoked at the end of each iteration
+    pub fn optimize<M, L, F>(
         &self,
         model: &M,
         initial_state: Option<M::StateType>,
@@ -59,11 +79,9 @@ impl TabuSearchOptimizer {
         callback: Option<&F>,
     ) -> (M::StateType, M::ScoreType, L)
     where
-        M: OptModel<StateType = S, TransitionType = T> + Sync + Send,
+        M: OptModel + Sync + Send,
         L: TabuList<Item = (M::StateType, M::TransitionType)>,
-        F: Fn(usize, Rc<RefCell<M::StateType>>, M::ScoreType),
-        S: Clone + Sync + Send,
-        T: Clone + Sync + Send,
+        F: OptCallbackFn<M::StateType, M::ScoreType>,
     {
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {
@@ -75,6 +93,7 @@ impl TabuSearchOptimizer {
         let best_state = Rc::new(RefCell::new(current_state.clone()));
         let mut best_score = current_score;
         let mut counter = 0;
+        let mut accepted_counter = 0;
 
         for it in 0..n_iter {
             let mut samples = vec![];
@@ -101,6 +120,7 @@ impl TabuSearchOptimizer {
                 current_score = score;
                 current_state = state.clone();
                 tabu_list.append((state, trans));
+                accepted_counter += 1;
             }
 
             counter += 1;
@@ -114,7 +134,9 @@ impl TabuSearchOptimizer {
             }
 
             if let Some(f) = callback {
-                f(it, best_state.clone(), best_score);
+                let progress =
+                    OptProgress::new(it, accepted_counter, best_state.clone(), best_score);
+                f(progress);
             }
         }
 

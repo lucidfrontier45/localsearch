@@ -1,25 +1,34 @@
 use std::{cell::RefCell, rc::Rc};
 
+use rand::Rng;
 use rayon::prelude::*;
 
 use crate::callback::{OptCallbackFn, OptProgress};
 use crate::OptModel;
 
-/// Optimizer that implements simple hill climbing algorithm
+/// Optimizer that implements epsilon-greedy algorithm.
+/// Unlike a total greedy algorithm such as hill climbing,
+/// it allows transitions that worsens the score with a fixed probability
 #[derive(Clone, Copy)]
-pub struct HillClimbingOptimizer {
+pub struct EpsilonGreedyOptimizer {
     patience: usize,
     n_trials: usize,
+    epsilon: f64,
 }
 
-impl HillClimbingOptimizer {
-    /// Constructor of HillClimbingOPtimizer
+impl EpsilonGreedyOptimizer {
+    /// Constructor of EpsilonGreedyOptimizer
     ///
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial states to generate and evaluate at each iteration
-    pub fn new(patience: usize, n_trials: usize) -> Self {
-        Self { patience, n_trials }
+    /// - `epsilon` : probability to accept a transition that worsens the score. Must be in [0, 1].
+    pub fn new(patience: usize, n_trials: usize, epsilon: f64) -> Self {
+        Self {
+            patience,
+            n_trials,
+            epsilon,
+        }
     }
 
     /// Start optimization
@@ -62,18 +71,23 @@ impl HillClimbingOptimizer {
                 .min_by_key(|(_, score)| *score)
                 .unwrap();
 
-            if trial_score < current_score {
+            let r: f64 = rng.gen();
+
+            if trial_score < current_score || self.epsilon > r {
                 current_state = trial_state;
                 current_score = trial_score;
+                accepted_counter += 1;
+            }
+
+            if current_score < best_score {
                 best_state.replace(current_state.clone());
                 best_score = current_score;
                 counter = 0;
-                accepted_counter += 1;
-            } else {
-                counter += 1;
-                if counter >= self.patience {
-                    break;
-                }
+            }
+
+            counter += 1;
+            if counter == self.patience {
+                break;
             }
 
             if let Some(f) = callback {
@@ -83,6 +97,7 @@ impl HillClimbingOptimizer {
             }
         }
 
-        (current_state, current_score)
+        let best_state = (*best_state.borrow()).clone();
+        (best_state, best_score)
     }
 }
