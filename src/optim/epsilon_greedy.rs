@@ -3,10 +3,11 @@ use std::{cell::RefCell, rc::Rc};
 use rand::Rng;
 use rayon::prelude::*;
 
+use crate::callback::{OptCallbackFn, OptProgress};
 use crate::OptModel;
 
-use super::callback::{OptCallbackFn, OptProgress};
-
+/// Optimizer that implements epsilon-greedy algorithm.
+///
 #[derive(Clone, Copy)]
 pub struct EpsilonGreedyOptimizer {
     patience: usize,

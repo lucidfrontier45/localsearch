@@ -1,9 +1,8 @@
 use rayon::prelude::*;
 use std::{cell::RefCell, rc::Rc};
 
+use crate::callback::{OptCallbackFn, OptProgress};
 use crate::OptModel;
-
-use super::callback::{OptCallbackFn, OptProgress};
 
 pub trait TabuList {
     type Item;

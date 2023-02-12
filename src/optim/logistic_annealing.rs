@@ -4,7 +4,7 @@ use ordered_float::NotNan;
 use rand::Rng;
 use rayon::prelude::*;
 
-use super::callback::{OptCallbackFn, OptProgress};
+use crate::callback::{OptCallbackFn, OptProgress};
 use crate::OptModel;
 
 fn calc_transition_score(trial_score: f64, current_score: f64, w: f64) -> f64 {

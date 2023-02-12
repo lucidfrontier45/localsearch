@@ -1,4 +1,4 @@
-pub mod callback;
+//! Optimization ALgorithm
 
 mod epsilon_greedy;
 mod hill_climbing;

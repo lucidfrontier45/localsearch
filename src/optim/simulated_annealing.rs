@@ -4,9 +4,8 @@ use ordered_float::NotNan;
 use rand::Rng;
 use rayon::prelude::*;
 
+use crate::callback::{OptCallbackFn, OptProgress};
 use crate::OptModel;
-
-use super::callback::{OptCallbackFn, OptProgress};
 
 #[derive(Clone, Copy)]
 pub struct SimulatedAnnealingOptimizer {
