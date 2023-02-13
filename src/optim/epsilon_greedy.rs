@@ -13,6 +13,7 @@ use crate::OptModel;
 pub struct EpsilonGreedyOptimizer {
     patience: usize,
     n_trials: usize,
+    return_iter: usize,
     epsilon: f64,
 }
 
@@ -22,11 +23,13 @@ impl EpsilonGreedyOptimizer {
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial states to generate and evaluate at each iteration
+    /// - `return_iter` : returns to the current best state if there is no improvement after this number of iterations.
     /// - `epsilon` : probability to accept a transition that worsens the score. Must be in [0, 1].
-    pub fn new(patience: usize, n_trials: usize, epsilon: f64) -> Self {
+    pub fn new(patience: usize, n_trials: usize, return_iter: usize, epsilon: f64) -> Self {
         Self {
             patience,
             n_trials,
+            return_iter,
             epsilon,
         }
     }
@@ -86,6 +89,12 @@ impl EpsilonGreedyOptimizer {
             }
 
             counter += 1;
+
+            if counter == self.return_iter {
+                current_state = best_state.borrow().clone();
+                current_score = best_score;
+            }
+
             if counter == self.patience {
                 break;
             }
