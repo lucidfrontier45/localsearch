@@ -2,7 +2,7 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-/// OptProgress expresses Optimization Progress that is passed to a OptCallbackFn
+/// OptProgress expresses Optimization Progress that is passed to a [`OptCallbackFn`]
 #[derive(Debug, Clone)]
 pub struct OptProgress<S, SC> {
     /// current iteration step

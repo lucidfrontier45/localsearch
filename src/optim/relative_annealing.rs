@@ -7,45 +7,49 @@ use rayon::prelude::*;
 use crate::callback::{OptCallbackFn, OptProgress};
 use crate::OptModel;
 
-fn calc_transition_score(trial_score: f64, current_score: f64, w: f64) -> f64 {
-    let ds = (trial_score - current_score) / current_score;
+/// pre-defined functions to convert relative difference of scores to probability
+pub mod relative_transition_score {
+    /// exp(-w * d)
+    pub fn exp(d: f64, w: f64) -> f64 {
+        (-w * d).exp()
+    }
 
-    if ds < 0.0 {
-        1.0
-    } else {
-        let z = ds * w;
-        2.0 / (1.0 + z.exp())
+    /// 2.0 / (1.0 + exp(w * d))
+    pub fn logistic(d: f64, w: f64) -> f64 {
+        2.0 / (1.0 + (w * d).exp())
     }
 }
 
-/// Optimizer that implements logistic annealing algorithm
-/// In this model, wether accept the trial state or not is decided by the following criterion
-///
-/// d <- (trial_score / current_score) / current_score
-/// if d < 0:
-///     accept
-/// else:
-///     p <- sigmoid(-w * d) * 2.0
-///     accept if p > rand(0, 1)
-#[derive(Clone, Copy)]
-pub struct LogisticAnnealingOptimizer {
-    patience: usize,
-    n_trials: usize,
-    w: f64,
+fn relative_difference(trial: f64, current: f64) -> f64 {
+    (trial - current) / current
 }
 
-impl LogisticAnnealingOptimizer {
-    /// Constructor of LogisticAnnealingOptimizer
+/// Optimizer that implements relative annealing algorithm
+/// In this model, unlike simulated annealing, wether accept the trial state or not is calculated based on relative score difference
+/// Given a functin f that converts a float number to probability, the actual procedure is as follows
+///
+/// 1. d <- (trial_score - current_score) / current_score
+/// 2. p <- f(d)
+/// 3. accept if p > rand(0, 1)
+#[derive(Clone, Copy)]
+pub struct RelativeAnnealingOptimizer<FS: Fn(f64) -> f64> {
+    patience: usize,
+    n_trials: usize,
+    score_func: FS,
+}
+
+impl<FS: Fn(f64) -> f64> RelativeAnnealingOptimizer<FS> {
+    /// Constructor of RelativeAnnealingOptimizer
     ///
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial states to generate and evaluate at each iteration
-    /// - `w` : positive weight parameter to be multiplied to relative difference.
-    pub fn new(patience: usize, n_trials: usize, w: f64) -> Self {
+    /// - `score_func` : score function to calculate transition probability from relative difference.
+    pub fn new(patience: usize, n_trials: usize, score_func: FS) -> Self {
         Self {
             patience,
             n_trials,
-            w,
+            score_func,
         }
     }
 
@@ -90,8 +94,8 @@ impl LogisticAnnealingOptimizer {
                 .min_by_key(|(_, score)| *score)
                 .unwrap();
 
-            let p =
-                calc_transition_score(trial_score.into_inner(), current_score.into_inner(), self.w);
+            let ds = relative_difference(trial_score.into(), current_score.into());
+            let p = (self.score_func)(ds);
             let r: f64 = rng.gen();
 
             if p > r {
@@ -125,17 +129,33 @@ impl LogisticAnnealingOptimizer {
 
 #[cfg(test)]
 mod test {
-    use approx::assert_abs_diff_eq;
+    use crate::optim::relative_annealing::relative_difference;
 
-    use super::calc_transition_score;
+    use super::relative_transition_score;
 
     #[test]
-    fn test_calc_transition_score() {
+    fn test_exp_transition_score() {
         let w = 1e1;
-        assert_abs_diff_eq!(calc_transition_score(0.9, 1.0, w), 1.0, epsilon = 0.01);
+        let f = |ds| relative_transition_score::exp(ds, w);
 
-        let p1 = calc_transition_score(1.1, 1.0, w);
-        let p2 = calc_transition_score(1.2, 1.0, w);
+        let p = f(relative_difference(0.9, 1.0));
+        assert!(p >= 1.0);
+
+        let p1 = f(relative_difference(1.1, 1.0));
+        let p2 = f(relative_difference(1.2, 1.0));
+        assert!(p1 > p2);
+    }
+
+    #[test]
+    fn test_logistic_transition_score() {
+        let w = 1e1;
+        let f = |ds| relative_transition_score::logistic(ds, w);
+
+        let p = f(relative_difference(0.9, 1.0));
+        assert!(p >= 1.0);
+
+        let p1 = f(relative_difference(1.1, 1.0));
+        let p2 = f(relative_difference(1.2, 1.0));
         assert!(p1 > p2);
     }
 }
