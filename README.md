@@ -10,6 +10,7 @@ All of the algorithms are parallelized with Rayon.
 3. Simulated Annealing
 4. Epsilon Greedy Search, a variant of Hill Climbing which accepts the trial state with a constant probabilith even if the score of the trial state is worse than the previous one.
 5. Relative Annealing, a variant of Simulated Annealing which uses relative score diff to calculate transition probability.
+6. Logistic Annealing, a variant of Relative Annealing which uses logistic function instead of simple exponential.
 
 # How to use
 
