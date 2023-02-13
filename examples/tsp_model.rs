@@ -9,8 +9,8 @@ use std::{
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     optim::{
-        EpsilonGreedyOptimizer, HillClimbingOptimizer, LogisticAnnealingOptimizer,
-        SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
+        relative_transition_score, EpsilonGreedyOptimizer, HillClimbingOptimizer,
+        RelativeAnnealingOptimizer, SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
     },
     utils::RingBuffer,
     OptModel, OptProgress,
@@ -320,8 +320,10 @@ fn main() {
     pb.finish_and_clear();
     pb.reset();
 
-    println!("run logistic annealing");
-    let optimizer = LogisticAnnealingOptimizer::new(patience, 200, 1e3);
+    println!("run relative annealing");
+    let optimizer = RelativeAnnealingOptimizer::new(patience, 200, |ds: f64| {
+        relative_transition_score::exp(ds, 1e1)
+    });
     let (final_state, final_score) =
         optimizer.optimize(&tsp_model, initial_state, n_iter, Some(&callback));
     println!(

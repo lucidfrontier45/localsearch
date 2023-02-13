@@ -58,9 +58,8 @@ impl OptModel for QuadraticModel {
     }
 }
 
-#[cfg(test)]
 mod test_epsilon_greedy;
 mod test_hill_climbing;
-mod test_logistic_annealing;
+mod test_relative_annealing;
 mod test_simulated_annealing;
 mod test_tabu_search;
