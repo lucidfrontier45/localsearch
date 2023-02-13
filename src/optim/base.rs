@@ -1,65 +1,49 @@
-use rayon::prelude::*;
+use std::marker::PhantomData;
 use std::{cell::RefCell, rc::Rc};
+
+use rand::Rng;
+use rayon::prelude::*;
+use trait_set::trait_set;
 
 use crate::callback::{OptCallbackFn, OptProgress};
 use crate::OptModel;
 
-/// Trait that a tabu list must satisfies
-pub trait TabuList {
-    /// Item type of the likst
-    type Item;
-
-    /// Check if the item is a Tabu
-    fn contains(&self, item: &Self::Item) -> bool;
-
-    /// Append the item to the list
-    fn append(&mut self, item: Self::Item);
+trait_set! {
+    pub trait TransitionProbabilityFn<ST: Ord + Sync + Send + Copy> = Fn(ST, ST) -> f64;
 }
 
-/// Optimizer that implements the tabu search algorithm
-pub struct TabuSearchOptimizer {
+/// Optimizer that implements local search algorithm
+/// Given a functin f that converts a float number to probability,
+/// the trial state is accepted by the following procedure
+///
+/// 1. p <- f(current_score, trial_score)
+/// 2. accept if p > rand(0, 1)
+#[derive(Clone, Copy)]
+pub struct BaseLocalSearchOptimizer<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>> {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
+    score_func: FT,
+    phantom: PhantomData<ST>,
 }
 
-fn find_accepted_solution<S, T, L, O>(
-    samples: Vec<(S, T, O)>,
-    tabu_list: &L,
-    best_score: O,
-) -> Option<(S, T, O)>
-where
-    L: TabuList<Item = (S, T)>,
-    O: Ord,
+impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
+    BaseLocalSearchOptimizer<ST, FT>
 {
-    for (state, transition, score) in samples.into_iter() {
-        // Aspiration Criterion
-        if score < best_score {
-            return Some((state, transition, score));
-        }
-
-        // Not Tabu
-        let item = (state, transition);
-        if !tabu_list.contains(&item) {
-            return Some((item.0, item.1, score));
-        }
-    }
-
-    None
-}
-
-impl TabuSearchOptimizer {
-    /// Constructor of TabuSearchOptimizer
+    /// Constructor of BaseLocalSearchOptimizer
     ///
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial states to generate and evaluate at each iteration
     /// - `return_iter` : returns to the current best state if there is no improvement after this number of iterations.
-    pub fn new(patience: usize, n_trials: usize, return_iter: usize) -> Self {
+    /// - `score_func` : score function to calculate transition probability.
+    pub fn new(patience: usize, n_trials: usize, return_iter: usize, score_func: FT) -> Self {
         Self {
             patience,
             n_trials,
             return_iter,
+            score_func,
+            phantom: PhantomData,
         }
     }
 
@@ -68,19 +52,16 @@ impl TabuSearchOptimizer {
     /// - `model` : the model to optimize
     /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
     /// - `n_iter`: maximum iterations
-    /// - `tabu_list` : initial tabu list
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    pub fn optimize<M, L, F>(
+    pub fn optimize<M, F>(
         &self,
         model: &M,
         initial_state: Option<M::StateType>,
         n_iter: usize,
-        mut tabu_list: L,
         callback: Option<&F>,
-    ) -> (M::StateType, M::ScoreType, L)
+    ) -> (M::StateType, M::ScoreType)
     where
-        M: OptModel + Sync + Send,
-        L: TabuList<Item = (M::StateType, M::TransitionType)>,
+        M: OptModel<ScoreType = ST> + Sync + Send,
         F: OptCallbackFn<M::StateType, M::ScoreType>,
     {
         let mut rng = rand::thread_rng();
@@ -92,35 +73,34 @@ impl TabuSearchOptimizer {
         let mut current_score = model.evaluate_state(&current_state);
         let best_state = Rc::new(RefCell::new(current_state.clone()));
         let mut best_score = current_score;
-        let mut counter = 0;
         let mut accepted_counter = 0;
+        let mut counter = 0;
 
         for it in 0..n_iter {
-            let mut samples = vec![];
-            (0..self.n_trials)
+            let (trial_state, trial_score) = (0..self.n_trials)
                 .into_par_iter()
                 .map(|_| {
                     let mut rng = rand::thread_rng();
-                    let (state, transitions, score) =
+                    let (state, _, score) =
                         model.generate_trial_state(&current_state, &mut rng, Some(current_score));
-                    (state, transitions, score)
+                    (state, score)
                 })
-                .collect_into_vec(&mut samples);
+                .min_by_key(|(_, score)| *score)
+                .unwrap();
 
-            samples.sort_unstable_by_key(|(_, _, score)| *score);
+            let p = (self.score_func)(current_score, trial_score);
+            let r: f64 = rng.gen();
 
-            let res = find_accepted_solution(samples, &tabu_list, best_score);
-
-            if let Some((state, trans, score)) = res {
-                if score < best_score {
-                    best_score = score;
-                    best_state.replace(state.clone());
-                    counter = 0;
-                }
-                current_score = score;
-                current_state = state.clone();
-                tabu_list.append((state, trans));
+            if p > r {
+                current_state = trial_state;
+                current_score = trial_score;
                 accepted_counter += 1;
+            }
+
+            if current_score < best_score {
+                best_state.replace(current_state.clone());
+                best_score = current_score;
+                counter = 0;
             }
 
             counter += 1;
@@ -142,7 +122,6 @@ impl TabuSearchOptimizer {
         }
 
         let best_state = (*best_state.borrow()).clone();
-
-        (best_state, best_score, tabu_list)
+        (best_state, best_score)
     }
 }
