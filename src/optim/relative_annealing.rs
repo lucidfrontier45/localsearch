@@ -28,9 +28,9 @@ fn relative_difference(trial: f64, current: f64) -> f64 {
 /// In this model, unlike simulated annealing, wether accept the trial state or not is calculated based on relative score difference
 /// Given a functin f that converts a float number to probability, the actual procedure is as follows
 ///
-/// d <- (trial_score / current_score) / current_score
-/// p <- f(d)
-/// accept if p > rand(0, 1)
+/// 1. d <- (trial_score - current_score) / current_score
+/// 2. p <- f(d)
+/// 3. accept if p > rand(0, 1)
 #[derive(Clone, Copy)]
 pub struct RelativeAnnealingOptimizer<FS: Fn(f64) -> f64> {
     patience: usize,
