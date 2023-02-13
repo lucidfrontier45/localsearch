@@ -55,6 +55,6 @@ impl<S, SC: Ord> OptProgress<S, SC> {
 ///     pb.set_position(op.iter as u64);
 /// };
 /// ```
-pub trait OptCallbackFn<S, SC: Ord>: Fn(OptProgress<S, SC>) {}
+pub trait OptCallbackFn<S, SC: PartialOrd>: Fn(OptProgress<S, SC>) {}
 
-impl<T: Fn(OptProgress<S, SC>), S, SC: Ord> OptCallbackFn<S, SC> for T {}
+impl<T: Fn(OptProgress<S, SC>), S, SC: PartialOrd> OptCallbackFn<S, SC> for T {}

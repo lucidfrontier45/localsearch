@@ -9,25 +9,25 @@ fn transition_prob<T: Into<f64>>(current: T, trial: T, w: f64) -> f64 {
     let current = current.into();
     let trial = trial.into();
     let d = (trial - current) / current;
-    (-w * d).exp()
+    2.0 / (1.0 + (w * d).exp())
 }
 
-/// Optimizer that implements relative annealing algorithm
+/// Optimizer that implements logistic annealing algorithm
 /// In this model, unlike simulated annealing, wether accept the trial state or not is calculated based on relative score difference
 ///
 /// 1. d <- (trial_score - current_score) / current_score
-/// 2. p <- exp(-w * d)
+/// 2. p <- 2.0 / (1.0 + exp(w * d))
 /// 3. accept if p > rand(0, 1)
 #[derive(Clone, Copy)]
-pub struct RelativeAnnealingOptimizer {
+pub struct LogisticAnnealingOptimizer {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
     w: f64,
 }
 
-impl RelativeAnnealingOptimizer {
-    /// Constructor of RelativeAnnealingOptimizer
+impl LogisticAnnealingOptimizer {
+    /// Constructor of LogisticAnnealingOptimizer
     ///
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
