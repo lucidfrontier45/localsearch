@@ -35,6 +35,7 @@ fn relative_difference(trial: f64, current: f64) -> f64 {
 pub struct RelativeAnnealingOptimizer<FS: Fn(f64) -> f64> {
     patience: usize,
     n_trials: usize,
+    return_iter: usize,
     score_func: FS,
 }
 
@@ -44,11 +45,13 @@ impl<FS: Fn(f64) -> f64> RelativeAnnealingOptimizer<FS> {
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial states to generate and evaluate at each iteration
+    /// - `return_iter` : returns to the current best state if there is no improvement after this number of iterations.
     /// - `score_func` : score function to calculate transition probability from relative difference.
-    pub fn new(patience: usize, n_trials: usize, score_func: FS) -> Self {
+    pub fn new(patience: usize, n_trials: usize, return_iter: usize, score_func: FS) -> Self {
         Self {
             patience,
             n_trials,
+            return_iter,
             score_func,
         }
     }
@@ -111,6 +114,12 @@ impl<FS: Fn(f64) -> f64> RelativeAnnealingOptimizer<FS> {
             }
 
             counter += 1;
+
+            if counter == self.return_iter {
+                current_state = best_state.borrow().clone();
+                current_score = best_score;
+            }
+
             if counter == self.patience {
                 break;
             }

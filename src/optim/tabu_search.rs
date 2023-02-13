@@ -124,6 +124,7 @@ impl TabuSearchOptimizer {
             }
 
             counter += 1;
+
             if counter == self.return_iter {
                 current_state = best_state.borrow().clone();
                 current_score = best_score;
