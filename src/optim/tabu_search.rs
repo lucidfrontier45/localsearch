@@ -1,8 +1,11 @@
-use rayon::prelude::*;
 use std::{cell::RefCell, rc::Rc};
 
-use crate::callback::{OptCallbackFn, OptProgress};
-use crate::OptModel;
+use rayon::prelude::*;
+
+use crate::{
+    callback::{OptCallbackFn, OptProgress},
+    OptModel,
+};
 
 /// Trait that a tabu list must satisfies
 pub trait TabuList {

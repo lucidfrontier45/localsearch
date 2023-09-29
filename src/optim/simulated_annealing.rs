@@ -4,8 +4,10 @@ use ordered_float::NotNan;
 use rand::Rng;
 use rayon::prelude::*;
 
-use crate::callback::{OptCallbackFn, OptProgress};
-use crate::OptModel;
+use crate::{
+    callback::{OptCallbackFn, OptProgress},
+    OptModel,
+};
 
 /// Optimizer that implements the simulated annealing algorithm
 #[derive(Clone, Copy)]
