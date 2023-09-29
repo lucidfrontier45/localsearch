@@ -1,7 +1,9 @@
 use approx::assert_abs_diff_eq;
 
-use crate::optim::{TabuList, TabuSearchOptimizer};
-use crate::utils::RingBuffer;
+use crate::{
+    optim::{TabuList, TabuSearchOptimizer},
+    utils::RingBuffer,
+};
 
 use super::{QuadraticModel, StateType, TransitionType};
 
