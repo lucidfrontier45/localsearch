@@ -1,12 +1,13 @@
-use std::marker::PhantomData;
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 use rand::Rng;
 use rayon::prelude::*;
 use trait_set::trait_set;
 
-use crate::callback::{OptCallbackFn, OptProgress};
-use crate::OptModel;
+use crate::{
+    callback::{OptCallbackFn, OptProgress},
+    OptModel,
+};
 
 trait_set! {
     pub trait TransitionProbabilityFn<ST: Ord + Sync + Send + Copy> = Fn(ST, ST) -> f64;
