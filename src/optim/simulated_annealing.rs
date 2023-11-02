@@ -48,13 +48,12 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         initial_state: Option<M::StateType>,
         n_iter: usize,
         callback: Option<&F>,
-        extra_in: Self::ExtraIn,
+        max_min_temperatures: Self::ExtraIn,
     ) -> (M::StateType, M::ScoreType, Self::ExtraOut)
     where
-        M: OptModel<ScoreType = NotNan<f64>> + Sync + Send,
         F: OptCallbackFn<M::StateType, M::ScoreType>,
     {
-        let (max_temperature, min_temperature) = extra_in;
+        let (max_temperature, min_temperature) = max_min_temperatures;
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {
             s

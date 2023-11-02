@@ -69,7 +69,7 @@ where
         initial_state: Option<M::StateType>,
         n_iter: usize,
         callback: Option<&F>,
-        _: Self::ExtraIn,
+        _extra_in: Self::ExtraIn,
     ) -> (M::StateType, M::ScoreType, Self::ExtraOut)
     where
         F: OptCallbackFn<M::StateType, M::ScoreType>,

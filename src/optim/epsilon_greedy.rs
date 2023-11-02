@@ -54,7 +54,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
         initial_state: Option<M::StateType>,
         n_iter: usize,
         callback: Option<&F>,
-        _: Self::ExtraIn,
+        _extra_in: Self::ExtraIn,
     ) -> (M::StateType, M::ScoreType, Self::ExtraOut)
     where
         M: OptModel + Sync + Send,
@@ -66,6 +66,6 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
             self.return_iter,
             |current, trial| transition_prob(current, trial, self.epsilon),
         );
-        optimizer.optimize(model, initial_state, n_iter, callback, ())
+        optimizer.optimize(model, initial_state, n_iter, callback, _extra_in)
     }
 }

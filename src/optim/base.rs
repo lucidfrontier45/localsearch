@@ -18,7 +18,7 @@ pub trait LocalSearchOptimizer<M: OptModel> {
         initial_state: Option<M::StateType>,
         n_iter: usize,
         callback: Option<&F>,
-        ext_in: Self::ExtraIn,
+        extra_in: Self::ExtraIn,
     ) -> (M::StateType, M::ScoreType, Self::ExtraOut)
     where
         M: OptModel,

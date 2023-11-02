@@ -71,7 +71,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeA
             |current, trial| transition_prob(current, trial, self.w),
         );
 
-        optimizer.optimize(model, initial_state, n_iter, callback, ())
+        optimizer.optimize(model, initial_state, n_iter, callback, _extra_in)
     }
 }
 

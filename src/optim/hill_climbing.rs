@@ -40,6 +40,6 @@ impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
         F: OptCallbackFn<M::StateType, M::ScoreType>,
     {
         let optimizer = EpsilonGreedyOptimizer::new(self.patience, self.n_trials, usize::MAX, 0.0);
-        optimizer.optimize(model, initial_state, n_iter, callback, ())
+        optimizer.optimize(model, initial_state, n_iter, callback, _extra_in)
     }
 }
