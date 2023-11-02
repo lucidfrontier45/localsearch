@@ -8,6 +8,8 @@ pub mod utils;
 
 use std::error::Error;
 
+use auto_impl::auto_impl;
+
 mod callback;
 pub use callback::{OptCallbackFn, OptProgress};
 
@@ -15,7 +17,8 @@ pub use callback::{OptCallbackFn, OptProgress};
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// OptModel is a trait that defines requirements to be used with optimization algorithm
-pub trait OptModel {
+#[auto_impl(&, Box, Rc, Arc)]
+pub trait OptModel: Sync + Send {
     /// Type of the Score
     type ScoreType: Ord + Copy + Sync + Send;
     /// Type of the State

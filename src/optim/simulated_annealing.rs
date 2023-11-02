@@ -9,6 +9,8 @@ use crate::{
     OptModel,
 };
 
+use super::LocalSearchOptimizer;
+
 /// Optimizer that implements the simulated annealing algorithm
 #[derive(Clone, Copy)]
 pub struct SimulatedAnnealingOptimizer {
@@ -25,6 +27,12 @@ impl SimulatedAnnealingOptimizer {
     pub fn new(patience: usize, n_trials: usize) -> Self {
         Self { patience, n_trials }
     }
+}
+
+impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for SimulatedAnnealingOptimizer {
+    /// max temperature, min temperature
+    type ExtraIn = (f64, f64);
+    type ExtraOut = ();
 
     /// Start optimization
     ///
@@ -34,19 +42,19 @@ impl SimulatedAnnealingOptimizer {
     /// - `max_temperature` : the initial temperature at the begining of the optimization
     /// - `min_temperature` : the final temperature at the end of the optimization
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    pub fn optimize<M, F>(
+    fn optimize<F>(
         &self,
         model: &M,
         initial_state: Option<M::StateType>,
         n_iter: usize,
-        max_temperature: f64,
-        min_temperature: f64,
         callback: Option<&F>,
-    ) -> (M::StateType, M::ScoreType)
+        extra_in: Self::ExtraIn,
+    ) -> (M::StateType, M::ScoreType, Self::ExtraOut)
     where
         M: OptModel<ScoreType = NotNan<f64>> + Sync + Send,
         F: OptCallbackFn<M::StateType, M::ScoreType>,
     {
+        let (max_temperature, min_temperature) = extra_in;
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {
             s
@@ -104,6 +112,6 @@ impl SimulatedAnnealingOptimizer {
         }
 
         let best_state = (*best_state.borrow()).clone();
-        (best_state, best_score)
+        (best_state, best_score, ())
     }
 }

@@ -1,6 +1,6 @@
 use crate::{callback::OptCallbackFn, OptModel};
 
-use super::EpsilonGreedyOptimizer;
+use super::{EpsilonGreedyOptimizer, LocalSearchOptimizer};
 
 /// Optimizer that implements simple hill climbing algorithm
 #[derive(Clone, Copy)]
@@ -16,6 +16,11 @@ impl HillClimbingOptimizer {
     pub fn new(patience: usize, n_trials: usize) -> Self {
         Self { patience, n_trials }
     }
+}
+
+impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
+    type ExtraIn = ();
+    type ExtraOut = ();
 
     /// Start optimization
     ///
@@ -23,18 +28,18 @@ impl HillClimbingOptimizer {
     /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
     /// - `n_iter`: maximum iterations
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    pub fn optimize<M, F>(
+    fn optimize<F>(
         &self,
         model: &M,
         initial_state: Option<M::StateType>,
         n_iter: usize,
         callback: Option<&F>,
-    ) -> (M::StateType, M::ScoreType)
+        _extra_in: Self::ExtraIn,
+    ) -> (M::StateType, M::ScoreType, Self::ExtraOut)
     where
-        M: OptModel + Sync + Send,
         F: OptCallbackFn<M::StateType, M::ScoreType>,
     {
         let optimizer = EpsilonGreedyOptimizer::new(self.patience, self.n_trials, usize::MAX, 0.0);
-        optimizer.optimize(model, initial_state, n_iter, callback)
+        optimizer.optimize(model, initial_state, n_iter, callback, ())
     }
 }

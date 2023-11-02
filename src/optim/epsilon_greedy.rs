@@ -1,6 +1,6 @@
 use crate::{callback::OptCallbackFn, OptModel};
 
-use super::base::BaseLocalSearchOptimizer;
+use super::{base::LocalSearchOptimizer, GenericLocalSearchOptimizer};
 
 fn transition_prob<T: PartialOrd>(current: T, trial: T, epsilon: f64) -> f64 {
     if trial < current {
@@ -36,30 +36,36 @@ impl EpsilonGreedyOptimizer {
             epsilon,
         }
     }
+}
 
+impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
+    type ExtraIn = ();
+    type ExtraOut = ();
     /// Start optimization
     ///
     /// - `model` : the model to optimize
     /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
     /// - `n_iter`: maximum iterations
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    pub fn optimize<M, F>(
+    ///
+    fn optimize<F>(
         &self,
         model: &M,
         initial_state: Option<M::StateType>,
         n_iter: usize,
         callback: Option<&F>,
-    ) -> (M::StateType, M::ScoreType)
+        _: Self::ExtraIn,
+    ) -> (M::StateType, M::ScoreType, Self::ExtraOut)
     where
         M: OptModel + Sync + Send,
         F: OptCallbackFn<M::StateType, M::ScoreType>,
     {
-        let optimizer = BaseLocalSearchOptimizer::new(
+        let optimizer = GenericLocalSearchOptimizer::new(
             self.patience,
             self.n_trials,
             self.return_iter,
             |current, trial| transition_prob(current, trial, self.epsilon),
         );
-        optimizer.optimize(model, initial_state, n_iter, callback)
+        optimizer.optimize(model, initial_state, n_iter, callback, ())
     }
 }
