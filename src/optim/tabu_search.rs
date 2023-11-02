@@ -1,5 +1,6 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
+use auto_impl::auto_impl;
 use rayon::prelude::*;
 
 use crate::{
@@ -7,7 +8,10 @@ use crate::{
     OptModel,
 };
 
+use super::LocalSearchOptimizer;
+
 /// Trait that a tabu list must satisfies
+#[auto_impl(&mut, Box)]
 pub trait TabuList {
     /// Item type of the likst
     type Item;
@@ -20,10 +24,11 @@ pub trait TabuList {
 }
 
 /// Optimizer that implements the tabu search algorithm
-pub struct TabuSearchOptimizer {
+pub struct TabuSearchOptimizer<T: TabuList> {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
+    phantom: PhantomData<T>,
 }
 
 fn find_accepted_solution<S, T, L, O>(
@@ -51,7 +56,7 @@ where
     None
 }
 
-impl TabuSearchOptimizer {
+impl<T: TabuList> TabuSearchOptimizer<T> {
     /// Constructor of TabuSearchOptimizer
     ///
     /// - `patience` : the optimizer will give up
@@ -63,27 +68,33 @@ impl TabuSearchOptimizer {
             patience,
             n_trials,
             return_iter,
+            phantom: PhantomData,
         }
     }
+}
+
+impl<M: OptModel, T: TabuList<Item = (M::StateType, M::TransitionType)>> LocalSearchOptimizer<M>
+    for TabuSearchOptimizer<T>
+{
+    type ExtraIn = T;
+    type ExtraOut = T;
 
     /// Start optimization
     ///
     /// - `model` : the model to optimize
     /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
     /// - `n_iter`: maximum iterations
-    /// - `tabu_list` : initial tabu list
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    pub fn optimize<M, L, F>(
+    /// - `tabu_list` : initial tabu list
+    fn optimize<F>(
         &self,
         model: &M,
         initial_state: Option<M::StateType>,
         n_iter: usize,
-        mut tabu_list: L,
         callback: Option<&F>,
-    ) -> (M::StateType, M::ScoreType, L)
+        mut tabu_list: Self::ExtraIn,
+    ) -> (M::StateType, M::ScoreType, Self::ExtraOut)
     where
-        M: OptModel + Sync + Send,
-        L: TabuList<Item = (M::StateType, M::TransitionType)>,
         F: OptCallbackFn<M::StateType, M::ScoreType>,
     {
         let mut rng = rand::thread_rng();

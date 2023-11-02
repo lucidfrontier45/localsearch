@@ -1,7 +1,10 @@
 use std::error::Error;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-use localsearch::{optim::HillClimbingOptimizer, OptModel, OptProgress};
+use localsearch::{
+    optim::{HillClimbingOptimizer, LocalSearchOptimizer},
+    OptModel, OptProgress,
+};
 use ordered_float::NotNan;
 use rand::{self, distributions::Uniform, prelude::Distribution};
 
@@ -85,7 +88,7 @@ fn main() {
         pb.set_position(op.iter as u64);
     };
 
-    let res = opt.optimize(&model, None, n_iter, Some(&callback));
+    let res = opt.optimize(&model, None, n_iter, Some(&callback), ());
     pb.finish();
     dbg!(res);
 }
