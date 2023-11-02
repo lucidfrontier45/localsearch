@@ -39,9 +39,8 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
     /// - `model` : the model to optimize
     /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
     /// - `n_iter`: maximum iterations
-    /// - `max_temperature` : the initial temperature at the begining of the optimization
-    /// - `min_temperature` : the final temperature at the end of the optimization
     /// - `callback` : callback function that will be invoked at the end of each iteration
+    /// - `max_min_temperatures` : (max_temperature, min_temperature)
     fn optimize<F>(
         &self,
         model: &M,

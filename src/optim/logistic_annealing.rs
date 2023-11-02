@@ -52,6 +52,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for LogisticA
     /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
     /// - `n_iter`: maximum iterations
     /// - `callback` : callback function that will be invoked at the end of each iteration
+    /// - `_extra_in` : not used
     fn optimize<F>(
         &self,
         model: &M,
