@@ -9,8 +9,8 @@ use std::{
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     optim::{
-        EpsilonGreedyOptimizer, HillClimbingOptimizer, RelativeAnnealingOptimizer,
-        SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
+        EpsilonGreedyOptimizer, HillClimbingOptimizer, LocalSearchOptimizer,
+        RelativeAnnealingOptimizer, SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
     },
     utils::RingBuffer,
     OptModel, OptProgress,
@@ -262,8 +262,13 @@ fn main() {
 
     println!("run hill climbing");
     let optimizer = HillClimbingOptimizer::new(1000, 200);
-    let (final_state, final_score) =
-        optimizer.optimize(&tsp_model, initial_state.clone(), n_iter, Some(&callback));
+    let (final_state, final_score, _) = optimizer.optimize(
+        &tsp_model,
+        initial_state.clone(),
+        n_iter,
+        Some(&callback),
+        (),
+    );
     println!(
         "final score = {}, num of cities {}",
         final_score,
@@ -279,8 +284,8 @@ fn main() {
         &tsp_model,
         initial_state.clone(),
         n_iter,
-        tabu_list,
         Some(&callback),
+        tabu_list,
     );
     println!(
         "final score = {}, num of cities {}",
@@ -292,13 +297,12 @@ fn main() {
 
     println!("run annealing");
     let optimizer = SimulatedAnnealingOptimizer::new(patience, 200);
-    let (final_state, final_score) = optimizer.optimize(
+    let (final_state, final_score, _) = optimizer.optimize(
         &tsp_model,
         initial_state.clone(),
         n_iter,
-        200.0,
-        50.0,
         Some(&callback),
+        (200.0, 50.0),
     );
     println!(
         "final score = {}, num of cities {}",
@@ -310,8 +314,13 @@ fn main() {
 
     println!("run epsilon greedy");
     let optimizer = EpsilonGreedyOptimizer::new(patience, 200, 10, 0.3);
-    let (final_state, final_score) =
-        optimizer.optimize(&tsp_model, initial_state.clone(), n_iter, Some(&callback));
+    let (final_state, final_score, _) = optimizer.optimize(
+        &tsp_model,
+        initial_state.clone(),
+        n_iter,
+        Some(&callback),
+        (),
+    );
     println!(
         "final score = {}, num of cities {}",
         final_score,
@@ -322,8 +331,8 @@ fn main() {
 
     println!("run relative annealing");
     let optimizer = RelativeAnnealingOptimizer::new(patience, 200, 10, 1e1);
-    let (final_state, final_score) =
-        optimizer.optimize(&tsp_model, initial_state, n_iter, Some(&callback));
+    let (final_state, final_score, _) =
+        optimizer.optimize(&tsp_model, initial_state, n_iter, Some(&callback), ());
     println!(
         "final score = {}, num of cities {}",
         final_score,

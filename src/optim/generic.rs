@@ -1,6 +1,5 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
-use ordered_float::NotNan;
 use rand::Rng;
 use rayon::prelude::*;
 
@@ -9,50 +8,73 @@ use crate::{
     OptModel,
 };
 
-use super::LocalSearchOptimizer;
+use super::{LocalSearchOptimizer, TransitionProbabilityFn};
 
-/// Optimizer that implements the simulated annealing algorithm
+/// Optimizer that implements local search algorithm
+/// Given a functin f that converts a float number to probability,
+/// the trial state is accepted by the following procedure
+///
+/// 1. p <- f(current_score, trial_score)
+/// 2. accept if p > rand(0, 1)
 #[derive(Clone, Copy)]
-pub struct SimulatedAnnealingOptimizer {
+pub struct GenericLocalSearchOptimizer<
+    ST: Ord + Sync + Send + Copy,
+    FT: TransitionProbabilityFn<ST>,
+> {
     patience: usize,
     n_trials: usize,
+    return_iter: usize,
+    score_func: FT,
+    phantom: PhantomData<ST>,
 }
 
-impl SimulatedAnnealingOptimizer {
-    /// Constructor of SimulatedAnnealingOptimizer
+impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
+    GenericLocalSearchOptimizer<ST, FT>
+{
+    /// Constructor of BaseLocalSearchOptimizer
     ///
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial states to generate and evaluate at each iteration
-    pub fn new(patience: usize, n_trials: usize) -> Self {
-        Self { patience, n_trials }
+    /// - `return_iter` : returns to the current best state if there is no improvement after this number of iterations.
+    /// - `score_func` : score function to calculate transition probability.
+    pub fn new(patience: usize, n_trials: usize, return_iter: usize, score_func: FT) -> Self {
+        Self {
+            patience,
+            n_trials,
+            return_iter,
+            score_func,
+            phantom: PhantomData,
+        }
     }
 }
 
-impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for SimulatedAnnealingOptimizer {
-    /// max temperature, min temperature
-    type ExtraIn = (f64, f64);
+impl<ST, FT, M> LocalSearchOptimizer<M> for GenericLocalSearchOptimizer<ST, FT>
+where
+    ST: Ord + Sync + Send + Copy,
+    FT: TransitionProbabilityFn<ST>,
+    M: OptModel<ScoreType = ST>,
+{
+    type ExtraIn = ();
     type ExtraOut = ();
-
     /// Start optimization
     ///
     /// - `model` : the model to optimize
     /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
     /// - `n_iter`: maximum iterations
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    /// - `max_min_temperatures` : (max_temperature, min_temperature)
+    /// - `_extra_in` : not used
     fn optimize<F>(
         &self,
         model: &M,
         initial_state: Option<M::StateType>,
         n_iter: usize,
         callback: Option<&F>,
-        max_min_temperatures: Self::ExtraIn,
+        _extra_in: Self::ExtraIn,
     ) -> (M::StateType, M::ScoreType, Self::ExtraOut)
     where
         F: OptCallbackFn<M::StateType, M::ScoreType>,
     {
-        let (max_temperature, min_temperature) = max_min_temperatures;
         let mut rng = rand::thread_rng();
         let mut current_state = if let Some(s) = initial_state {
             s
@@ -63,8 +85,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         let best_state = Rc::new(RefCell::new(current_state.clone()));
         let mut best_score = current_score;
         let mut accepted_counter = 0;
-        let mut temperature = max_temperature;
-        let t_factor = (min_temperature / max_temperature).ln();
         let mut counter = 0;
 
         for it in 0..n_iter {
@@ -79,8 +99,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
                 .min_by_key(|(_, score)| *score)
                 .unwrap();
 
-            let ds = trial_score - current_score;
-            let p = (-ds / temperature).exp();
+            let p = (self.score_func)(current_score, trial_score);
             let r: f64 = rng.gen();
 
             if p > r {
@@ -95,9 +114,13 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
                 counter = 0;
             }
 
-            temperature = max_temperature * (t_factor * (it as f64 / n_iter as f64)).exp();
-
             counter += 1;
+
+            if counter == self.return_iter {
+                current_state = best_state.borrow().clone();
+                current_score = best_score;
+            }
+
             if counter == self.patience {
                 break;
             }

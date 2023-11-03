@@ -2,6 +2,8 @@
 
 use std::{cell::RefCell, rc::Rc};
 
+use trait_set::trait_set;
+
 /// OptProgress expresses Optimization Progress that is passed to a [`OptCallbackFn`]
 #[derive(Debug, Clone)]
 pub struct OptProgress<S, SC> {
@@ -27,6 +29,7 @@ impl<S, SC: Ord> OptProgress<S, SC> {
     }
 }
 
+trait_set! {
 /// OptCallbackFn is a trait of a callback function for optimization
 /// Typical usage is to show progress bar and save current result to the file
 ///
@@ -55,6 +58,5 @@ impl<S, SC: Ord> OptProgress<S, SC> {
 ///     pb.set_position(op.iter as u64);
 /// };
 /// ```
-pub trait OptCallbackFn<S, SC: PartialOrd>: Fn(OptProgress<S, SC>) {}
-
-impl<T: Fn(OptProgress<S, SC>), S, SC: PartialOrd> OptCallbackFn<S, SC> for T {}
+pub trait OptCallbackFn<S, SC: PartialOrd> = Fn(OptProgress<S, SC>);
+}

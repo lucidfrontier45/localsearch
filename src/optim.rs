@@ -2,13 +2,16 @@
 
 mod base;
 mod epsilon_greedy;
+mod generic;
 mod hill_climbing;
 mod logistic_annealing;
 mod relative_annealing;
 mod simulated_annealing;
 mod tabu_search;
 
+pub use base::{LocalSearchOptimizer, TransitionProbabilityFn};
 pub use epsilon_greedy::EpsilonGreedyOptimizer;
+pub use generic::GenericLocalSearchOptimizer;
 pub use hill_climbing::HillClimbingOptimizer;
 pub use logistic_annealing::LogisticAnnealingOptimizer;
 pub use relative_annealing::RelativeAnnealingOptimizer;
