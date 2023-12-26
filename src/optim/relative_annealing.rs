@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use ordered_float::NotNan;
 
 use crate::{callback::OptCallbackFn, OptModel};
@@ -59,6 +61,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeA
         model: &M,
         initial_solution: Option<M::SolutionType>,
         n_iter: usize,
+        time_limit: Duration,
         callback: Option<&F>,
         _extra_in: Self::ExtraIn,
     ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
@@ -72,7 +75,14 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeA
             |current, trial| transition_prob(current, trial, self.w),
         );
 
-        optimizer.optimize(model, initial_solution, n_iter, callback, _extra_in)
+        optimizer.optimize(
+            model,
+            initial_solution,
+            n_iter,
+            time_limit,
+            callback,
+            _extra_in,
+        )
     }
 }
 

@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, time::Duration};
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
@@ -79,6 +79,7 @@ fn main() {
 
     println!("running Hill Climbing optimizer");
     let n_iter = 10000;
+    let time_limit = Duration::from_secs_f32(1.0);
     let patiance = 1000;
     let n_trials = 50;
     let opt = HillClimbingOptimizer::new(patiance, n_trials);
@@ -88,7 +89,7 @@ fn main() {
         pb.set_position(op.iter as u64);
     };
 
-    let res = opt.optimize(&model, None, n_iter, Some(&callback), ());
+    let res = opt.optimize(&model, None, n_iter, time_limit, Some(&callback), ());
     pb.finish();
     dbg!(res);
 }
