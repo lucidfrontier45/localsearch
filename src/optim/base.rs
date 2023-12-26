@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use auto_impl::auto_impl;
 use trait_set::trait_set;
 
@@ -17,6 +19,7 @@ pub trait LocalSearchOptimizer<M: OptModel> {
         model: &M,
         initial_solution: Option<M::SolutionType>,
         n_iter: usize,
+        time_limit: Duration,
         callback: Option<&F>,
         extra_in: Self::ExtraIn,
     ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)

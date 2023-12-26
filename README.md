@@ -17,7 +17,7 @@ All of the algorithms are parallelized with Rayon.
 You need to implement your own model that implements `OptModel` trait. Actual optimization is handled by each algorithm functions. Here is a simple example to optimize a quadratic function with Hill Climbing algorithm.
 
 ```rust
-use std::error::Error;
+use std::{error::Error, time::Duration};
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
@@ -98,6 +98,7 @@ fn main() {
 
     println!("running Hill Climbing optimizer");
     let n_iter = 10000;
+    let time_limit = Duration::from_secs(60);
     let patiance = 1000;
     let n_trials = 50;
     let opt = HillClimbingOptimizer::new(patiance, n_trials);
@@ -107,10 +108,11 @@ fn main() {
         pb.set_position(op.iter as u64);
     };
 
-    let res = opt.optimize(&model, None, n_iter, Some(&callback), ());
+    let res = opt.optimize(&model, None, n_iter, time_limit, Some(&callback), ());
     pb.finish();
     dbg!(res);
 }
+
 ```
 
 Further details can be found at API document, example and test codes.

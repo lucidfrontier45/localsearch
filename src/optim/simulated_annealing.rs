@@ -1,4 +1,8 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 use ordered_float::NotNan;
 use rand::Rng;
@@ -46,12 +50,14 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         model: &M,
         initial_solution: Option<M::SolutionType>,
         n_iter: usize,
+        time_limit: Duration,
         callback: Option<&F>,
         max_min_temperatures: Self::ExtraIn,
     ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
     where
         F: OptCallbackFn<M::SolutionType, M::ScoreType>,
     {
+        let start_time = Instant::now();
         let (max_temperature, min_temperature) = max_min_temperatures;
         let mut rng = rand::thread_rng();
         let mut current_solution = if let Some(s) = initial_solution {
@@ -68,6 +74,10 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         let mut counter = 0;
 
         for it in 0..n_iter {
+            let duration = Instant::now().duration_since(start_time);
+            if duration > time_limit {
+                break;
+            }
             let (trial_solution, trial_score) = (0..self.n_trials)
                 .into_par_iter()
                 .map(|_| {

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{callback::OptCallbackFn, OptModel};
 
 use super::{EpsilonGreedyOptimizer, LocalSearchOptimizer};
@@ -34,6 +36,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
         model: &M,
         initial_solution: Option<M::SolutionType>,
         n_iter: usize,
+        time_limit: Duration,
         callback: Option<&F>,
         _extra_in: Self::ExtraIn,
     ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
@@ -41,6 +44,13 @@ impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
         F: OptCallbackFn<M::SolutionType, M::ScoreType>,
     {
         let optimizer = EpsilonGreedyOptimizer::new(self.patience, self.n_trials, usize::MAX, 0.0);
-        optimizer.optimize(model, initial_solution, n_iter, callback, _extra_in)
+        optimizer.optimize(
+            model,
+            initial_solution,
+            n_iter,
+            time_limit,
+            callback,
+            _extra_in,
+        )
     }
 }

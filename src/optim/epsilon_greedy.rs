@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{callback::OptCallbackFn, OptModel};
 
 use super::{base::LocalSearchOptimizer, GenericLocalSearchOptimizer};
@@ -53,6 +55,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
         model: &M,
         initial_solution: Option<M::SolutionType>,
         n_iter: usize,
+        time_limit: Duration,
         callback: Option<&F>,
         _extra_in: Self::ExtraIn,
     ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
@@ -66,6 +69,13 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
             self.return_iter,
             |current, trial| transition_prob(current, trial, self.epsilon),
         );
-        optimizer.optimize(model, initial_solution, n_iter, callback, _extra_in)
+        optimizer.optimize(
+            model,
+            initial_solution,
+            n_iter,
+            time_limit,
+            callback,
+            _extra_in,
+        )
     }
 }

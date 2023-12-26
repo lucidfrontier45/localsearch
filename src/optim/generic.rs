@@ -1,4 +1,9 @@
-use std::{cell::RefCell, marker::PhantomData, rc::Rc};
+use std::{
+    cell::RefCell,
+    marker::PhantomData,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 use rand::Rng;
 use rayon::prelude::*;
@@ -69,12 +74,14 @@ where
         model: &M,
         initial_solution: Option<M::SolutionType>,
         n_iter: usize,
+        time_limit: Duration,
         callback: Option<&F>,
         _extra_in: Self::ExtraIn,
     ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
     where
         F: OptCallbackFn<M::SolutionType, M::ScoreType>,
     {
+        let start_time = Instant::now();
         let mut rng = rand::thread_rng();
         let mut current_solution = if let Some(s) = initial_solution {
             s
@@ -88,6 +95,10 @@ where
         let mut counter = 0;
 
         for it in 0..n_iter {
+            let duration = Instant::now().duration_since(start_time);
+            if duration > time_limit {
+                break;
+            }
             let (trial_solution, trial_score) = (0..self.n_trials)
                 .into_par_iter()
                 .map(|_| {

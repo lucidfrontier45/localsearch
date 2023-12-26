@@ -1,3 +1,4 @@
+use core::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
     error::Error,
@@ -243,6 +244,7 @@ fn main() {
     let tsp_model = TSPModel::from_coords(&coords);
 
     let n_iter: usize = 20000;
+    let time_limit = Duration::from_secs(60);
     let patience = n_iter / 2;
 
     let mut rng = rand::thread_rng();
@@ -266,6 +268,7 @@ fn main() {
         &tsp_model,
         initial_solution.clone(),
         n_iter,
+        time_limit,
         Some(&callback),
         (),
     );
@@ -284,6 +287,7 @@ fn main() {
         &tsp_model,
         initial_solution.clone(),
         n_iter,
+        time_limit,
         Some(&callback),
         tabu_list,
     );
@@ -301,6 +305,7 @@ fn main() {
         &tsp_model,
         initial_solution.clone(),
         n_iter,
+        time_limit,
         Some(&callback),
         (200.0, 50.0),
     );
@@ -318,6 +323,7 @@ fn main() {
         &tsp_model,
         initial_solution.clone(),
         n_iter,
+        time_limit,
         Some(&callback),
         (),
     );
@@ -331,8 +337,14 @@ fn main() {
 
     println!("run relative annealing");
     let optimizer = RelativeAnnealingOptimizer::new(patience, 200, 10, 1e1);
-    let (final_solution, final_score, _) =
-        optimizer.optimize(&tsp_model, initial_solution, n_iter, Some(&callback), ());
+    let (final_solution, final_score, _) = optimizer.optimize(
+        &tsp_model,
+        initial_solution,
+        n_iter,
+        time_limit,
+        Some(&callback),
+        (),
+    );
     println!(
         "final score = {}, num of cities {}",
         final_score,
