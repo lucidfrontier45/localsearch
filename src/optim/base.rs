@@ -15,14 +15,14 @@ pub trait LocalSearchOptimizer<M: OptModel> {
     fn optimize<F>(
         &self,
         model: &M,
-        initial_state: Option<M::StateType>,
+        initial_solution: Option<M::SolutionType>,
         n_iter: usize,
         callback: Option<&F>,
         extra_in: Self::ExtraIn,
-    ) -> (M::StateType, M::ScoreType, Self::ExtraOut)
+    ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
     where
         M: OptModel,
-        F: OptCallbackFn<M::StateType, M::ScoreType>;
+        F: OptCallbackFn<M::SolutionType, M::ScoreType>;
 }
 
 trait_set! {
