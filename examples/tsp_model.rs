@@ -1,3 +1,4 @@
+use core::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
     error::Error,
@@ -84,19 +85,19 @@ fn select_two_indides<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize
     min_sorted(n1, n2)
 }
 
-type StateType = Vec<usize>;
+type SolutionType = Vec<usize>;
 // remvoed edges and inserted edges
 type TransitionType = ([Edge; 2], [Edge; 2]);
 type ScoreType = NotNan<f64>;
 
 impl OptModel for TSPModel {
-    type StateType = StateType;
+    type SolutionType = SolutionType;
     type TransitionType = TransitionType;
     type ScoreType = ScoreType;
-    fn generate_random_state<R: rand::Rng>(
+    fn generate_random_solution<R: rand::Rng>(
         &self,
         rng: &mut R,
-    ) -> Result<StateType, Box<dyn Error>> {
+    ) -> Result<SolutionType, Box<dyn Error>> {
         let mut cities = self
             .distance_matrix
             .keys()
@@ -118,27 +119,27 @@ impl OptModel for TSPModel {
         Ok(cities)
     }
 
-    fn generate_trial_state<R: rand::Rng>(
+    fn generate_trial_solution<R: rand::Rng>(
         &self,
-        current_state: &StateType,
+        current_solution: &SolutionType,
         rng: &mut R,
         current_score: Option<NotNan<f64>>,
-    ) -> (StateType, TransitionType, NotNan<f64>) {
-        let (ind1, ind2) = select_two_indides(1, current_state.len() - 1, rng);
+    ) -> (SolutionType, TransitionType, NotNan<f64>) {
+        let (ind1, ind2) = select_two_indides(1, current_solution.len() - 1, rng);
 
-        let mut new_state = current_state.clone();
+        let mut new_solution = current_solution.clone();
         for (i, ind) in (ind1..=ind2).enumerate() {
-            new_state[ind] = current_state[ind2 - i];
+            new_solution[ind] = current_solution[ind2 - i];
         }
 
         let removed_edges = [
-            min_sorted(current_state[ind1 - 1], current_state[ind1]),
-            min_sorted(current_state[ind2 + 1], current_state[ind2]),
+            min_sorted(current_solution[ind1 - 1], current_solution[ind1]),
+            min_sorted(current_solution[ind2 + 1], current_solution[ind2]),
         ];
 
         let inserted_edges = [
-            min_sorted(new_state[ind1 - 1], new_state[ind1]),
-            min_sorted(new_state[ind2 + 1], new_state[ind2]),
+            min_sorted(new_solution[ind1 - 1], new_solution[ind1]),
+            min_sorted(new_solution[ind2 + 1], new_solution[ind2]),
         ];
 
         // calculate new score
@@ -149,19 +150,19 @@ impl OptModel for TSPModel {
                     + self.get_distance(&inserted_edges[0], true)
                     + self.get_distance(&inserted_edges[1], true)
             }
-            None => self.evaluate_state(&new_state),
+            None => self.evaluate_solution(&new_solution),
         };
 
         // create transition
         let trans = (removed_edges, inserted_edges);
 
-        (new_state, trans, new_score)
+        (new_solution, trans, new_score)
     }
 
-    fn evaluate_state(&self, state: &StateType) -> NotNan<f64> {
-        let score = (0..state.len() - 1)
+    fn evaluate_solution(&self, solution: &SolutionType) -> NotNan<f64> {
+        let score = (0..solution.len() - 1)
             .map(|i| {
-                let key = min_sorted(state[i], state[i + 1]);
+                let key = min_sorted(solution[i], solution[i + 1]);
                 self.get_distance(&key, true)
             })
             .sum();
@@ -182,7 +183,7 @@ impl DequeTabuList {
 }
 
 impl TabuList for DequeTabuList {
-    type Item = (StateType, TransitionType);
+    type Item = (SolutionType, TransitionType);
 
     fn contains(&self, item: &Self::Item) -> bool {
         let (_, (_, inserted_edges)) = item;
@@ -243,13 +244,14 @@ fn main() {
     let tsp_model = TSPModel::from_coords(&coords);
 
     let n_iter: usize = 20000;
+    let time_limit = Duration::from_secs(60);
     let patience = n_iter / 2;
 
     let mut rng = rand::thread_rng();
-    let initial_state = tsp_model.generate_random_state(&mut rng).ok();
+    let initial_solution = tsp_model.generate_random_solution(&mut rng).ok();
 
     let pb = create_pbar(n_iter as u64);
-    let callback = |op: OptProgress<StateType, ScoreType>| {
+    let callback = |op: OptProgress<SolutionType, ScoreType>| {
         let ratio = op.accepted_count as f64 / op.iter as f64;
         pb.set_message(format!(
             "best score {:.4e}, count = {}, acceptance ratio {:.2e}",
@@ -262,17 +264,18 @@ fn main() {
 
     println!("run hill climbing");
     let optimizer = HillClimbingOptimizer::new(1000, 200);
-    let (final_state, final_score, _) = optimizer.optimize(
+    let (final_solution, final_score, _) = optimizer.optimize(
         &tsp_model,
-        initial_state.clone(),
+        initial_solution.clone(),
         n_iter,
+        time_limit,
         Some(&callback),
         (),
     );
     println!(
         "final score = {}, num of cities {}",
         final_score,
-        final_state.len()
+        final_solution.len()
     );
     pb.finish_and_clear();
     pb.reset();
@@ -280,67 +283,76 @@ fn main() {
     println!("run tabu search");
     let tabu_list = DequeTabuList::new(20);
     let optimizer = TabuSearchOptimizer::new(patience, 200, 10);
-    let (final_state, final_score, _) = optimizer.optimize(
+    let (final_solution, final_score, _) = optimizer.optimize(
         &tsp_model,
-        initial_state.clone(),
+        initial_solution.clone(),
         n_iter,
+        time_limit,
         Some(&callback),
         tabu_list,
     );
     println!(
         "final score = {}, num of cities {}",
         final_score,
-        final_state.len()
+        final_solution.len()
     );
     pb.finish_and_clear();
     pb.reset();
 
     println!("run annealing");
     let optimizer = SimulatedAnnealingOptimizer::new(patience, 200);
-    let (final_state, final_score, _) = optimizer.optimize(
+    let (final_solution, final_score, _) = optimizer.optimize(
         &tsp_model,
-        initial_state.clone(),
+        initial_solution.clone(),
         n_iter,
+        time_limit,
         Some(&callback),
         (200.0, 50.0),
     );
     println!(
         "final score = {}, num of cities {}",
         final_score,
-        final_state.len()
+        final_solution.len()
     );
     pb.finish_and_clear();
     pb.reset();
 
     println!("run epsilon greedy");
     let optimizer = EpsilonGreedyOptimizer::new(patience, 200, 10, 0.3);
-    let (final_state, final_score, _) = optimizer.optimize(
+    let (final_solution, final_score, _) = optimizer.optimize(
         &tsp_model,
-        initial_state.clone(),
+        initial_solution.clone(),
         n_iter,
+        time_limit,
         Some(&callback),
         (),
     );
     println!(
         "final score = {}, num of cities {}",
         final_score,
-        final_state.len()
+        final_solution.len()
     );
     pb.finish_and_clear();
     pb.reset();
 
     println!("run relative annealing");
     let optimizer = RelativeAnnealingOptimizer::new(patience, 200, 10, 1e1);
-    let (final_state, final_score, _) =
-        optimizer.optimize(&tsp_model, initial_state, n_iter, Some(&callback), ());
+    let (final_solution, final_score, _) = optimizer.optimize(
+        &tsp_model,
+        initial_solution,
+        n_iter,
+        time_limit,
+        Some(&callback),
+        (),
+    );
     println!(
         "final score = {}, num of cities {}",
         final_score,
-        final_state.len()
+        final_solution.len()
     );
 
     let opt_route_file = args.get(2).unwrap();
-    let opt_state = read_lines(opt_route_file)
+    let opt_solution = read_lines(opt_route_file)
         .unwrap()
         .into_iter()
         .map(|line| {
@@ -349,10 +361,10 @@ fn main() {
         })
         .collect::<Vec<_>>();
 
-    let opt_score = tsp_model.evaluate_state(&opt_state);
+    let opt_score = tsp_model.evaluate_solution(&opt_solution);
     println!(
         "optimal score = {}, num of cities {}",
         opt_score,
-        opt_state.len()
+        opt_solution.len()
     );
 }

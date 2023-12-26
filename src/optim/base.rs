@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use auto_impl::auto_impl;
 use trait_set::trait_set;
 
@@ -15,14 +17,15 @@ pub trait LocalSearchOptimizer<M: OptModel> {
     fn optimize<F>(
         &self,
         model: &M,
-        initial_state: Option<M::StateType>,
+        initial_solution: Option<M::SolutionType>,
         n_iter: usize,
+        time_limit: Duration,
         callback: Option<&F>,
         extra_in: Self::ExtraIn,
-    ) -> (M::StateType, M::ScoreType, Self::ExtraOut)
+    ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
     where
         M: OptModel,
-        F: OptCallbackFn<M::StateType, M::ScoreType>;
+        F: OptCallbackFn<M::SolutionType, M::ScoreType>;
 }
 
 trait_set! {

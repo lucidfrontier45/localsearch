@@ -1,4 +1,8 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 use ordered_float::NotNan;
 use rand::Rng;
@@ -23,7 +27,7 @@ impl SimulatedAnnealingOptimizer {
     ///
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
-    /// - `n_trials` : number of trial states to generate and evaluate at each iteration
+    /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     pub fn new(patience: usize, n_trials: usize) -> Self {
         Self { patience, n_trials }
     }
@@ -37,30 +41,32 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
     /// Start optimization
     ///
     /// - `model` : the model to optimize
-    /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
+    /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
     /// - `n_iter`: maximum iterations
     /// - `callback` : callback function that will be invoked at the end of each iteration
     /// - `max_min_temperatures` : (max_temperature, min_temperature)
     fn optimize<F>(
         &self,
         model: &M,
-        initial_state: Option<M::StateType>,
+        initial_solution: Option<M::SolutionType>,
         n_iter: usize,
+        time_limit: Duration,
         callback: Option<&F>,
         max_min_temperatures: Self::ExtraIn,
-    ) -> (M::StateType, M::ScoreType, Self::ExtraOut)
+    ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
     where
-        F: OptCallbackFn<M::StateType, M::ScoreType>,
+        F: OptCallbackFn<M::SolutionType, M::ScoreType>,
     {
+        let start_time = Instant::now();
         let (max_temperature, min_temperature) = max_min_temperatures;
         let mut rng = rand::thread_rng();
-        let mut current_state = if let Some(s) = initial_state {
+        let mut current_solution = if let Some(s) = initial_solution {
             s
         } else {
-            model.generate_random_state(&mut rng).unwrap()
+            model.generate_random_solution(&mut rng).unwrap()
         };
-        let mut current_score = model.evaluate_state(&current_state);
-        let best_state = Rc::new(RefCell::new(current_state.clone()));
+        let mut current_score = model.evaluate_solution(&current_solution);
+        let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
         let mut accepted_counter = 0;
         let mut temperature = max_temperature;
@@ -68,13 +74,20 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         let mut counter = 0;
 
         for it in 0..n_iter {
-            let (trial_state, trial_score) = (0..self.n_trials)
+            let duration = Instant::now().duration_since(start_time);
+            if duration > time_limit {
+                break;
+            }
+            let (trial_solution, trial_score) = (0..self.n_trials)
                 .into_par_iter()
                 .map(|_| {
                     let mut rng = rand::thread_rng();
-                    let (state, _, score) =
-                        model.generate_trial_state(&current_state, &mut rng, Some(current_score));
-                    (state, score)
+                    let (solution, _, score) = model.generate_trial_solution(
+                        &current_solution,
+                        &mut rng,
+                        Some(current_score),
+                    );
+                    (solution, score)
                 })
                 .min_by_key(|(_, score)| *score)
                 .unwrap();
@@ -84,13 +97,13 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
             let r: f64 = rng.gen();
 
             if p > r {
-                current_state = trial_state;
+                current_solution = trial_solution;
                 current_score = trial_score;
                 accepted_counter += 1;
             }
 
             if current_score < best_score {
-                best_state.replace(current_state.clone());
+                best_solution.replace(current_solution.clone());
                 best_score = current_score;
                 counter = 0;
             }
@@ -104,12 +117,12 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
 
             if let Some(f) = callback {
                 let progress =
-                    OptProgress::new(it, accepted_counter, best_state.clone(), best_score);
+                    OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
                 f(progress);
             }
         }
 
-        let best_state = (*best_state.borrow()).clone();
-        (best_state, best_score, ())
+        let best_solution = (*best_solution.borrow()).clone();
+        (best_solution, best_score, ())
     }
 }

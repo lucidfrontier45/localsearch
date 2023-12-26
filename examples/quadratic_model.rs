@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, time::Duration};
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
@@ -23,39 +23,39 @@ impl QuadraticModel {
     }
 }
 
-type StateType = Vec<f64>;
+type SolutionType = Vec<f64>;
 type ScoreType = NotNan<f64>;
 
 impl OptModel for QuadraticModel {
-    type StateType = StateType;
+    type SolutionType = SolutionType;
     type TransitionType = ();
     type ScoreType = ScoreType;
-    fn generate_random_state<R: rand::Rng>(
+    fn generate_random_solution<R: rand::Rng>(
         &self,
         rng: &mut R,
-    ) -> Result<Self::StateType, Box<dyn Error>> {
-        let state = self.dist.sample_iter(rng).take(self.k).collect::<Vec<_>>();
-        Ok(state)
+    ) -> Result<Self::SolutionType, Box<dyn Error>> {
+        let solution = self.dist.sample_iter(rng).take(self.k).collect::<Vec<_>>();
+        Ok(solution)
     }
 
-    fn generate_trial_state<R: rand::Rng>(
+    fn generate_trial_solution<R: rand::Rng>(
         &self,
-        current_state: &Self::StateType,
+        current_solution: &Self::SolutionType,
         rng: &mut R,
         _current_score: Option<NotNan<f64>>,
-    ) -> (Self::StateType, Self::TransitionType, NotNan<f64>) {
+    ) -> (Self::SolutionType, Self::TransitionType, NotNan<f64>) {
         let k = rng.gen_range(0..self.k);
         let v = self.dist.sample(rng);
-        let mut new_state = current_state.clone();
-        new_state[k] = v;
-        let score = self.evaluate_state(&new_state);
-        (new_state, (), score)
+        let mut new_solution = current_solution.clone();
+        new_solution[k] = v;
+        let score = self.evaluate_solution(&new_solution);
+        (new_solution, (), score)
     }
 
-    fn evaluate_state(&self, state: &Self::StateType) -> NotNan<f64> {
+    fn evaluate_solution(&self, solution: &Self::SolutionType) -> NotNan<f64> {
         let score = (0..self.k)
             .into_iter()
-            .map(|i| (state[i] - self.centers[i]).powf(2.0))
+            .map(|i| (solution[i] - self.centers[i]).powf(2.0))
             .sum();
         NotNan::new(score).unwrap()
     }
@@ -79,16 +79,17 @@ fn main() {
 
     println!("running Hill Climbing optimizer");
     let n_iter = 10000;
+    let time_limit = Duration::from_secs_f32(1.0);
     let patiance = 1000;
     let n_trials = 50;
     let opt = HillClimbingOptimizer::new(patiance, n_trials);
     let pb = create_pbar(n_iter as u64);
-    let callback = |op: OptProgress<StateType, ScoreType>| {
+    let callback = |op: OptProgress<SolutionType, ScoreType>| {
         pb.set_message(format!("best score {:e}", op.score.into_inner()));
         pb.set_position(op.iter as u64);
     };
 
-    let res = opt.optimize(&model, None, n_iter, Some(&callback), ());
+    let res = opt.optimize(&model, None, n_iter, time_limit, Some(&callback), ());
     pb.finish();
     dbg!(res);
 }

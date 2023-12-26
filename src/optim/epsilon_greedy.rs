@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{callback::OptCallbackFn, OptModel};
 
 use super::{base::LocalSearchOptimizer, GenericLocalSearchOptimizer};
@@ -25,8 +27,8 @@ impl EpsilonGreedyOptimizer {
     ///
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
-    /// - `n_trials` : number of trial states to generate and evaluate at each iteration
-    /// - `return_iter` : returns to the current best state if there is no improvement after this number of iterations.
+    /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
+    /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
     /// - `epsilon` : probability to accept a transition that worsens the score. Must be in [0, 1].
     pub fn new(patience: usize, n_trials: usize, return_iter: usize, epsilon: f64) -> Self {
         Self {
@@ -44,21 +46,22 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
     /// Start optimization
     ///
     /// - `model` : the model to optimize
-    /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
+    /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
     /// - `n_iter`: maximum iterations
     /// - `callback` : callback function that will be invoked at the end of each iteration
     /// - `_extra_in` : not used
     fn optimize<F>(
         &self,
         model: &M,
-        initial_state: Option<M::StateType>,
+        initial_solution: Option<M::SolutionType>,
         n_iter: usize,
+        time_limit: Duration,
         callback: Option<&F>,
         _extra_in: Self::ExtraIn,
-    ) -> (M::StateType, M::ScoreType, Self::ExtraOut)
+    ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
     where
         M: OptModel + Sync + Send,
-        F: OptCallbackFn<M::StateType, M::ScoreType>,
+        F: OptCallbackFn<M::SolutionType, M::ScoreType>,
     {
         let optimizer = GenericLocalSearchOptimizer::new(
             self.patience,
@@ -66,6 +69,13 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
             self.return_iter,
             |current, trial| transition_prob(current, trial, self.epsilon),
         );
-        optimizer.optimize(model, initial_state, n_iter, callback, _extra_in)
+        optimizer.optimize(
+            model,
+            initial_solution,
+            n_iter,
+            time_limit,
+            callback,
+            _extra_in,
+        )
     }
 }

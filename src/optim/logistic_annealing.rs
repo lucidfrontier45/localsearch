@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use ordered_float::NotNan;
 
 use crate::{callback::OptCallbackFn, OptModel};
@@ -12,7 +14,7 @@ fn transition_prob<T: Into<f64>>(current: T, trial: T, w: f64) -> f64 {
 }
 
 /// Optimizer that implements logistic annealing algorithm
-/// In this model, unlike simulated annealing, wether accept the trial state or not is calculated based on relative score difference
+/// In this model, unlike simulated annealing, wether accept the trial solution or not is calculated based on relative score difference
 ///
 /// 1. d <- (trial_score - current_score) / current_score
 /// 2. p <- 2.0 / (1.0 + exp(w * d))
@@ -30,8 +32,8 @@ impl LogisticAnnealingOptimizer {
     ///
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
-    /// - `n_trials` : number of trial states to generate and evaluate at each iteration
-    /// - `return_iter` : returns to the current best state if there is no improvement after this number of iterations.
+    /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
+    /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
     /// - `w` : weight to be multiplied with the relative score difference.
     pub fn new(patience: usize, n_trials: usize, return_iter: usize, w: f64) -> Self {
         Self {
@@ -49,20 +51,21 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for LogisticA
     /// Start optimization
     ///
     /// - `model` : the model to optimize
-    /// - `initial_state` : the initial state to start optimization. If None, a random state will be generated.
+    /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
     /// - `n_iter`: maximum iterations
     /// - `callback` : callback function that will be invoked at the end of each iteration
     /// - `_extra_in` : not used
     fn optimize<F>(
         &self,
         model: &M,
-        initial_state: Option<M::StateType>,
+        initial_solution: Option<M::SolutionType>,
         n_iter: usize,
+        time_limit: Duration,
         callback: Option<&F>,
         _extra_in: Self::ExtraIn,
-    ) -> (M::StateType, M::ScoreType, Self::ExtraOut)
+    ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
     where
-        F: OptCallbackFn<M::StateType, M::ScoreType>,
+        F: OptCallbackFn<M::SolutionType, M::ScoreType>,
     {
         let optimizer = GenericLocalSearchOptimizer::new(
             self.patience,
@@ -71,7 +74,14 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for LogisticA
             |current, trial| transition_prob(current, trial, self.w),
         );
 
-        optimizer.optimize(model, initial_state, n_iter, callback, _extra_in)
+        optimizer.optimize(
+            model,
+            initial_solution,
+            n_iter,
+            time_limit,
+            callback,
+            _extra_in,
+        )
     }
 }
 
