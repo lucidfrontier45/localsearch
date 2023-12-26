@@ -11,19 +11,19 @@ pub struct OptProgress<S, SC> {
     pub iter: usize,
     /// number of accepted transitions
     pub accepted_count: usize,
-    /// current best state
-    pub state: Rc<RefCell<S>>,
+    /// current best solution
+    pub solution: Rc<RefCell<S>>,
     /// current best score
     pub score: SC,
 }
 
 impl<S, SC: Ord> OptProgress<S, SC> {
     /// constuctor of OptProgress
-    pub fn new(iter: usize, accepted_count: usize, state: Rc<RefCell<S>>, score: SC) -> Self {
+    pub fn new(iter: usize, accepted_count: usize, solution: Rc<RefCell<S>>, score: SC) -> Self {
         Self {
             iter,
             accepted_count,
-            state,
+            solution,
             score,
         }
     }
@@ -47,7 +47,7 @@ trait_set! {
 ///     pb.set_draw_target(ProgressDrawTarget::stderr_with_hz(10));
 ///     pb
 /// };
-/// let callback = |op: OptProgress<StateType, ScoreType>| {
+/// let callback = |op: OptProgress<SolutionType, ScoreType>| {
 ///     let ratio = op.accepted_count as f64 / op.iter as f64;
 ///     pb.set_message(format!(
 ///         "best score {:.4e}, count = {}, acceptance ratio {:.2e}",

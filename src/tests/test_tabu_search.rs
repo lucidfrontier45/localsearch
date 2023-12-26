@@ -5,7 +5,7 @@ use crate::{
     utils::RingBuffer,
 };
 
-use super::{QuadraticModel, StateType, TransitionType};
+use super::{QuadraticModel, SolutionType, TransitionType};
 
 #[derive(Debug)]
 struct MyTabuList {
@@ -20,7 +20,7 @@ impl MyTabuList {
 }
 
 impl TabuList for MyTabuList {
-    type Item = (StateType, TransitionType);
+    type Item = (SolutionType, TransitionType);
 
     fn contains(&self, item: &Self::Item) -> bool {
         let (k1, _, x) = item.1;
@@ -40,9 +40,10 @@ fn test() {
     let opt = TabuSearchOptimizer::new(1000, 25, 5);
     let tabu_list = MyTabuList::new(10);
     let null_closure = None::<&fn(_)>;
-    let (final_state, final_score, _) = opt.optimize(&model, None, 10000, null_closure, tabu_list);
-    assert_abs_diff_eq!(2.0, final_state[0], epsilon = 0.1);
-    assert_abs_diff_eq!(0.0, final_state[1], epsilon = 0.1);
-    assert_abs_diff_eq!(-3.5, final_state[2], epsilon = 0.1);
+    let (final_solution, final_score, _) =
+        opt.optimize(&model, None, 10000, null_closure, tabu_list);
+    assert_abs_diff_eq!(2.0, final_solution[0], epsilon = 0.1);
+    assert_abs_diff_eq!(0.0, final_solution[1], epsilon = 0.1);
+    assert_abs_diff_eq!(-3.5, final_solution[2], epsilon = 0.1);
     assert_abs_diff_eq!(0.0, final_score.into_inner(), epsilon = 0.05);
 }
