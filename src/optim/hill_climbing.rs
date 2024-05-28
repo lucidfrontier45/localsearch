@@ -1,6 +1,4 @@
-use std::time::Duration;
-
-use crate::{callback::OptCallbackFn, OptModel};
+use crate::{callback::OptCallbackFn, Duration, OptModel};
 
 use super::{EpsilonGreedyOptimizer, LocalSearchOptimizer};
 

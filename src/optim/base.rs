@@ -1,9 +1,7 @@
-use std::time::Duration;
-
 use auto_impl::auto_impl;
 use trait_set::trait_set;
 
-use crate::{callback::OptCallbackFn, OptModel};
+use crate::{callback::OptCallbackFn, Duration, OptModel};
 
 /// Optimizer that implements local search algorithm
 #[auto_impl(&, Box, Rc, Arc)]
