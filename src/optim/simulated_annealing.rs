@@ -1,8 +1,4 @@
-use std::{
-    cell::RefCell,
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use std::{cell::RefCell, rc::Rc};
 
 use ordered_float::NotNan;
 use rand::Rng;
@@ -10,7 +6,7 @@ use rayon::prelude::*;
 
 use crate::{
     callback::{OptCallbackFn, OptProgress},
-    OptModel,
+    Duration, Instant, OptModel,
 };
 
 use super::LocalSearchOptimizer;

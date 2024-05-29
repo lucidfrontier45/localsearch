@@ -12,6 +12,9 @@ pub use callback::{OptCallbackFn, OptProgress};
 mod model;
 pub use model::OptModel;
 
+mod time_wrapper;
+pub use time_wrapper::{Duration, Instant};
+
 /// Crate verison string
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
