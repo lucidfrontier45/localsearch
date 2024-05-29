@@ -1,8 +1,6 @@
-use std::time::Duration;
-
 use ordered_float::NotNan;
 
-use crate::{callback::OptCallbackFn, OptModel};
+use crate::{callback::OptCallbackFn, Duration, OptModel};
 
 use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer};
 
