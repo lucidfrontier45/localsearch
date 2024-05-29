@@ -1,16 +1,11 @@
-use std::{
-    cell::RefCell,
-    marker::PhantomData,
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 use rand::Rng;
 use rayon::prelude::*;
 
 use crate::{
     callback::{OptCallbackFn, OptProgress},
-    OptModel,
+    Duration, Instant, OptModel,
 };
 
 use super::{LocalSearchOptimizer, TransitionProbabilityFn};

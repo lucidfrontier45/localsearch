@@ -1,16 +1,11 @@
-use std::{
-    cell::RefCell,
-    marker::PhantomData,
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 use auto_impl::auto_impl;
 use rayon::prelude::*;
 
 use crate::{
     callback::{OptCallbackFn, OptProgress},
-    OptModel,
+    Duration, Instant, OptModel,
 };
 
 use super::LocalSearchOptimizer;
