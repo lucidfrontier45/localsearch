@@ -89,7 +89,7 @@ fn main() {
         pb.set_position(op.iter as u64);
     };
 
-    let res = opt.optimize(&model, None, n_iter, time_limit, Some(&callback), ());
+    let res = opt.run(&model, None, n_iter, time_limit, Some(&callback), ());
     pb.finish();
     dbg!(res);
 }

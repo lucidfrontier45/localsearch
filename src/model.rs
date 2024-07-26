@@ -28,4 +28,14 @@ pub trait OptModel: Sync + Send {
 
     /// Evaluate the given solution
     fn evaluate_solution(&self, solution: &Self::SolutionType) -> Self::ScoreType;
+
+    /// Preprocess the solution
+    fn preprocess_solution(&self, solution: Self::SolutionType) -> Self::SolutionType {
+        solution
+    }
+
+    /// Postprocess the solution
+    fn postprocess_solution(&self, solution: Self::SolutionType) -> Self::SolutionType {
+        solution
+    }
 }
