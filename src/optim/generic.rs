@@ -67,7 +67,7 @@ where
     fn optimize<F>(
         &self,
         model: &M,
-        initial_solution: Option<M::SolutionType>,
+        initial_solution: M::SolutionType,
         n_iter: usize,
         time_limit: Duration,
         callback: Option<&F>,
@@ -78,11 +78,7 @@ where
     {
         let start_time = Instant::now();
         let mut rng = rand::thread_rng();
-        let mut current_solution = if let Some(s) = initial_solution {
-            s
-        } else {
-            model.generate_random_solution(&mut rng).unwrap()
-        };
+        let mut current_solution = initial_solution;
         let mut current_score = model.evaluate_solution(&current_solution);
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;

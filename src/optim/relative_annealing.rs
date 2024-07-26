@@ -57,7 +57,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeA
     fn optimize<F>(
         &self,
         model: &M,
-        initial_solution: Option<M::SolutionType>,
+        initial_solution: M::SolutionType,
         n_iter: usize,
         time_limit: Duration,
         callback: Option<&F>,
