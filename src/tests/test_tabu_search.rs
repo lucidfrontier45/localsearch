@@ -42,7 +42,7 @@ fn test() {
     let opt = TabuSearchOptimizer::new(1000, 25, 5);
     let tabu_list = MyTabuList::new(10);
     let null_closure = None::<&fn(_)>;
-    let (final_solution, final_score, _) = opt.optimize(
+    let (final_solution, final_score, _) = opt.run(
         &model,
         None,
         10000,

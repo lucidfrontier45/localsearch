@@ -108,11 +108,17 @@ fn main() {
         pb.set_position(op.iter as u64);
     };
 
-    let res = opt.optimize(&model, None, n_iter, time_limit, Some(&callback), ());
+    let res = opt.run(&model, None, n_iter, time_limit, Some(&callback), ());
     pb.finish();
     dbg!(res);
 }
 
 ```
+
+In addition you can also add `preprocess_initial_solution` and `postprocess_final_solution` to your model.
+`preprocess_initial_solution` is called before start of optimization iteration.
+If initial solution is not supplied, `generate_initial_solution` is called and the generate solution is then passed to `preprocess_initial_solution`.
+`postprocess_final_solution` is called after the optimization iteration.
+
 
 Further details can be found at API document, example and test codes.

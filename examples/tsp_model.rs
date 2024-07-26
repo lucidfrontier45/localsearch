@@ -264,7 +264,7 @@ fn main() {
 
     println!("run hill climbing");
     let optimizer = HillClimbingOptimizer::new(1000, 200);
-    let (final_solution, final_score, _) = optimizer.optimize(
+    let (final_solution, final_score, _) = optimizer.run(
         &tsp_model,
         initial_solution.clone(),
         n_iter,
@@ -283,7 +283,7 @@ fn main() {
     println!("run tabu search");
     let tabu_list = DequeTabuList::new(20);
     let optimizer = TabuSearchOptimizer::new(patience, 200, 10);
-    let (final_solution, final_score, _) = optimizer.optimize(
+    let (final_solution, final_score, _) = optimizer.run(
         &tsp_model,
         initial_solution.clone(),
         n_iter,
@@ -301,7 +301,7 @@ fn main() {
 
     println!("run annealing");
     let optimizer = SimulatedAnnealingOptimizer::new(patience, 200);
-    let (final_solution, final_score, _) = optimizer.optimize(
+    let (final_solution, final_score, _) = optimizer.run(
         &tsp_model,
         initial_solution.clone(),
         n_iter,
@@ -319,7 +319,7 @@ fn main() {
 
     println!("run epsilon greedy");
     let optimizer = EpsilonGreedyOptimizer::new(patience, 200, 10, 0.3);
-    let (final_solution, final_score, _) = optimizer.optimize(
+    let (final_solution, final_score, _) = optimizer.run(
         &tsp_model,
         initial_solution.clone(),
         n_iter,
@@ -337,7 +337,7 @@ fn main() {
 
     println!("run relative annealing");
     let optimizer = RelativeAnnealingOptimizer::new(patience, 200, 10, 1e1);
-    let (final_solution, final_score, _) = optimizer.optimize(
+    let (final_solution, final_score, _) = optimizer.run(
         &tsp_model,
         initial_solution,
         n_iter,
