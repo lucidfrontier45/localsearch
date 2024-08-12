@@ -1,9 +1,9 @@
-use core::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
     io::{self, BufRead},
     path::Path,
+    time::Duration,
 };
 
 use anyhow::Result as AnyResult;
