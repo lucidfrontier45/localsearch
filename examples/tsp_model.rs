@@ -1,12 +1,12 @@
 use core::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
-    error::Error,
     fs::File,
     io::{self, BufRead},
     path::Path,
 };
 
+use anyhow::Result as AnyResult;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     optim::{
@@ -94,10 +94,7 @@ impl OptModel for TSPModel {
     type SolutionType = SolutionType;
     type TransitionType = TransitionType;
     type ScoreType = ScoreType;
-    fn generate_random_solution<R: rand::Rng>(
-        &self,
-        rng: &mut R,
-    ) -> Result<SolutionType, Box<dyn Error>> {
+    fn generate_random_solution<R: rand::Rng>(&self, rng: &mut R) -> AnyResult<SolutionType> {
         let mut cities = self
             .distance_matrix
             .keys()

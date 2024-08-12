@@ -17,6 +17,7 @@ rand = "0.8.5"
 ordered-float = "4.2.2"
 rayon = "1.10.0"
 auto_impl = "1.2.0"
+anyhow = "1.0.86"
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 web-time = "1.1.0"

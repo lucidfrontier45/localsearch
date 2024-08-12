@@ -17,8 +17,9 @@ All of the algorithms are parallelized with Rayon.
 You need to implement your own model that implements `OptModel` trait. Actual optimization is handled by each algorithm functions. Here is a simple example to optimize a quadratic function with Hill Climbing algorithm.
 
 ```rust
-use std::{error::Error, time::Duration};
+use std::{time::Duration};
 
+use anyhow::Result as AnyResult;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     optim::{HillClimbingOptimizer, LocalSearchOptimizer},
@@ -52,7 +53,7 @@ impl OptModel for QuadraticModel {
     fn generate_random_solution<R: rand::Rng>(
         &self,
         rng: &mut R,
-    ) -> Result<Self::SolutionType, Box<dyn Error>> {
+    ) -> AnyResult<Self::SolutionType> {
         let solution = self.dist.sample_iter(rng).take(self.k).collect::<Vec<_>>();
         Ok(solution)
     }

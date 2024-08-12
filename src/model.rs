@@ -1,4 +1,4 @@
-use std::error::Error;
+use anyhow::Result as AnyResult;
 
 use auto_impl::auto_impl;
 
@@ -13,10 +13,7 @@ pub trait OptModel: Sync + Send {
     type TransitionType: Clone + Sync + Send;
 
     /// Randomly generate a solution
-    fn generate_random_solution<R: rand::Rng>(
-        &self,
-        rng: &mut R,
-    ) -> Result<Self::SolutionType, Box<dyn Error>>;
+    fn generate_random_solution<R: rand::Rng>(&self, rng: &mut R) -> AnyResult<Self::SolutionType>;
 
     /// Generate a new trial solution from current solution
     fn generate_trial_solution<R: rand::Rng>(
