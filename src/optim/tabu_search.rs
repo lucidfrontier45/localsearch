@@ -90,6 +90,7 @@ impl<M: OptModel, T: TabuList<Item = (M::SolutionType, M::TransitionType)>> Loca
         &self,
         model: &M,
         initial_solution: M::SolutionType,
+        initial_score: M::ScoreType,
         n_iter: usize,
         time_limit: Duration,
         callback: Option<&F>,
@@ -100,7 +101,7 @@ impl<M: OptModel, T: TabuList<Item = (M::SolutionType, M::TransitionType)>> Loca
     {
         let start_time = Instant::now();
         let mut current_solution = initial_solution;
-        let mut current_score = model.evaluate_solution(&current_solution);
+        let mut current_score = initial_score;
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
         let mut counter = 0;
@@ -117,9 +118,9 @@ impl<M: OptModel, T: TabuList<Item = (M::SolutionType, M::TransitionType)>> Loca
                 .map(|_| {
                     let mut rng = rand::thread_rng();
                     let (solution, transitions, score) = model.generate_trial_solution(
-                        &current_solution,
+                        current_solution.clone(),
+                        current_score,
                         &mut rng,
-                        Some(current_score),
                     );
                     (solution, transitions, score)
                 })

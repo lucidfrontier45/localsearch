@@ -1,3 +1,4 @@
+use anyhow::Result as AnyResult;
 use auto_impl::auto_impl;
 
 use crate::{callback::OptCallbackFn, Duration, OptModel};
@@ -15,6 +16,7 @@ pub trait LocalSearchOptimizer<M: OptModel> {
         &self,
         model: &M,
         initial_solution: M::SolutionType,
+        initial_score: M::ScoreType,
         n_iter: usize,
         time_limit: Duration,
         callback: Option<&F>,
@@ -28,31 +30,39 @@ pub trait LocalSearchOptimizer<M: OptModel> {
     fn run<F>(
         &self,
         model: &M,
-        initial_solution: Option<M::SolutionType>,
+        initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
         n_iter: usize,
         time_limit: Duration,
         callback: Option<&F>,
         extra_in: Self::ExtraIn,
-    ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
+    ) -> AnyResult<(M::SolutionType, M::ScoreType, Self::ExtraOut)>
     where
         M: OptModel,
         F: OptCallbackFn<M::SolutionType, M::ScoreType>,
     {
-        let initial_solution = model.preprocess_solution(initial_solution.unwrap_or_else(|| {
-            let mut rng = rand::thread_rng();
-            model.generate_random_solution(&mut rng).unwrap()
-        }));
+        let (initial_solution, initial_score) = match initial_solution_and_score {
+            Some((solution, score)) => (solution, score),
+            None => {
+                let mut rng = rand::thread_rng();
+                model.generate_random_solution(&mut rng)?
+            }
+        };
+
+        let (initial_solution, initial_score) =
+            model.preprocess_solution(initial_solution, initial_score)?;
 
         let (solution, score, extra) = self.optimize(
             model,
             initial_solution,
+            initial_score,
             n_iter,
             time_limit,
             callback,
             extra_in,
         );
 
-        (model.postprocess_solution(solution), score, extra)
+        let (solution, score) = model.postprocess_solution(solution, score);
+        Ok((solution, score, extra))
     }
 }
 

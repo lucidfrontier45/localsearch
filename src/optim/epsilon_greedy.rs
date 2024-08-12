@@ -52,6 +52,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
         &self,
         model: &M,
         initial_solution: M::SolutionType,
+        initial_score: M::ScoreType,
         n_iter: usize,
         time_limit: Duration,
         callback: Option<&F>,
@@ -70,6 +71,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
         optimizer.optimize(
             model,
             initial_solution,
+            initial_score,
             n_iter,
             time_limit,
             callback,

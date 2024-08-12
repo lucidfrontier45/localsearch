@@ -45,6 +45,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         &self,
         model: &M,
         initial_solution: M::SolutionType,
+        initial_score: M::ScoreType,
         n_iter: usize,
         time_limit: Duration,
         callback: Option<&F>,
@@ -57,7 +58,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         let (max_temperature, min_temperature) = max_min_temperatures;
         let mut rng = rand::thread_rng();
         let mut current_solution = initial_solution;
-        let mut current_score = model.evaluate_solution(&current_solution);
+        let mut current_score = initial_score;
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
         let mut accepted_counter = 0;
@@ -75,9 +76,9 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
                 .map(|_| {
                     let mut rng = rand::thread_rng();
                     let (solution, _, score) = model.generate_trial_solution(
-                        &current_solution,
+                        current_solution.clone(),
+                        current_score,
                         &mut rng,
-                        Some(current_score),
                     );
                     (solution, score)
                 })

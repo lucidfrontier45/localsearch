@@ -13,26 +13,34 @@ pub trait OptModel: Sync + Send {
     type TransitionType: Clone + Sync + Send;
 
     /// Randomly generate a solution
-    fn generate_random_solution<R: rand::Rng>(&self, rng: &mut R) -> AnyResult<Self::SolutionType>;
+    fn generate_random_solution<R: rand::Rng>(
+        &self,
+        rng: &mut R,
+    ) -> AnyResult<(Self::SolutionType, Self::ScoreType)>;
 
     /// Generate a new trial solution from current solution
     fn generate_trial_solution<R: rand::Rng>(
         &self,
-        current_solution: &Self::SolutionType,
+        current_solution: Self::SolutionType,
+        current_score: Self::ScoreType,
         rng: &mut R,
-        current_score: Option<Self::ScoreType>,
     ) -> (Self::SolutionType, Self::TransitionType, Self::ScoreType);
 
-    /// Evaluate the given solution
-    fn evaluate_solution(&self, solution: &Self::SolutionType) -> Self::ScoreType;
-
     /// Preprocess the solution
-    fn preprocess_solution(&self, solution: Self::SolutionType) -> Self::SolutionType {
-        solution
+    fn preprocess_solution(
+        &self,
+        current_solution: Self::SolutionType,
+        current_score: Self::ScoreType,
+    ) -> AnyResult<(Self::SolutionType, Self::ScoreType)> {
+        Ok((current_solution, current_score))
     }
 
     /// Postprocess the solution
-    fn postprocess_solution(&self, solution: Self::SolutionType) -> Self::SolutionType {
-        solution
+    fn postprocess_solution(
+        &self,
+        current_solution: Self::SolutionType,
+        current_score: Self::ScoreType,
+    ) -> (Self::SolutionType, Self::ScoreType) {
+        (current_solution, current_score)
     }
 }
