@@ -16,7 +16,6 @@ edition = "2021"
 rand = "0.8.5"
 ordered-float = "4.2.2"
 rayon = "1.10.0"
-trait-set = "0.3.0"
 auto_impl = "1.2.0"
 
 [target.'cfg(target_family = "wasm")'.dependencies]

@@ -1,5 +1,4 @@
 use auto_impl::auto_impl;
-use trait_set::trait_set;
 
 use crate::{callback::OptCallbackFn, Duration, OptModel};
 
@@ -57,7 +56,7 @@ pub trait LocalSearchOptimizer<M: OptModel> {
     }
 }
 
-trait_set! {
-    /// Transition probability function
-    pub trait TransitionProbabilityFn<ST: Ord + Sync + Send + Copy> = Fn(ST, ST) -> f64;
-}
+/// Transition probability function
+pub trait TransitionProbabilityFn<ST: Ord + Sync + Send + Copy>: Fn(ST, ST) -> f64 {}
+
+impl<F, ST: Ord + Sync + Send + Copy> TransitionProbabilityFn<ST> for F where F: Fn(ST, ST) -> f64 {}
