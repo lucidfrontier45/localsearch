@@ -51,7 +51,9 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeA
     ///
     /// - `model` : the model to optimize
     /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
+    /// - `initial_score` : the initial score of the initial solution
     /// - `n_iter`: maximum iterations
+    /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
     /// - `_extra_in` : not used
     fn optimize<F>(
