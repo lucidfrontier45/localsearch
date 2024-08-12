@@ -14,17 +14,17 @@ edition = "2021"
 
 [dependencies]
 rand = "0.8.5"
-ordered-float = "4.1.1"
-rayon = "1.8.0"
+ordered-float = "4.2.2"
+rayon = "1.10.0"
 trait-set = "0.3.0"
-auto_impl = "1.1.0"
+auto_impl = "1.2.0"
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 web-time = "1.1.0"
 
 [dev-dependencies]
 approx = "0.5.1"
-indicatif = "0.17.7"
+indicatif = "0.17.8"
 
 [lib]
 name = "localsearch"
