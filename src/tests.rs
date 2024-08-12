@@ -1,5 +1,4 @@
-use std::error::Error;
-
+use anyhow::Result as AnyResult;
 use ordered_float::NotNan;
 use rand::{distributions::Uniform, prelude::Distribution};
 
@@ -27,10 +26,7 @@ impl OptModel for QuadraticModel {
     type SolutionType = SolutionType;
     type TransitionType = TransitionType;
     type ScoreType = NotNan<f64>;
-    fn generate_random_solution<R: rand::Rng>(
-        &self,
-        rng: &mut R,
-    ) -> Result<Self::SolutionType, Box<dyn Error>> {
+    fn generate_random_solution<R: rand::Rng>(&self, rng: &mut R) -> AnyResult<Self::SolutionType> {
         let solution = self.dist.sample_iter(rng).take(self.k).collect::<Vec<_>>();
         Ok(solution)
     }
