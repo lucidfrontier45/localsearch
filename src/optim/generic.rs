@@ -61,13 +61,16 @@ where
     ///
     /// - `model` : the model to optimize
     /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
+    /// - `initial_score` : the initial score of the initial solution
     /// - `n_iter`: maximum iterations
+    /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
     /// - `_extra_in` : not used
     fn optimize<F>(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
+        initial_score: M::ScoreType,
         n_iter: usize,
         time_limit: Duration,
         callback: Option<&F>,
@@ -79,7 +82,7 @@ where
         let start_time = Instant::now();
         let mut rng = rand::thread_rng();
         let mut current_solution = initial_solution;
-        let mut current_score = model.evaluate_solution(&current_solution);
+        let mut current_score = initial_score;
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
         let mut accepted_counter = 0;
@@ -95,9 +98,9 @@ where
                 .map(|_| {
                     let mut rng = rand::thread_rng();
                     let (solution, _, score) = model.generate_trial_solution(
-                        &current_solution,
+                        current_solution.clone(),
+                        current_score,
                         &mut rng,
-                        Some(current_score),
                     );
                     (solution, score)
                 })

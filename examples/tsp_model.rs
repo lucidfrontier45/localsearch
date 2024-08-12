@@ -28,6 +28,10 @@ fn min_sorted(c1: usize, c2: usize) -> (usize, usize) {
 }
 
 type Edge = (usize, usize);
+type SolutionType = Vec<usize>;
+// remvoed edges and inserted edges
+type TransitionType = ([Edge; 2], [Edge; 2]);
+type ScoreType = NotNan<f64>;
 
 #[derive(Clone, Debug)]
 struct TSPModel {
@@ -72,6 +76,16 @@ impl TSPModel {
             self.distance_matrix[&key]
         }
     }
+
+    fn evaluate_solution(&self, solution: &SolutionType) -> ScoreType {
+        let score = (0..solution.len() - 1)
+            .map(|i| {
+                let key = min_sorted(solution[i], solution[i + 1]);
+                self.get_distance(&key, true)
+            })
+            .sum();
+        NotNan::new(score).unwrap()
+    }
 }
 
 fn select_two_indides<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize, usize) {
@@ -85,16 +99,14 @@ fn select_two_indides<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize
     min_sorted(n1, n2)
 }
 
-type SolutionType = Vec<usize>;
-// remvoed edges and inserted edges
-type TransitionType = ([Edge; 2], [Edge; 2]);
-type ScoreType = NotNan<f64>;
-
 impl OptModel for TSPModel {
     type SolutionType = SolutionType;
     type TransitionType = TransitionType;
     type ScoreType = ScoreType;
-    fn generate_random_solution<R: rand::Rng>(&self, rng: &mut R) -> AnyResult<SolutionType> {
+    fn generate_random_solution<R: rand::Rng>(
+        &self,
+        rng: &mut R,
+    ) -> AnyResult<(self::SolutionType, self::ScoreType)> {
         let mut cities = self
             .distance_matrix
             .keys()
@@ -113,15 +125,17 @@ impl OptModel for TSPModel {
         // append start city to the last
         cities.push(self.start);
 
-        Ok(cities)
+        let score = self.evaluate_solution(&cities);
+
+        Ok((cities, score))
     }
 
     fn generate_trial_solution<R: rand::Rng>(
         &self,
-        current_solution: &SolutionType,
+        current_solution: Self::SolutionType,
+        current_score: Self::ScoreType,
         rng: &mut R,
-        current_score: Option<NotNan<f64>>,
-    ) -> (SolutionType, TransitionType, NotNan<f64>) {
+    ) -> (Self::SolutionType, Self::TransitionType, Self::ScoreType) {
         let (ind1, ind2) = select_two_indides(1, current_solution.len() - 1, rng);
 
         let mut new_solution = current_solution.clone();
@@ -140,30 +154,16 @@ impl OptModel for TSPModel {
         ];
 
         // calculate new score
-        let new_score = match current_score {
-            Some(s) => {
-                s - self.get_distance(&removed_edges[0], true)
-                    - self.get_distance(&removed_edges[1], true)
-                    + self.get_distance(&inserted_edges[0], true)
-                    + self.get_distance(&inserted_edges[1], true)
-            }
-            None => self.evaluate_solution(&new_solution),
-        };
+        let new_score = current_score
+            - self.get_distance(&removed_edges[0], true)
+            - self.get_distance(&removed_edges[1], true)
+            + self.get_distance(&inserted_edges[0], true)
+            + self.get_distance(&inserted_edges[1], true);
 
         // create transition
         let trans = (removed_edges, inserted_edges);
 
         (new_solution, trans, new_score)
-    }
-
-    fn evaluate_solution(&self, solution: &SolutionType) -> NotNan<f64> {
-        let score = (0..solution.len() - 1)
-            .map(|i| {
-                let key = min_sorted(solution[i], solution[i + 1]);
-                self.get_distance(&key, true)
-            })
-            .sum();
-        NotNan::new(score).unwrap()
     }
 }
 
@@ -261,14 +261,16 @@ fn main() {
 
     println!("run hill climbing");
     let optimizer = HillClimbingOptimizer::new(1000, 200);
-    let (final_solution, final_score, _) = optimizer.run(
-        &tsp_model,
-        initial_solution.clone(),
-        n_iter,
-        time_limit,
-        Some(&callback),
-        (),
-    );
+    let (final_solution, final_score, _) = optimizer
+        .run(
+            &tsp_model,
+            initial_solution.clone(),
+            n_iter,
+            time_limit,
+            Some(&callback),
+            (),
+        )
+        .unwrap();
     println!(
         "final score = {}, num of cities {}",
         final_score,
@@ -280,14 +282,16 @@ fn main() {
     println!("run tabu search");
     let tabu_list = DequeTabuList::new(20);
     let optimizer = TabuSearchOptimizer::new(patience, 200, 10);
-    let (final_solution, final_score, _) = optimizer.run(
-        &tsp_model,
-        initial_solution.clone(),
-        n_iter,
-        time_limit,
-        Some(&callback),
-        tabu_list,
-    );
+    let (final_solution, final_score, _) = optimizer
+        .run(
+            &tsp_model,
+            initial_solution.clone(),
+            n_iter,
+            time_limit,
+            Some(&callback),
+            tabu_list,
+        )
+        .unwrap();
     println!(
         "final score = {}, num of cities {}",
         final_score,
@@ -298,14 +302,16 @@ fn main() {
 
     println!("run annealing");
     let optimizer = SimulatedAnnealingOptimizer::new(patience, 200);
-    let (final_solution, final_score, _) = optimizer.run(
-        &tsp_model,
-        initial_solution.clone(),
-        n_iter,
-        time_limit,
-        Some(&callback),
-        (200.0, 50.0),
-    );
+    let (final_solution, final_score, _) = optimizer
+        .run(
+            &tsp_model,
+            initial_solution.clone(),
+            n_iter,
+            time_limit,
+            Some(&callback),
+            (200.0, 50.0),
+        )
+        .unwrap();
     println!(
         "final score = {}, num of cities {}",
         final_score,
@@ -316,14 +322,16 @@ fn main() {
 
     println!("run epsilon greedy");
     let optimizer = EpsilonGreedyOptimizer::new(patience, 200, 10, 0.3);
-    let (final_solution, final_score, _) = optimizer.run(
-        &tsp_model,
-        initial_solution.clone(),
-        n_iter,
-        time_limit,
-        Some(&callback),
-        (),
-    );
+    let (final_solution, final_score, _) = optimizer
+        .run(
+            &tsp_model,
+            initial_solution.clone(),
+            n_iter,
+            time_limit,
+            Some(&callback),
+            (),
+        )
+        .unwrap();
     println!(
         "final score = {}, num of cities {}",
         final_score,
@@ -334,14 +342,16 @@ fn main() {
 
     println!("run relative annealing");
     let optimizer = RelativeAnnealingOptimizer::new(patience, 200, 10, 1e1);
-    let (final_solution, final_score, _) = optimizer.run(
-        &tsp_model,
-        initial_solution,
-        n_iter,
-        time_limit,
-        Some(&callback),
-        (),
-    );
+    let (final_solution, final_score, _) = optimizer
+        .run(
+            &tsp_model,
+            initial_solution,
+            n_iter,
+            time_limit,
+            Some(&callback),
+            (),
+        )
+        .unwrap();
     println!(
         "final score = {}, num of cities {}",
         final_score,
