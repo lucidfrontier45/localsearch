@@ -44,9 +44,6 @@ impl RelativeAnnealingOptimizer {
 }
 
 impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeAnnealingOptimizer {
-    type ExtraIn = ();
-    type ExtraOut = ();
-
     /// Start optimization
     ///
     /// - `model` : the model to optimize
@@ -64,8 +61,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeA
         n_iter: usize,
         time_limit: Duration,
         callback: Option<&F>,
-        _extra_in: Self::ExtraIn,
-    ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
+    ) -> (M::SolutionType, M::ScoreType)
     where
         F: OptCallbackFn<M::SolutionType, M::ScoreType>,
     {
@@ -83,7 +79,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeA
             n_iter,
             time_limit,
             callback,
-            _extra_in,
         )
     }
 }

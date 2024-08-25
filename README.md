@@ -6,7 +6,7 @@ Rust library for local search optimization
 All of the algorithms are parallelized with Rayon.
 
 1. Hill Climbing.
-2. Tabu Search.
+2. Tabu Search. To use this optimizer you also need to implement your problem specific tabu list.
 3. Simulated Annealing
 4. Epsilon Greedy Search, a variant of Hill Climbing which accepts the trial solution with a constant probabilith even if the score of the trial solution is worse than the previous one.
 5. Relative Annealing, a variant of Simulated Annealing which uses relative score diff to calculate transition probability.
@@ -110,7 +110,7 @@ fn main() {
         pb.set_position(op.iter as u64);
     };
 
-    let res = opt.run(&model, None, n_iter, time_limit, Some(&callback), ());
+    let res = opt.run(&model, None, n_iter, time_limit, Some(&callback));
     pb.finish();
     dbg!(res.unwrap());
 }
