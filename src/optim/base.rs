@@ -6,11 +6,6 @@ use crate::{callback::OptCallbackFn, Duration, OptModel};
 /// Optimizer that implements local search algorithm
 #[auto_impl(&, Box, Rc, Arc)]
 pub trait LocalSearchOptimizer<M: OptModel> {
-    /// Extra input type
-    type ExtraIn;
-    /// Extra output type
-    type ExtraOut;
-
     /// Start optimization
     fn optimize<F>(
         &self,
@@ -20,8 +15,7 @@ pub trait LocalSearchOptimizer<M: OptModel> {
         n_iter: usize,
         time_limit: Duration,
         callback: Option<&F>,
-        extra_in: Self::ExtraIn,
-    ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
+    ) -> (M::SolutionType, M::ScoreType)
     where
         M: OptModel,
         F: OptCallbackFn<M::SolutionType, M::ScoreType>;
@@ -34,8 +28,7 @@ pub trait LocalSearchOptimizer<M: OptModel> {
         n_iter: usize,
         time_limit: Duration,
         callback: Option<&F>,
-        extra_in: Self::ExtraIn,
-    ) -> AnyResult<(M::SolutionType, M::ScoreType, Self::ExtraOut)>
+    ) -> AnyResult<(M::SolutionType, M::ScoreType)>
     where
         M: OptModel,
         F: OptCallbackFn<M::SolutionType, M::ScoreType>,
@@ -51,18 +44,17 @@ pub trait LocalSearchOptimizer<M: OptModel> {
         let (initial_solution, initial_score) =
             model.preprocess_solution(initial_solution, initial_score)?;
 
-        let (solution, score, extra) = self.optimize(
+        let (solution, score) = self.optimize(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-            extra_in,
         );
 
         let (solution, score) = model.postprocess_solution(solution, score);
-        Ok((solution, score, extra))
+        Ok((solution, score))
     }
 }
 

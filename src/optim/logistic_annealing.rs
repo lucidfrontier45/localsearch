@@ -44,8 +44,6 @@ impl LogisticAnnealingOptimizer {
 }
 
 impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for LogisticAnnealingOptimizer {
-    type ExtraIn = ();
-    type ExtraOut = ();
     /// Start optimization
     ///
     /// - `model` : the model to optimize
@@ -54,7 +52,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for LogisticA
     /// - `n_iter`: maximum iterations
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    /// - `_extra_in` : not used
     fn optimize<F>(
         &self,
         model: &M,
@@ -63,8 +60,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for LogisticA
         n_iter: usize,
         time_limit: Duration,
         callback: Option<&F>,
-        _extra_in: Self::ExtraIn,
-    ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
+    ) -> (M::SolutionType, M::ScoreType)
     where
         F: OptCallbackFn<M::SolutionType, M::ScoreType>,
     {
@@ -82,7 +78,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for LogisticA
             n_iter,
             time_limit,
             callback,
-            _extra_in,
         )
     }
 }

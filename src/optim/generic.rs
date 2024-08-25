@@ -55,8 +55,6 @@ where
     FT: TransitionProbabilityFn<ST>,
     M: OptModel<ScoreType = ST>,
 {
-    type ExtraIn = ();
-    type ExtraOut = ();
     /// Start optimization
     ///
     /// - `model` : the model to optimize
@@ -65,7 +63,6 @@ where
     /// - `n_iter`: maximum iterations
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    /// - `_extra_in` : not used
     fn optimize<F>(
         &self,
         model: &M,
@@ -74,8 +71,7 @@ where
         n_iter: usize,
         time_limit: Duration,
         callback: Option<&F>,
-        _extra_in: Self::ExtraIn,
-    ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
+    ) -> (M::SolutionType, M::ScoreType)
     where
         F: OptCallbackFn<M::SolutionType, M::ScoreType>,
     {
@@ -141,6 +137,6 @@ where
         }
 
         let best_solution = (*best_solution.borrow()).clone();
-        (best_solution, best_score, ())
+        (best_solution, best_score)
     }
 }

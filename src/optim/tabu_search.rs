@@ -1,6 +1,5 @@
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
-use auto_impl::auto_impl;
 use rayon::prelude::*;
 
 use crate::{
@@ -11,33 +10,34 @@ use crate::{
 use super::LocalSearchOptimizer;
 
 /// Trait that a tabu list must satisfies
-#[auto_impl(&mut, Box)]
-pub trait TabuList {
-    /// Item type of the likst
-    type Item;
+pub trait TabuList<M: OptModel>: Default {
+    /// Set the length of the tabu list
+    fn set_size(&mut self, n: usize);
 
     /// Check if the item is a Tabu
-    fn contains(&self, item: &Self::Item) -> bool;
+    fn contains(&self, item: &(M::SolutionType, M::TransitionType)) -> bool;
 
     /// Append the item to the list
-    fn append(&mut self, item: Self::Item);
+    fn append(&mut self, item: (M::SolutionType, M::TransitionType));
 }
 
 /// Optimizer that implements the tabu search algorithm
-pub struct TabuSearchOptimizer<T: TabuList> {
+pub struct TabuSearchOptimizer<M: OptModel, T: TabuList<M>> {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
-    phantom: PhantomData<T>,
+    default_tabu_size: usize,
+    phantom: PhantomData<(M, T)>,
 }
 
-fn find_accepted_solution<S, T, L, O>(
-    samples: Vec<(S, T, O)>,
+fn find_accepted_solution<M, L, O>(
+    samples: Vec<(M::SolutionType, M::TransitionType, O)>,
     tabu_list: &L,
     best_score: O,
-) -> Option<(S, T, O)>
+) -> Option<(M::SolutionType, M::TransitionType, O)>
 where
-    L: TabuList<Item = (S, T)>,
+    M: OptModel,
+    L: TabuList<M>,
     O: Ord,
 {
     for (solution, transition, score) in samples.into_iter() {
@@ -56,29 +56,34 @@ where
     None
 }
 
-impl<T: TabuList> TabuSearchOptimizer<T> {
+impl<M: OptModel, T: TabuList<M>> TabuSearchOptimizer<M, T> {
     /// Constructor of TabuSearchOptimizer
     ///
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
-    pub fn new(patience: usize, n_trials: usize, return_iter: usize) -> Self {
+    pub fn new(
+        patience: usize,
+        n_trials: usize,
+        return_iter: usize,
+        default_tabu_size: usize,
+    ) -> Self {
         Self {
             patience,
             n_trials,
             return_iter,
+            default_tabu_size,
             phantom: PhantomData,
         }
     }
 }
 
-impl<M: OptModel, T: TabuList<Item = (M::SolutionType, M::TransitionType)>> LocalSearchOptimizer<M>
-    for TabuSearchOptimizer<T>
+impl<M, T> TabuSearchOptimizer<M, T>
+where
+    M: OptModel,
+    T: TabuList<M>,
 {
-    type ExtraIn = T;
-    type ExtraOut = T;
-
     /// Start optimization
     ///
     /// - `model` : the model to optimize
@@ -88,7 +93,7 @@ impl<M: OptModel, T: TabuList<Item = (M::SolutionType, M::TransitionType)>> Loca
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
     /// - `tabu_list` : initial tabu list
-    fn optimize<F>(
+    fn optimize_with_tabu_list<F>(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
@@ -96,8 +101,8 @@ impl<M: OptModel, T: TabuList<Item = (M::SolutionType, M::TransitionType)>> Loca
         n_iter: usize,
         time_limit: Duration,
         callback: Option<&F>,
-        mut tabu_list: Self::ExtraIn,
-    ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
+        mut tabu_list: T,
+    ) -> (M::SolutionType, M::ScoreType, T)
     where
         F: OptCallbackFn<M::SolutionType, M::ScoreType>,
     {
@@ -165,5 +170,35 @@ impl<M: OptModel, T: TabuList<Item = (M::SolutionType, M::TransitionType)>> Loca
         let best_solution = (*best_solution.borrow()).clone();
 
         (best_solution, best_score, tabu_list)
+    }
+}
+
+impl<M: OptModel, T: TabuList<M>> LocalSearchOptimizer<M> for TabuSearchOptimizer<M, T> {
+    #[doc = " Start optimization"]
+    fn optimize<F>(
+        &self,
+        model: &M,
+        initial_solution: M::SolutionType,
+        initial_score: M::ScoreType,
+        n_iter: usize,
+        time_limit: Duration,
+        callback: Option<&F>,
+    ) -> (M::SolutionType, M::ScoreType)
+    where
+        M: OptModel,
+        F: OptCallbackFn<M::SolutionType, M::ScoreType>,
+    {
+        let mut tabu_list = T::default();
+        tabu_list.set_size(self.default_tabu_size);
+        let (solution, score, _) = self.optimize_with_tabu_list(
+            model,
+            initial_solution,
+            initial_score,
+            n_iter,
+            time_limit,
+            callback,
+            tabu_list,
+        );
+        (solution, score)
     }
 }
