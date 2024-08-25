@@ -179,23 +179,31 @@ impl DequeTabuList {
     }
 }
 
-impl TabuList for DequeTabuList {
-    type Item = (SolutionType, TransitionType);
+impl Default for DequeTabuList {
+    fn default() -> Self {
+        Self::new(10)
+    }
+}
 
-    fn contains(&self, item: &Self::Item) -> bool {
+impl TabuList<TSPModel> for DequeTabuList {
+    fn contains(&self, item: &(SolutionType, TransitionType)) -> bool {
         let (_, (_, inserted_edges)) = item;
         inserted_edges
             .iter()
             .any(|edge| self.buff.iter().any(|e| *e == *edge))
     }
 
-    fn append(&mut self, item: Self::Item) {
+    fn append(&mut self, item: (SolutionType, TransitionType)) {
         let (_, (removed_edges, _)) = item;
         for edge in removed_edges {
             if self.buff.iter().all(|e| *e != edge) {
                 self.buff.append(edge);
             }
         }
+    }
+
+    fn set_size(&mut self, n: usize) {
+        self.buff = RingBuffer::new(n);
     }
 }
 
@@ -261,14 +269,13 @@ fn main() {
 
     println!("run hill climbing");
     let optimizer = HillClimbingOptimizer::new(1000, 200);
-    let (final_solution, final_score, _) = optimizer
+    let (final_solution, final_score) = optimizer
         .run(
             &tsp_model,
             initial_solution.clone(),
             n_iter,
             time_limit,
             Some(&callback),
-            (),
         )
         .unwrap();
     println!(
@@ -280,16 +287,14 @@ fn main() {
     pb.reset();
 
     println!("run tabu search");
-    let tabu_list = DequeTabuList::new(20);
-    let optimizer = TabuSearchOptimizer::new(patience, 200, 10);
-    let (final_solution, final_score, _) = optimizer
+    let optimizer = TabuSearchOptimizer::<TSPModel, DequeTabuList>::new(patience, 200, 10, 20);
+    let (final_solution, final_score) = optimizer
         .run(
             &tsp_model,
             initial_solution.clone(),
             n_iter,
             time_limit,
             Some(&callback),
-            tabu_list,
         )
         .unwrap();
     println!(
@@ -301,15 +306,14 @@ fn main() {
     pb.reset();
 
     println!("run annealing");
-    let optimizer = SimulatedAnnealingOptimizer::new(patience, 200);
-    let (final_solution, final_score, _) = optimizer
+    let optimizer = SimulatedAnnealingOptimizer::new(patience, 200, 200.0, 50.0);
+    let (final_solution, final_score) = optimizer
         .run(
             &tsp_model,
             initial_solution.clone(),
             n_iter,
             time_limit,
             Some(&callback),
-            (200.0, 50.0),
         )
         .unwrap();
     println!(
@@ -322,14 +326,13 @@ fn main() {
 
     println!("run epsilon greedy");
     let optimizer = EpsilonGreedyOptimizer::new(patience, 200, 10, 0.3);
-    let (final_solution, final_score, _) = optimizer
+    let (final_solution, final_score) = optimizer
         .run(
             &tsp_model,
             initial_solution.clone(),
             n_iter,
             time_limit,
             Some(&callback),
-            (),
         )
         .unwrap();
     println!(
@@ -342,14 +345,13 @@ fn main() {
 
     println!("run relative annealing");
     let optimizer = RelativeAnnealingOptimizer::new(patience, 200, 10, 1e1);
-    let (final_solution, final_score, _) = optimizer
+    let (final_solution, final_score) = optimizer
         .run(
             &tsp_model,
             initial_solution,
             n_iter,
             time_limit,
             Some(&callback),
-            (),
         )
         .unwrap();
     println!(

@@ -11,15 +11,8 @@ fn test() {
     let model = QuadraticModel::new(3, vec![2.0, 0.0, -3.5], (-10.0, 10.0));
     let opt = LogisticAnnealingOptimizer::new(5000, 10, 200, 1e1);
     let null_closure = None::<&fn(_)>;
-    let (final_solution, final_score, _) = opt
-        .run(
-            &model,
-            None,
-            10000,
-            Duration::from_secs(10),
-            null_closure,
-            (),
-        )
+    let (final_solution, final_score) = opt
+        .run(&model, None, 10000, Duration::from_secs(10), null_closure)
         .unwrap();
     assert_abs_diff_eq!(2.0, final_solution[0], epsilon = 0.05);
     assert_abs_diff_eq!(0.0, final_solution[1], epsilon = 0.05);

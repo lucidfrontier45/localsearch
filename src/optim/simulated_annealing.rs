@@ -16,6 +16,8 @@ use super::LocalSearchOptimizer;
 pub struct SimulatedAnnealingOptimizer {
     patience: usize,
     n_trials: usize,
+    max_temperature: f64,
+    min_temperature: f64,
 }
 
 impl SimulatedAnnealingOptimizer {
@@ -24,17 +26,25 @@ impl SimulatedAnnealingOptimizer {
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
-    pub fn new(patience: usize, n_trials: usize) -> Self {
-        Self { patience, n_trials }
+    /// - `max_temperature` : maximum temperature
+    /// - `min_temperature` : minimum temperature
+    pub fn new(
+        patience: usize,
+        n_trials: usize,
+        max_temperature: f64,
+        min_temperature: f64,
+    ) -> Self {
+        Self {
+            patience,
+            n_trials,
+            max_temperature,
+            min_temperature,
+        }
     }
 }
 
-impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for SimulatedAnnealingOptimizer {
-    /// max temperature, min temperature
-    type ExtraIn = (f64, f64);
-    type ExtraOut = ();
-
-    /// Start optimization
+impl SimulatedAnnealingOptimizer {
+    /// Start optimization with given temperature range
     ///
     /// - `model` : the model to optimize
     /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
@@ -42,8 +52,9 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
     /// - `n_iter`: maximum iterations
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    /// - `max_min_temperatures` : (max_temperature, min_temperature)
-    fn optimize<F>(
+    /// - `max_temperature` : maximum temperature
+    /// - `min_temperature` : minimum temperature
+    fn optimize_with_temperature<M, F>(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
@@ -51,13 +62,14 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         n_iter: usize,
         time_limit: Duration,
         callback: Option<&F>,
-        max_min_temperatures: Self::ExtraIn,
-    ) -> (M::SolutionType, M::ScoreType, Self::ExtraOut)
+        max_temperature: f64,
+        min_temperature: f64,
+    ) -> (M::SolutionType, M::ScoreType)
     where
+        M: OptModel<ScoreType = NotNan<f64>>,
         F: OptCallbackFn<M::SolutionType, M::ScoreType>,
     {
         let start_time = Instant::now();
-        let (max_temperature, min_temperature) = max_min_temperatures;
         let mut rng = rand::thread_rng();
         let mut current_solution = initial_solution;
         let mut current_score = initial_score;
@@ -118,6 +130,40 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         }
 
         let best_solution = (*best_solution.borrow()).clone();
-        (best_solution, best_score, ())
+        (best_solution, best_score)
+    }
+}
+
+impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for SimulatedAnnealingOptimizer {
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
+    /// - `initial_score` : the initial score of the initial solution
+    /// - `n_iter`: maximum iterations
+    /// - `time_limit`: maximum iteration time
+    /// - `callback` : callback function that will be invoked at the end of each iteration
+    fn optimize<F>(
+        &self,
+        model: &M,
+        initial_solution: M::SolutionType,
+        initial_score: M::ScoreType,
+        n_iter: usize,
+        time_limit: Duration,
+        callback: Option<&F>,
+    ) -> (M::SolutionType, M::ScoreType)
+    where
+        F: OptCallbackFn<M::SolutionType, M::ScoreType>,
+    {
+        self.optimize_with_temperature(
+            model,
+            initial_solution,
+            initial_score,
+            n_iter,
+            time_limit,
+            callback,
+            self.max_temperature,
+            self.min_temperature,
+        )
     }
 }
