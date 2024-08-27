@@ -63,18 +63,15 @@ where
     /// - `n_iter`: maximum iterations
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    fn optimize<F>(
+    fn optimize(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
         time_limit: Duration,
-        callback: Option<&F>,
-    ) -> (M::SolutionType, M::ScoreType)
-    where
-        F: OptCallbackFn<M::SolutionType, M::ScoreType>,
-    {
+        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
+    ) -> (M::SolutionType, M::ScoreType) {
         let start_time = Instant::now();
         let mut rng = rand::thread_rng();
         let mut current_solution = initial_solution;
@@ -129,11 +126,9 @@ where
                 break;
             }
 
-            if let Some(f) = callback {
-                let progress =
-                    OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
-                f(progress);
-            }
+            let progress =
+                OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
+            callback(progress);
         }
 
         let best_solution = (*best_solution.borrow()).clone();
