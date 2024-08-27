@@ -105,12 +105,12 @@ fn main() {
     let n_trials = 50;
     let opt = HillClimbingOptimizer::new(patiance, n_trials);
     let pb = create_pbar(n_iter as u64);
-    let callback = |op: OptProgress<SolutionType, ScoreType>| {
+    let mut callback = |op: OptProgress<SolutionType, ScoreType>| {
         pb.set_message(format!("best score {:e}", op.score.into_inner()));
         pb.set_position(op.iter as u64);
     };
 
-    let res = opt.run(&model, None, n_iter, time_limit, Some(&callback));
+    let res = opt.run_with_callback(&model, None, n_iter, time_limit, &mut callback);
     pb.finish();
     dbg!(res.unwrap());
 }
