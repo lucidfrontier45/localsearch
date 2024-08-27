@@ -25,7 +25,7 @@ impl<T> RingBuffer<T> {
     }
 
     /// Convert to an iterator
-    pub fn iter(&self) -> std::collections::vec_deque::Iter<T> {
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.buff.iter()
     }
 }
