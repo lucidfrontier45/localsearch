@@ -15,10 +15,10 @@ pub trait TabuList<M: OptModel>: Default {
     fn set_size(&mut self, n: usize);
 
     /// Check if the item is a Tabu
-    fn contains(&self, item: &(M::SolutionType, M::TransitionType)) -> bool;
+    fn contains(&self, transition: &M::TransitionType) -> bool;
 
     /// Append the item to the list
-    fn append(&mut self, item: (M::SolutionType, M::TransitionType));
+    fn append(&mut self, transition: M::TransitionType);
 }
 
 /// Optimizer that implements the tabu search algorithm
@@ -41,15 +41,14 @@ where
     O: Ord,
 {
     for (solution, transition, score) in samples.into_iter() {
-        // Aspiration Criterion
-        if score < best_score {
+        #[allow(unused_parens)]
+        if (
+            // Aspiration Criterion
+            score < best_score ||
+            // Not Tabu
+            !tabu_list.contains( &transition)
+        ) {
             return Some((solution, transition, score));
-        }
-
-        // Not Tabu
-        let item = (solution, transition);
-        if !tabu_list.contains(&item) {
-            return Some((item.0, item.1, score));
         }
     }
 
@@ -140,9 +139,9 @@ where
                     best_solution.replace(solution.clone());
                     counter = 0;
                 }
+                tabu_list.append(trans);
                 current_score = score;
-                current_solution = solution.clone();
-                tabu_list.append((solution, trans));
+                current_solution = solution;
                 accepted_counter += 1;
             }
 

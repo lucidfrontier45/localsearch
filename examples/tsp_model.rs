@@ -186,15 +186,15 @@ impl Default for DequeTabuList {
 }
 
 impl TabuList<TSPModel> for DequeTabuList {
-    fn contains(&self, item: &(SolutionType, TransitionType)) -> bool {
-        let (_, (_, inserted_edges)) = item;
+    fn contains(&self, transition: &TransitionType) -> bool {
+        let (_, inserted_edges) = transition;
         inserted_edges
             .iter()
             .any(|edge| self.buff.iter().any(|e| *e == *edge))
     }
 
-    fn append(&mut self, item: (SolutionType, TransitionType)) {
-        let (_, (removed_edges, _)) = item;
+    fn append(&mut self, transition: TransitionType) {
+        let (removed_edges, _) = transition;
         for edge in removed_edges {
             if self.buff.iter().all(|e| *e != edge) {
                 self.buff.append(edge);

@@ -32,27 +32,15 @@ impl TabuList<QuadraticModel> for MyTabuList {
         self.buff = RingBuffer::new(n);
     }
 
-    fn contains(
-        &self,
-        item: &(
-            <QuadraticModel as crate::OptModel>::SolutionType,
-            <QuadraticModel as crate::OptModel>::TransitionType,
-        ),
-    ) -> bool {
-        let (k1, _, x) = item.1;
+    fn contains(&self, transition: &TransitionType) -> bool {
+        let (k1, _, x) = *transition;
         self.buff
             .iter()
             .any(|&(k2, y, _)| (k1 == k2) && (x - y).abs() < 0.005)
     }
 
-    fn append(
-        &mut self,
-        item: (
-            <QuadraticModel as crate::OptModel>::SolutionType,
-            <QuadraticModel as crate::OptModel>::TransitionType,
-        ),
-    ) {
-        self.buff.append(item.1);
+    fn append(&mut self, transition: TransitionType) {
+        self.buff.append(transition);
     }
 }
 
