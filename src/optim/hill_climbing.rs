@@ -27,7 +27,6 @@ impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
     /// - `n_iter`: maximum iterations
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    /// - `_extra_in` : not used
     fn optimize(
         &self,
         model: &M,
