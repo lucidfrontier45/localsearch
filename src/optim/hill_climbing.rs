@@ -27,19 +27,15 @@ impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
     /// - `n_iter`: maximum iterations
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    /// - `_extra_in` : not used
-    fn optimize<F>(
+    fn optimize(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
         time_limit: Duration,
-        callback: Option<&F>,
-    ) -> (M::SolutionType, M::ScoreType)
-    where
-        F: OptCallbackFn<M::SolutionType, M::ScoreType>,
-    {
+        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
+    ) -> (M::SolutionType, M::ScoreType) {
         let optimizer = EpsilonGreedyOptimizer::new(self.patience, self.n_trials, usize::MAX, 0.0);
         optimizer.optimize(
             model,
