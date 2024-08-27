@@ -93,19 +93,16 @@ where
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
     /// - `tabu_list` : initial tabu list
-    fn optimize_with_tabu_list<F>(
+    fn optimize_with_tabu_list(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
         time_limit: Duration,
-        callback: Option<&F>,
+        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
         mut tabu_list: T,
-    ) -> (M::SolutionType, M::ScoreType, T)
-    where
-        F: OptCallbackFn<M::SolutionType, M::ScoreType>,
-    {
+    ) -> (M::SolutionType, M::ScoreType, T) {
         let start_time = Instant::now();
         let mut current_solution = initial_solution;
         let mut current_score = initial_score;
@@ -160,11 +157,9 @@ where
                 break;
             }
 
-            if let Some(f) = callback {
-                let progress =
-                    OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
-                f(progress);
-            }
+            let progress =
+                OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
+            callback(progress);
         }
 
         let best_solution = (*best_solution.borrow()).clone();
@@ -175,19 +170,15 @@ where
 
 impl<M: OptModel, T: TabuList<M>> LocalSearchOptimizer<M> for TabuSearchOptimizer<M, T> {
     #[doc = " Start optimization"]
-    fn optimize<F>(
+    fn optimize(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
         time_limit: Duration,
-        callback: Option<&F>,
-    ) -> (M::SolutionType, M::ScoreType)
-    where
-        M: OptModel,
-        F: OptCallbackFn<M::SolutionType, M::ScoreType>,
-    {
+        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
+    ) -> (M::SolutionType, M::ScoreType) {
         let mut tabu_list = T::default();
         tabu_list.set_size(self.default_tabu_size);
         let (solution, score, _) = self.optimize_with_tabu_list(

@@ -54,21 +54,17 @@ impl SimulatedAnnealingOptimizer {
     /// - `callback` : callback function that will be invoked at the end of each iteration
     /// - `max_temperature` : maximum temperature
     /// - `min_temperature` : minimum temperature
-    fn optimize_with_temperature<M, F>(
+    fn optimize_with_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
         time_limit: Duration,
-        callback: Option<&F>,
+        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
         max_temperature: f64,
         min_temperature: f64,
-    ) -> (M::SolutionType, M::ScoreType)
-    where
-        M: OptModel<ScoreType = NotNan<f64>>,
-        F: OptCallbackFn<M::SolutionType, M::ScoreType>,
-    {
+    ) -> (M::SolutionType, M::ScoreType) {
         let start_time = Instant::now();
         let mut rng = rand::thread_rng();
         let mut current_solution = initial_solution;
@@ -122,11 +118,9 @@ impl SimulatedAnnealingOptimizer {
                 break;
             }
 
-            if let Some(f) = callback {
-                let progress =
-                    OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
-                f(progress);
-            }
+            let progress =
+                OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
+            callback(progress);
         }
 
         let best_solution = (*best_solution.borrow()).clone();
@@ -143,18 +137,15 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
     /// - `n_iter`: maximum iterations
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    fn optimize<F>(
+    fn optimize(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
         time_limit: Duration,
-        callback: Option<&F>,
-    ) -> (M::SolutionType, M::ScoreType)
-    where
-        F: OptCallbackFn<M::SolutionType, M::ScoreType>,
-    {
+        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
+    ) -> (M::SolutionType, M::ScoreType) {
         self.optimize_with_temperature(
             model,
             initial_solution,

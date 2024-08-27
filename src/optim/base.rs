@@ -7,32 +7,42 @@ use crate::{callback::OptCallbackFn, Duration, OptModel};
 #[auto_impl(&, Box, Rc, Arc)]
 pub trait LocalSearchOptimizer<M: OptModel> {
     /// Start optimization
-    fn optimize<F>(
+    fn optimize(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
         time_limit: Duration,
-        callback: Option<&F>,
-    ) -> (M::SolutionType, M::ScoreType)
-    where
-        M: OptModel,
-        F: OptCallbackFn<M::SolutionType, M::ScoreType>;
+        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
+    ) -> (M::SolutionType, M::ScoreType);
 
-    /// Start optimization
-    fn run<F>(
+    /// generate initial solution if not given and run optimization
+    fn run(
         &self,
         model: &M,
         initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
         n_iter: usize,
         time_limit: Duration,
-        callback: Option<&F>,
-    ) -> AnyResult<(M::SolutionType, M::ScoreType)>
-    where
-        M: OptModel,
-        F: OptCallbackFn<M::SolutionType, M::ScoreType>,
-    {
+    ) -> AnyResult<(M::SolutionType, M::ScoreType)> {
+        self.run_with_callback(
+            model,
+            initial_solution_and_score,
+            n_iter,
+            time_limit,
+            &mut |_| {},
+        )
+    }
+
+    /// generate initial solution if not given and run optimization with callback
+    fn run_with_callback(
+        &self,
+        model: &M,
+        initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
+        n_iter: usize,
+        time_limit: Duration,
+        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
+    ) -> AnyResult<(M::SolutionType, M::ScoreType)> {
         let (initial_solution, initial_score) = match initial_solution_and_score {
             Some((solution, score)) => (solution, score),
             None => {

@@ -44,7 +44,7 @@ impl<S, SC: Ord> OptProgress<S, SC> {
 ///     pb.set_draw_target(ProgressDrawTarget::stderr_with_hz(10));
 ///     pb
 /// };
-/// let callback = |op: OptProgress<SolutionType, ScoreType>| {
+/// let mut callback = |op: OptProgress<SolutionType, ScoreType>| {
 ///     let ratio = op.accepted_count as f64 / op.iter as f64;
 ///     pb.set_message(format!(
 ///         "best score {:.4e}, count = {}, acceptance ratio {:.2e}",
@@ -55,6 +55,6 @@ impl<S, SC: Ord> OptProgress<S, SC> {
 ///     pb.set_position(op.iter as u64);
 /// };
 /// ```
-pub trait OptCallbackFn<S, SC: PartialOrd>: Fn(OptProgress<S, SC>) {}
+pub trait OptCallbackFn<S, SC: PartialOrd>: FnMut(OptProgress<S, SC>) {}
 
-impl<F, S, SC: PartialOrd> OptCallbackFn<S, SC> for F where F: Fn(OptProgress<S, SC>) {}
+impl<F, S, SC: PartialOrd> OptCallbackFn<S, SC> for F where F: FnMut(OptProgress<S, SC>) {}
