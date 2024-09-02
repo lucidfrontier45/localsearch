@@ -83,6 +83,7 @@ where
     M: OptModel,
     T: TabuList<M>,
 {
+    #[allow(clippy::too_many_arguments)]
     /// Start optimization
     ///
     /// - `model` : the model to optimize

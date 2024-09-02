@@ -28,7 +28,6 @@ impl QuadraticModel {
 
     fn evaluate_solution(&self, solution: &SolutionType) -> NotNan<f64> {
         let score = (0..self.k)
-            .into_iter()
             .map(|i| (solution[i] - self.centers[i]).powf(2.0))
             .sum();
         NotNan::new(score).unwrap()
