@@ -44,6 +44,7 @@ impl SimulatedAnnealingOptimizer {
 }
 
 impl SimulatedAnnealingOptimizer {
+    #[allow(clippy::too_many_arguments)]
     /// Start optimization with given temperature range
     ///
     /// - `model` : the model to optimize

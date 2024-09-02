@@ -111,7 +111,6 @@ impl OptModel for TSPModel {
             .distance_matrix
             .keys()
             .copied()
-            .into_iter()
             .flat_map(|(i, j)| [i, j])
             .collect::<HashSet<_>>()
             .into_iter()
@@ -235,7 +234,6 @@ fn main() {
     let input_file = args.get(1).unwrap();
     let coords = read_lines(input_file)
         .unwrap()
-        .into_iter()
         .map(|line| {
             let line = line.unwrap();
             let splt = line.split(' ').collect::<Vec<_>>();
@@ -363,7 +361,6 @@ fn main() {
     let opt_route_file = args.get(2).unwrap();
     let opt_solution = read_lines(opt_route_file)
         .unwrap()
-        .into_iter()
         .map(|line| {
             let i: usize = line.unwrap().parse().unwrap();
             i
