@@ -27,7 +27,8 @@ impl Default for MyTabuList {
     }
 }
 
-impl TabuList<QuadraticModel> for MyTabuList {
+impl TabuList for MyTabuList {
+    type Item = TransitionType;
     fn set_size(&mut self, n: usize) {
         self.buff = RingBuffer::new(n);
     }
@@ -47,7 +48,7 @@ impl TabuList<QuadraticModel> for MyTabuList {
 #[test]
 fn test() {
     let model = QuadraticModel::new(3, vec![2.0, 0.0, -3.5], (-10.0, 10.0));
-    let opt = TabuSearchOptimizer::<QuadraticModel, MyTabuList>::new(1000, 25, 5, 10);
+    let opt = TabuSearchOptimizer::<MyTabuList>::new(1000, 25, 5, 10);
     let (final_solution, final_score) = opt
         .run(&model, None, 10000, Duration::from_secs(10))
         .unwrap();

@@ -184,7 +184,8 @@ impl Default for DequeTabuList {
     }
 }
 
-impl TabuList<TSPModel> for DequeTabuList {
+impl TabuList for DequeTabuList {
+    type Item = TransitionType;
     fn contains(&self, transition: &TransitionType) -> bool {
         let (_, inserted_edges) = transition;
         inserted_edges
@@ -285,7 +286,7 @@ fn main() {
     pb.reset();
 
     println!("run tabu search");
-    let optimizer = TabuSearchOptimizer::<TSPModel, DequeTabuList>::new(patience, 200, 10, 20);
+    let optimizer = TabuSearchOptimizer::<DequeTabuList>::new(patience, 200, 10, 20);
     let (final_solution, final_score) = optimizer
         .run_with_callback(
             &tsp_model,
