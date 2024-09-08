@@ -10,35 +10,37 @@ use crate::{
 use super::LocalSearchOptimizer;
 
 /// Trait that a tabu list must satisfies
-pub trait TabuList<M: OptModel>: Default {
+pub trait TabuList: Default {
+    /// The type of item stored in the tabu list.
+    type Item: Clone + Sync + Send;
+
     /// Set the length of the tabu list
     fn set_size(&mut self, n: usize);
 
     /// Check if the item is a Tabu
-    fn contains(&self, transition: &M::TransitionType) -> bool;
+    fn contains(&self, transition: &Self::Item) -> bool;
 
     /// Append the item to the list
-    fn append(&mut self, transition: M::TransitionType);
+    fn append(&mut self, transition: Self::Item);
 }
 
 /// Optimizer that implements the tabu search algorithm
-pub struct TabuSearchOptimizer<M: OptModel, T: TabuList<M>> {
+pub struct TabuSearchOptimizer<T: TabuList> {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
     default_tabu_size: usize,
-    phantom: PhantomData<(M, T)>,
+    phantom: PhantomData<T>,
 }
 
-fn find_accepted_solution<M, L, O>(
-    samples: Vec<(M::SolutionType, M::TransitionType, O)>,
+fn find_accepted_solution<M, L>(
+    samples: Vec<(M::SolutionType, M::TransitionType, M::ScoreType)>,
     tabu_list: &L,
-    best_score: O,
-) -> Option<(M::SolutionType, M::TransitionType, O)>
+    best_score: M::ScoreType,
+) -> Option<(M::SolutionType, M::TransitionType, M::ScoreType)>
 where
     M: OptModel,
-    L: TabuList<M>,
-    O: Ord,
+    L: TabuList<Item = M::TransitionType>,
 {
     for (solution, transition, score) in samples.into_iter() {
         #[allow(unused_parens)]
@@ -55,7 +57,7 @@ where
     None
 }
 
-impl<M: OptModel, T: TabuList<M>> TabuSearchOptimizer<M, T> {
+impl<T: TabuList> TabuSearchOptimizer<T> {
     /// Constructor of TabuSearchOptimizer
     ///
     /// - `patience` : the optimizer will give up
@@ -78,10 +80,9 @@ impl<M: OptModel, T: TabuList<M>> TabuSearchOptimizer<M, T> {
     }
 }
 
-impl<M, T> TabuSearchOptimizer<M, T>
+impl<T> TabuSearchOptimizer<T>
 where
-    M: OptModel,
-    T: TabuList<M>,
+    T: TabuList,
 {
     #[allow(clippy::too_many_arguments)]
     /// Start optimization
@@ -93,7 +94,7 @@ where
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
     /// - `tabu_list` : initial tabu list
-    fn optimize_with_tabu_list(
+    fn optimize_with_tabu_list<M: OptModel<TransitionType = T::Item>>(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
@@ -132,7 +133,7 @@ where
 
             samples.sort_unstable_by_key(|(_, _, score)| *score);
 
-            let res = find_accepted_solution(samples, &tabu_list, best_score);
+            let res = find_accepted_solution::<M, T>(samples, &tabu_list, best_score);
 
             if let Some((solution, trans, score)) = res {
                 if score < best_score {
@@ -168,7 +169,9 @@ where
     }
 }
 
-impl<M: OptModel, T: TabuList<M>> LocalSearchOptimizer<M> for TabuSearchOptimizer<M, T> {
+impl<T: TabuList, M: OptModel<TransitionType = T::Item>> LocalSearchOptimizer<M>
+    for TabuSearchOptimizer<T>
+{
     #[doc = " Start optimization"]
     fn optimize(
         &self,
