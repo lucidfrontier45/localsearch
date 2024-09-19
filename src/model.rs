@@ -13,13 +13,13 @@ pub trait OptModel: Sync + Send {
     type TransitionType: Clone + Sync + Send;
 
     /// Randomly generate a solution
-    fn generate_random_solution<R: rand::Rng>(
+    fn generate_random_solution<R: rand::Rng + ?Sized>(
         &self,
         rng: &mut R,
     ) -> AnyResult<(Self::SolutionType, Self::ScoreType)>;
 
     /// Generate a new trial solution from current solution
-    fn generate_trial_solution<R: rand::Rng>(
+    fn generate_trial_solution<R: rand::Rng + ?Sized>(
         &self,
         current_solution: Self::SolutionType,
         current_score: Self::ScoreType,

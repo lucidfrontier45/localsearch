@@ -35,7 +35,7 @@ impl OptModel for QuadraticModel {
     type TransitionType = TransitionType;
     type ScoreType = NotNan<f64>;
 
-    fn generate_random_solution<R: rand::Rng>(
+    fn generate_random_solution<R: rand::Rng + ?Sized>(
         &self,
         rng: &mut R,
     ) -> AnyResult<(Self::SolutionType, Self::ScoreType)> {
@@ -44,7 +44,7 @@ impl OptModel for QuadraticModel {
         Ok((solution, score))
     }
 
-    fn generate_trial_solution<R: rand::Rng>(
+    fn generate_trial_solution<R: rand::Rng + ?Sized>(
         &self,
         current_solution: Self::SolutionType,
         _current_score: Self::ScoreType,

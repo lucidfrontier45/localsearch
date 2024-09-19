@@ -88,7 +88,7 @@ impl TSPModel {
     }
 }
 
-fn select_two_indides<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize, usize) {
+fn select_two_indides<R: rand::Rng + ?Sized>(lb: usize, ub: usize, rng: &mut R) -> (usize, usize) {
     let n1 = rng.gen_range(lb..ub);
     let n2 = loop {
         let n_ = rng.gen_range(lb..ub);
@@ -103,7 +103,7 @@ impl OptModel for TSPModel {
     type SolutionType = SolutionType;
     type TransitionType = TransitionType;
     type ScoreType = ScoreType;
-    fn generate_random_solution<R: rand::Rng>(
+    fn generate_random_solution<R: rand::Rng + ?Sized>(
         &self,
         rng: &mut R,
     ) -> AnyResult<(self::SolutionType, self::ScoreType)> {
@@ -129,7 +129,7 @@ impl OptModel for TSPModel {
         Ok((cities, score))
     }
 
-    fn generate_trial_solution<R: rand::Rng>(
+    fn generate_trial_solution<R: rand::Rng + ?Sized>(
         &self,
         current_solution: Self::SolutionType,
         current_score: Self::ScoreType,
