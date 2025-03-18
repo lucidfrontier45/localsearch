@@ -46,7 +46,7 @@ pub trait LocalSearchOptimizer<M: OptModel> {
         let (initial_solution, initial_score) = match initial_solution_and_score {
             Some((solution, score)) => (solution, score),
             None => {
-                let mut rng = rand::thread_rng();
+                let mut rng = rand::rng();
                 model.generate_random_solution(&mut rng)?
             }
         };

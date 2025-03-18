@@ -73,7 +73,7 @@ where
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
         let start_time = Instant::now();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut current_solution = initial_solution;
         let mut current_score = initial_score;
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
@@ -89,7 +89,7 @@ where
             let (trial_solution, trial_score) = (0..self.n_trials)
                 .into_par_iter()
                 .map(|_| {
-                    let mut rng = rand::thread_rng();
+                    let mut rng = rand::rng();
                     let (solution, _, score) = model.generate_trial_solution(
                         current_solution.clone(),
                         current_score,
@@ -101,7 +101,7 @@ where
                 .unwrap();
 
             let p = (self.score_func)(current_score, trial_score);
-            let r: f64 = rng.gen();
+            let r: f64 = rng.random();
 
             if p > r {
                 current_solution = trial_solution;
