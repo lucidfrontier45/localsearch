@@ -7,7 +7,7 @@ categories = ["algorithms"]
 repository = "https://github.com/lucidfrontier45/localsearch"
 license-file = "LICENSE"
 readme = "README.md"
-version = "0.17.0"
+version = "0.18.0"
 edition = "2024"
 rust-version = "1.85"
 
