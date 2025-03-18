@@ -1,6 +1,6 @@
 use anyhow::Result as AnyResult;
 use ordered_float::NotNan;
-use rand::{distributions::Uniform, prelude::Distribution};
+use rand::{distr::Uniform, prelude::Distribution};
 
 use crate::OptModel;
 
@@ -18,7 +18,7 @@ struct QuadraticModel {
 impl QuadraticModel {
     fn new(k: usize, centers: Vec<f64>, value_range: (f64, f64)) -> Self {
         let (low, high) = value_range;
-        let dist = Uniform::new(low, high);
+        let dist = Uniform::new(low, high).unwrap();
         Self { k, centers, dist }
     }
 
@@ -50,7 +50,7 @@ impl OptModel for QuadraticModel {
         _current_score: Self::ScoreType,
         rng: &mut R,
     ) -> (Self::SolutionType, Self::TransitionType, NotNan<f64>) {
-        let k = rng.gen_range(0..self.k);
+        let k = rng.random_range(0..self.k);
         let v = self.dist.sample(rng);
         let mut new_solution = current_solution.clone();
         new_solution[k] = v;

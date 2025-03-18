@@ -121,7 +121,7 @@ where
             (0..self.n_trials)
                 .into_par_iter()
                 .map(|_| {
-                    let mut rng = rand::thread_rng();
+                    let mut rng = rand::rng();
                     let (solution, transitions, score) = model.generate_trial_solution(
                         current_solution.clone(),
                         current_score,

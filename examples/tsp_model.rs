@@ -89,9 +89,9 @@ impl TSPModel {
 }
 
 fn select_two_indides<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize, usize) {
-    let n1 = rng.gen_range(lb..ub);
+    let n1 = rng.random_range(lb..ub);
     let n2 = loop {
-        let n_ = rng.gen_range(lb..ub);
+        let n_ = rng.random_range(lb..ub);
         if n_ != n1 {
             break n_;
         }
@@ -162,7 +162,7 @@ impl OptModel for TSPModel {
         // create transition
         let trans = (removed_edges, inserted_edges);
 
-        (new_solution, trans, new_score)
+        (new_solution, trans, NotNan::new(new_score).unwrap())
     }
 }
 
@@ -251,7 +251,7 @@ fn main() {
     let time_limit = Duration::from_secs(60);
     let patience = n_iter / 2;
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let initial_solution = tsp_model.generate_random_solution(&mut rng).ok();
 
     let pb = create_pbar(n_iter as u64);

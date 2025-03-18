@@ -67,7 +67,7 @@ impl SimulatedAnnealingOptimizer {
         min_temperature: f64,
     ) -> (M::SolutionType, M::ScoreType) {
         let start_time = Instant::now();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut current_solution = initial_solution;
         let mut current_score = initial_score;
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
@@ -85,7 +85,7 @@ impl SimulatedAnnealingOptimizer {
             let (trial_solution, trial_score) = (0..self.n_trials)
                 .into_par_iter()
                 .map(|_| {
-                    let mut rng = rand::thread_rng();
+                    let mut rng = rand::rng();
                     let (solution, _, score) = model.generate_trial_solution(
                         current_solution.clone(),
                         current_score,
@@ -98,7 +98,7 @@ impl SimulatedAnnealingOptimizer {
 
             let ds = trial_score - current_score;
             let p = (-ds / temperature).exp();
-            let r: f64 = rng.gen();
+            let r: f64 = rng.random();
 
             if p > r {
                 current_solution = trial_solution;
