@@ -7,7 +7,7 @@ use localsearch::{
     OptModel, OptProgress,
 };
 use ordered_float::NotNan;
-use rand::{self, distributions::Uniform, prelude::Distribution};
+use rand::{self, distr::Uniform, prelude::Distribution};
 
 type SolutionType = Vec<f64>;
 type ScoreType = NotNan<f64>;
@@ -22,7 +22,7 @@ struct QuadraticModel {
 impl QuadraticModel {
     fn new(k: usize, centers: Vec<f64>, value_range: (f64, f64)) -> Self {
         let (low, high) = value_range;
-        let dist = Uniform::new(low, high);
+        let dist = Uniform::new(low, high).unwrap();
         Self { k, centers, dist }
     }
 
@@ -53,7 +53,7 @@ impl OptModel for QuadraticModel {
         _current_score: Self::ScoreType,
         rng: &mut R,
     ) -> (Self::SolutionType, Self::TransitionType, NotNan<f64>) {
-        let k = rng.gen_range(0..self.k);
+        let k = rng.random_range(0..self.k);
         let v = self.dist.sample(rng);
         let mut new_solution = current_solution;
         new_solution[k] = v;
