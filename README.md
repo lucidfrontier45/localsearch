@@ -14,6 +14,11 @@ All of the algorithms are parallelized with Rayon.
 
 # How to use
 
+```toml
+[dependencies]
+localsearch = "0.18.0"
+```
+
 You need to implement your own model that implements `OptModel` trait. Actual optimization is handled by each algorithm functions. Here is a simple example to optimize a quadratic function with Hill Climbing algorithm.
 
 ```rust
@@ -26,7 +31,7 @@ use localsearch::{
     OptModel, OptProgress,
 };
 use ordered_float::NotNan;
-use rand::{self, distributions::Uniform, prelude::Distribution};
+use rand::{self, distr::Uniform, prelude::Distribution};
 
 type SolutionType = Vec<f64>;
 type ScoreType = NotNan<f64>;
@@ -41,13 +46,12 @@ struct QuadraticModel {
 impl QuadraticModel {
     fn new(k: usize, centers: Vec<f64>, value_range: (f64, f64)) -> Self {
         let (low, high) = value_range;
-        let dist = Uniform::new(low, high);
+        let dist = Uniform::new(low, high).unwrap();
         Self { k, centers, dist }
     }
 
     fn evaluate_solution(&self, solution: &SolutionType) -> NotNan<f64> {
         let score = (0..self.k)
-            .into_iter()
             .map(|i| (solution[i] - self.centers[i]).powf(2.0))
             .sum();
         NotNan::new(score).unwrap()
@@ -73,7 +77,7 @@ impl OptModel for QuadraticModel {
         _current_score: Self::ScoreType,
         rng: &mut R,
     ) -> (Self::SolutionType, Self::TransitionType, NotNan<f64>) {
-        let k = rng.gen_range(0..self.k);
+        let k = rng.random_range(0..self.k);
         let v = self.dist.sample(rng);
         let mut new_solution = current_solution;
         new_solution[k] = v;
