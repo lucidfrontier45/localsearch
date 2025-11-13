@@ -80,9 +80,13 @@ impl SimulatedAnnealingOptimizer {
         // Calculate initial_temperature based on target_initial_prob
         // p = exp(-ds / T) => T = -ds / ln(p)
         // Average across all energy differences
-        let avg_energy_diff = energy_diffs.iter().sum::<f64>() / energy_diffs.len() as f64;
-        let ln_prob = target_initial_prob.ln().clamp(-100.0, -0.01);
-        let initial_temperature = (-avg_energy_diff / ln_prob).max(1.0);
+        let initial_temperature = if energy_diffs.is_empty() {
+            1.0
+        } else {
+            let avg_energy_diff = energy_diffs.iter().sum::<f64>() / energy_diffs.len() as f64;
+            let ln_prob = target_initial_prob.ln().clamp(-100.0, -0.01);
+            (-avg_energy_diff / ln_prob).max(1.0)
+        };
 
         SimulatedAnnealingOptimizer {
             patience: self.patience,
