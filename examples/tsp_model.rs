@@ -9,22 +9,18 @@ use std::{
 use anyhow::Result as AnyResult;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
+    OptModel, OptProgress,
     optim::{
         EpsilonGreedyOptimizer, HillClimbingOptimizer, LocalSearchOptimizer,
         RelativeAnnealingOptimizer, SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
     },
     utils::RingBuffer,
-    OptModel, OptProgress,
 };
 use ordered_float::NotNan;
 use rand::seq::SliceRandom;
 
 fn min_sorted(c1: usize, c2: usize) -> (usize, usize) {
-    if c1 < c2 {
-        (c1, c2)
-    } else {
-        (c2, c1)
-    }
+    if c1 < c2 { (c1, c2) } else { (c2, c1) }
 }
 
 type Edge = (usize, usize);
@@ -247,7 +243,8 @@ fn main() {
 
     let tsp_model = TSPModel::from_coords(&coords);
 
-    let n_iter: usize = 20000;
+    let n_iter: usize = 50000;
+    let return_iter = 100;
     let time_limit = Duration::from_secs(60);
     let patience = n_iter / 2;
 
@@ -267,26 +264,7 @@ fn main() {
     };
 
     println!("run hill climbing");
-    let optimizer = HillClimbingOptimizer::new(1000, 200);
-    let (final_solution, final_score) = optimizer
-        .run_with_callback(
-            &tsp_model,
-            initial_solution.clone(),
-            n_iter,
-            time_limit,
-            &mut callback,
-        )
-        .unwrap();
-    println!(
-        "final score = {}, num of cities {}",
-        final_score,
-        final_solution.len()
-    );
-    pb.finish_and_clear();
-    pb.reset();
-
-    println!("run tabu search");
-    let optimizer = TabuSearchOptimizer::<DequeTabuList>::new(patience, 200, 10, 20);
+    let optimizer = HillClimbingOptimizer::new(patience, 16);
     let (final_solution, final_score) = optimizer
         .run_with_callback(
             &tsp_model,
@@ -305,7 +283,27 @@ fn main() {
     pb.reset();
 
     println!("run annealing");
-    let optimizer = SimulatedAnnealingOptimizer::new(patience, 200, 200.0, 50.0);
+    let optimizer = SimulatedAnnealingOptimizer::new(patience, 16, return_iter, 1.0)
+        .tune_temperature(&tsp_model, None, 200, 0.5);
+    let (final_solution, final_score) = optimizer
+        .run_with_callback(
+            &tsp_model,
+            initial_solution.clone(),
+            n_iter,
+            time_limit,
+            &mut callback,
+        )
+        .unwrap();
+    println!(
+        "final score = {}, num of cities {}",
+        final_score,
+        final_solution.len()
+    );
+    pb.finish_and_clear();
+    pb.reset();
+
+    println!("run tabu search");
+    let optimizer = TabuSearchOptimizer::<DequeTabuList>::new(patience, 128, return_iter, 20);
     let (final_solution, final_score) = optimizer
         .run_with_callback(
             &tsp_model,
@@ -324,7 +322,7 @@ fn main() {
     pb.reset();
 
     println!("run epsilon greedy");
-    let optimizer = EpsilonGreedyOptimizer::new(patience, 200, 10, 0.3);
+    let optimizer = EpsilonGreedyOptimizer::new(patience, 128, return_iter, 0.3);
     let (final_solution, final_score) = optimizer
         .run_with_callback(
             &tsp_model,
@@ -343,7 +341,7 @@ fn main() {
     pb.reset();
 
     println!("run relative annealing");
-    let optimizer = RelativeAnnealingOptimizer::new(patience, 200, 10, 1e1);
+    let optimizer = RelativeAnnealingOptimizer::new(patience, 128, return_iter, 1e1);
     let (final_solution, final_score) = optimizer
         .run_with_callback(
             &tsp_model,
