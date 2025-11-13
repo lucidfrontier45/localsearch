@@ -2,7 +2,7 @@ use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 use super::{EpsilonGreedyOptimizer, LocalSearchOptimizer};
 
-/// Optimizer that implements simple hill climbing algorithm
+/// Optimizer that implements random search algorithm
 #[derive(Clone, Copy)]
 pub struct RandomSearchOptimizer {
     patience: usize,
