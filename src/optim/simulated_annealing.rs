@@ -17,7 +17,7 @@ pub struct SimulatedAnnealingOptimizer {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
-    max_temperature: f64,
+    initial_temperature: f64,
 }
 
 impl SimulatedAnnealingOptimizer {
@@ -27,13 +27,18 @@ impl SimulatedAnnealingOptimizer {
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     /// - `return_iter` : returns to the best solution if there is no improvement after this number of iterations.
-    /// - `max_temperature` : maximum temperature
-    pub fn new(patience: usize, n_trials: usize, return_iter: usize, max_temperature: f64) -> Self {
+    /// - `initial_temperature` : initial temperature
+    pub fn new(
+        patience: usize,
+        n_trials: usize,
+        return_iter: usize,
+        initial_temperature: f64,
+    ) -> Self {
         Self {
             patience,
             n_trials,
             return_iter,
-            max_temperature,
+            initial_temperature,
         }
     }
 }
@@ -44,7 +49,6 @@ impl SimulatedAnnealingOptimizer {
     /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
     /// - `n_warmup` : number of warmup iterations to run
     /// - `target_initial_prob` : target acceptance probability for uphill moves at the beginning
-    /// - `min_temperature_scale` : scale factor to determine min_temperature from max_temperature
     pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
         self,
         model: &M,
@@ -53,9 +57,8 @@ impl SimulatedAnnealingOptimizer {
         target_initial_prob: f64,
     ) -> Self {
         // 1. First run n_warmup completely random iterations from initial_solution
-        // 2. calculate max_temperature so that the average acceptance probability of sampled trial solutions are target_initial_prob
-        // 3. set min_temperature as min_temperature_scale * max_temperature
-        // 4. return new SimulatedAnnealingOptimizer with updated temperatures
+        // 2. calculate initial_temperature so that the average acceptance probability of sampled trial solutions are target_initial_prob
+        // 3. return new SimulatedAnnealingOptimizer with updated temperatures
         let mut rng = rand::rng();
         let (mut current_solution, mut current_score) =
             initial_solution_and_score.unwrap_or(model.generate_random_solution(&mut rng).unwrap());
@@ -74,17 +77,17 @@ impl SimulatedAnnealingOptimizer {
             current_score = trial_score;
         }
 
-        // Calculate max_temperature based on target_initial_prob
+        // Calculate initial_temperature based on target_initial_prob
         // p = exp(-ds / T) => T = -ds / ln(p)
         // Average across all energy differences
         let avg_energy_diff = energy_diffs.iter().sum::<f64>() / energy_diffs.len() as f64;
         let ln_prob = target_initial_prob.ln().clamp(-100.0, -0.01);
-        let max_temperature = (-avg_energy_diff / ln_prob).max(1.0);
+        let initial_temperature = (-avg_energy_diff / ln_prob).max(1.0);
 
         SimulatedAnnealingOptimizer {
             patience: self.patience,
             n_trials: self.n_trials,
-            max_temperature,
+            initial_temperature,
             return_iter: self.return_iter,
         }
     }
@@ -98,8 +101,7 @@ impl SimulatedAnnealingOptimizer {
     /// - `n_iter`: maximum iterations
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    /// - `max_temperature` : maximum temperature
-    /// - `min_temperature` : minimum temperature
+    /// - `initial_temperature` : initial temperature
     fn optimize_with_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
         &self,
         model: &M,
@@ -108,7 +110,7 @@ impl SimulatedAnnealingOptimizer {
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        max_temperature: f64,
+        initial_temperature: f64,
     ) -> (M::SolutionType, M::ScoreType) {
         let start_time = Instant::now();
         let mut rng = rand::rng();
@@ -117,8 +119,8 @@ impl SimulatedAnnealingOptimizer {
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
         let mut accepted_counter = 0;
-        let mut temperature = max_temperature;
-        let t_factor = (1e-2 / max_temperature).powf(1.0 / n_iter as f64);
+        let mut temperature = initial_temperature;
+        let t_factor = (1e-2 / initial_temperature).powf(1.0 / n_iter as f64);
         let mut counter = 0;
 
         for it in 0..n_iter {
@@ -204,7 +206,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
             n_iter,
             time_limit,
             callback,
-            self.max_temperature,
+            self.initial_temperature,
         )
     }
 }
