@@ -9,22 +9,18 @@ use std::{
 use anyhow::Result as AnyResult;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
+    OptModel, OptProgress,
     optim::{
         EpsilonGreedyOptimizer, HillClimbingOptimizer, LocalSearchOptimizer,
         RelativeAnnealingOptimizer, SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
     },
     utils::RingBuffer,
-    OptModel, OptProgress,
 };
 use ordered_float::NotNan;
 use rand::seq::SliceRandom;
 
 fn min_sorted(c1: usize, c2: usize) -> (usize, usize) {
-    if c1 < c2 {
-        (c1, c2)
-    } else {
-        (c2, c1)
-    }
+    if c1 < c2 { (c1, c2) } else { (c2, c1) }
 }
 
 type Edge = (usize, usize);
@@ -247,7 +243,7 @@ fn main() {
 
     let tsp_model = TSPModel::from_coords(&coords);
 
-    let n_iter: usize = 20000;
+    let n_iter: usize = 1000000;
     let time_limit = Duration::from_secs(60);
     let patience = n_iter / 2;
 
@@ -285,8 +281,9 @@ fn main() {
     pb.finish_and_clear();
     pb.reset();
 
-    println!("run tabu search");
-    let optimizer = TabuSearchOptimizer::<DequeTabuList>::new(patience, 200, 10, 20);
+    println!("run annealing");
+    let optimizer = SimulatedAnnealingOptimizer::new(1000000, 200, 1000, 0.0)
+        .tune_temperature(&tsp_model, None, 200, 0.5);
     let (final_solution, final_score) = optimizer
         .run_with_callback(
             &tsp_model,
@@ -304,8 +301,8 @@ fn main() {
     pb.finish_and_clear();
     pb.reset();
 
-    println!("run annealing");
-    let optimizer = SimulatedAnnealingOptimizer::new(patience, 200, 200.0, 50.0);
+    println!("run tabu search");
+    let optimizer = TabuSearchOptimizer::<DequeTabuList>::new(patience, 200, 10, 20);
     let (final_solution, final_score) = optimizer
         .run_with_callback(
             &tsp_model,
