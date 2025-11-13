@@ -118,7 +118,7 @@ impl SimulatedAnnealingOptimizer {
         let mut best_score = current_score;
         let mut accepted_counter = 0;
         let mut temperature = max_temperature;
-        let t_factor = (-(max_temperature.ln()) / (n_iter as f64)).exp();
+        let t_factor = (1e-2 / max_temperature).powf(1.0 / n_iter as f64);
         let mut counter = 0;
 
         for it in 0..n_iter {

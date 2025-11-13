@@ -243,7 +243,8 @@ fn main() {
 
     let tsp_model = TSPModel::from_coords(&coords);
 
-    let n_iter: usize = 1000000;
+    let n_iter: usize = 50000;
+    let return_iter = 100;
     let time_limit = Duration::from_secs(60);
     let patience = n_iter / 2;
 
@@ -263,7 +264,7 @@ fn main() {
     };
 
     println!("run hill climbing");
-    let optimizer = HillClimbingOptimizer::new(1000, 200);
+    let optimizer = HillClimbingOptimizer::new(patience, 16);
     let (final_solution, final_score) = optimizer
         .run_with_callback(
             &tsp_model,
@@ -282,7 +283,7 @@ fn main() {
     pb.reset();
 
     println!("run annealing");
-    let optimizer = SimulatedAnnealingOptimizer::new(1000000, 200, 1000, 0.0)
+    let optimizer = SimulatedAnnealingOptimizer::new(patience, 16, return_iter, 1.0)
         .tune_temperature(&tsp_model, None, 200, 0.5);
     let (final_solution, final_score) = optimizer
         .run_with_callback(
@@ -302,7 +303,7 @@ fn main() {
     pb.reset();
 
     println!("run tabu search");
-    let optimizer = TabuSearchOptimizer::<DequeTabuList>::new(patience, 200, 10, 20);
+    let optimizer = TabuSearchOptimizer::<DequeTabuList>::new(patience, 128, return_iter, 20);
     let (final_solution, final_score) = optimizer
         .run_with_callback(
             &tsp_model,
@@ -321,7 +322,7 @@ fn main() {
     pb.reset();
 
     println!("run epsilon greedy");
-    let optimizer = EpsilonGreedyOptimizer::new(patience, 200, 10, 0.3);
+    let optimizer = EpsilonGreedyOptimizer::new(patience, 128, return_iter, 0.3);
     let (final_solution, final_score) = optimizer
         .run_with_callback(
             &tsp_model,
@@ -340,7 +341,7 @@ fn main() {
     pb.reset();
 
     println!("run relative annealing");
-    let optimizer = RelativeAnnealingOptimizer::new(patience, 200, 10, 1e1);
+    let optimizer = RelativeAnnealingOptimizer::new(patience, 128, return_iter, 1e1);
     let (final_solution, final_score) = optimizer
         .run_with_callback(
             &tsp_model,
