@@ -1,5 +1,6 @@
 //! Optimization ALgorithm
 
+mod asa;
 mod base;
 mod epsilon_greedy;
 mod generic;
@@ -10,6 +11,7 @@ mod relative_annealing;
 mod simulated_annealing;
 mod tabu_search;
 
+pub use asa::AdaptiveSimulatedAnnealingOptimizer;
 pub use base::{LocalSearchOptimizer, TransitionProbabilityFn};
 pub use epsilon_greedy::EpsilonGreedyOptimizer;
 pub use generic::GenericLocalSearchOptimizer;

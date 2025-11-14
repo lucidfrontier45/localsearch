@@ -1,4 +1,4 @@
-use crate::{callback::OptCallbackFn, Duration, OptModel};
+use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 use super::{EpsilonGreedyOptimizer, LocalSearchOptimizer};
 

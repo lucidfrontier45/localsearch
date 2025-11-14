@@ -3,8 +3,8 @@ use std::time::Duration;
 use anyhow::Result as AnyResult;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
-    optim::{HillClimbingOptimizer, LocalSearchOptimizer},
     OptModel, OptProgress,
+    optim::{HillClimbingOptimizer, LocalSearchOptimizer},
 };
 use ordered_float::NotNan;
 use rand::{self, distr::Uniform, prelude::Distribution};

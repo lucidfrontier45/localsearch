@@ -11,6 +11,46 @@ use crate::{
 
 use super::LocalSearchOptimizer;
 
+pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
+    model: &M,
+    initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
+    n_warmup: usize,
+    target_initial_prob: f64,
+) -> f64 {
+    // 1. First run n_warmup completely random iterations from initial_solution
+    // 2. calculate initial_temperature so that the average acceptance probability of sampled trial solutions are target_initial_prob
+    // 3. return new SimulatedAnnealingOptimizer with updated temperatures
+    let mut rng = rand::rng();
+    let (mut current_solution, mut current_score) =
+        initial_solution_and_score.unwrap_or(model.generate_random_solution(&mut rng).unwrap());
+
+    let mut energy_diffs = Vec::new();
+
+    for _ in 0..n_warmup {
+        let (trial_solution, _, trial_score) =
+            model.generate_trial_solution(current_solution.clone(), current_score, &mut rng);
+        let ds = trial_score - current_score;
+        if ds <= NotNan::new(0.0).unwrap() {
+            continue;
+        }
+        energy_diffs.push(ds.into_inner());
+        current_solution = trial_solution;
+        current_score = trial_score;
+    }
+
+    // Calculate initial_temperature based on target_initial_prob
+    // p = exp(-ds / T) => T = -ds / ln(p)
+    // Average across all energy differences
+
+    if energy_diffs.is_empty() {
+        1.0
+    } else {
+        let avg_energy_diff = energy_diffs.iter().sum::<f64>() / energy_diffs.len() as f64;
+        let ln_prob = target_initial_prob.ln().clamp(-100.0, -0.01);
+        (-avg_energy_diff / ln_prob).max(1.0)
+    }
+}
+
 /// Optimizer that implements the simulated annealing algorithm
 #[derive(Clone, Copy)]
 pub struct SimulatedAnnealingOptimizer {
@@ -50,49 +90,20 @@ impl SimulatedAnnealingOptimizer {
     /// - `n_warmup` : number of warmup iterations to run
     /// - `target_initial_prob` : target acceptance probability for uphill moves at the beginning
     pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
-        self,
+        &self,
         model: &M,
-        initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
+        initial_solution: Option<(M::SolutionType, M::ScoreType)>,
         n_warmup: usize,
         target_initial_prob: f64,
-    ) -> Self {
-        // 1. First run n_warmup completely random iterations from initial_solution
-        // 2. calculate initial_temperature so that the average acceptance probability of sampled trial solutions are target_initial_prob
-        // 3. return new SimulatedAnnealingOptimizer with updated temperatures
-        let mut rng = rand::rng();
-        let (mut current_solution, mut current_score) =
-            initial_solution_and_score.unwrap_or(model.generate_random_solution(&mut rng).unwrap());
-
-        let mut energy_diffs = Vec::new();
-
-        for _ in 0..n_warmup {
-            let (trial_solution, _, trial_score) =
-                model.generate_trial_solution(current_solution.clone(), current_score, &mut rng);
-            let ds = trial_score - current_score;
-            if ds <= NotNan::new(0.0).unwrap() {
-                continue;
-            }
-            energy_diffs.push(ds.into_inner());
-            current_solution = trial_solution;
-            current_score = trial_score;
-        }
-
-        // Calculate initial_temperature based on target_initial_prob
-        // p = exp(-ds / T) => T = -ds / ln(p)
-        // Average across all energy differences
-        let initial_temperature = if energy_diffs.is_empty() {
-            1.0
-        } else {
-            let avg_energy_diff = energy_diffs.iter().sum::<f64>() / energy_diffs.len() as f64;
-            let ln_prob = target_initial_prob.ln().clamp(-100.0, -0.01);
-            (-avg_energy_diff / ln_prob).max(1.0)
-        };
+    ) -> SimulatedAnnealingOptimizer {
+        let tuned_temperature =
+            tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
 
         SimulatedAnnealingOptimizer {
             patience: self.patience,
             n_trials: self.n_trials,
-            initial_temperature,
             return_iter: self.return_iter,
+            initial_temperature: tuned_temperature,
         }
     }
 

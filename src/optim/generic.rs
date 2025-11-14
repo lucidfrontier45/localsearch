@@ -4,8 +4,8 @@ use rand::Rng;
 use rayon::prelude::*;
 
 use crate::{
-    callback::{OptCallbackFn, OptProgress},
     Duration, Instant, OptModel,
+    callback::{OptCallbackFn, OptProgress},
 };
 
 use super::{LocalSearchOptimizer, TransitionProbabilityFn};

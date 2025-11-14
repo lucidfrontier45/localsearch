@@ -3,8 +3,8 @@ use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 use rayon::prelude::*;
 
 use crate::{
-    callback::{OptCallbackFn, OptProgress},
     Duration, Instant, OptModel,
+    callback::{OptCallbackFn, OptProgress},
 };
 
 use super::LocalSearchOptimizer;

@@ -11,8 +11,9 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     OptModel, OptProgress,
     optim::{
-        EpsilonGreedyOptimizer, HillClimbingOptimizer, LocalSearchOptimizer,
-        RelativeAnnealingOptimizer, SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
+        AdaptiveSimulatedAnnealingOptimizer, EpsilonGreedyOptimizer, HillClimbingOptimizer,
+        LocalSearchOptimizer, RelativeAnnealingOptimizer, SimulatedAnnealingOptimizer, TabuList,
+        TabuSearchOptimizer,
     },
     utils::RingBuffer,
 };
@@ -285,6 +286,27 @@ fn main() {
     println!("run annealing");
     let optimizer = SimulatedAnnealingOptimizer::new(patience, 16, return_iter, 1.0)
         .tune_temperature(&tsp_model, None, 200, 0.5);
+    let (final_solution, final_score) = optimizer
+        .run_with_callback(
+            &tsp_model,
+            initial_solution.clone(),
+            n_iter,
+            time_limit,
+            &mut callback,
+        )
+        .unwrap();
+    println!(
+        "final score = {}, num of cities {}",
+        final_score,
+        final_solution.len()
+    );
+    pb.finish_and_clear();
+    pb.reset();
+
+    println!("run adaptive simulated annealing");
+    let optimizer =
+        AdaptiveSimulatedAnnealingOptimizer::new(patience, 16, return_iter, 1.0, return_iter * 5)
+            .tune_temperature(&tsp_model, None, 200, 0.5);
     let (final_solution, final_score) = optimizer
         .run_with_callback(
             &tsp_model,
