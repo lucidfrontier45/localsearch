@@ -1,7 +1,7 @@
 use anyhow::Result as AnyResult;
 use auto_impl::auto_impl;
 
-use crate::{callback::OptCallbackFn, Duration, OptModel};
+use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 /// Optimizer that implements local search algorithm
 #[auto_impl(&, Box, Rc, Arc)]

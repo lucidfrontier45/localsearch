@@ -1,6 +1,6 @@
 use ordered_float::NotNan;
 
-use crate::{callback::OptCallbackFn, Duration, OptModel};
+use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer};
 
