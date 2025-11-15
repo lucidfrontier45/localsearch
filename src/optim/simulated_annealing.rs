@@ -54,10 +54,14 @@ pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
 /// Optimizer that implements the simulated annealing algorithm
 #[derive(Clone, Copy)]
 pub struct SimulatedAnnealingOptimizer {
-    patience: usize,
-    n_trials: usize,
-    return_iter: usize,
-    initial_temperature: f64,
+    /// The optimizer will give up if there is no improvement of the score after this number of iterations
+    pub patience: usize,
+    /// Number of trial solutions to generate and evaluate at each iteration
+    pub n_trials: usize,
+    /// Returns to the best solution if there is no improvement after this number of iterations
+    pub return_iter: usize,
+    /// Initial temperature
+    pub initial_temperature: f64,
 }
 
 impl SimulatedAnnealingOptimizer {
@@ -117,7 +121,7 @@ impl SimulatedAnnealingOptimizer {
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
     /// - `initial_temperature` : initial temperature
-    fn optimize_with_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
+    pub fn optimize_with_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
