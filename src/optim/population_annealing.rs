@@ -119,14 +119,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                         self.base_sa.cooling_rate,
                     );
                 next_temperature = final_temperature;
-
                 new_population.push((updated_solution, updated_score));
-
-                // Update best solution if needed
-                if updated_score < best_score {
-                    best_score = updated_score;
-                    best_solution.replace(new_population.last().unwrap().0.clone());
-                }
             }
             current_temperature = next_temperature;
 
@@ -165,15 +158,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 let idx = slice_sampler.sample(&mut rng);
                 population[i] = new_population[idx].clone();
             });
-
-            // Calculate new temperature using the same decay approach as SimulatedAnnealingOptimizer
-            // Calculate temperature decay factor for the next round of n_population_update steps
-            let t_factor = (1e-2 / current_temperature).powf(1.0 / self.n_population_update as f64);
-            current_temperature *= t_factor;
-
-            if patience_counter >= self.base_sa.patience {
-                break;
-            }
 
             // Invoke callback with progress information
             iter += self.n_population_update;
