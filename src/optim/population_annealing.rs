@@ -14,14 +14,8 @@ use super::{LocalSearchOptimizer, simulated_annealing::SimulatedAnnealingOptimiz
 /// It runs multiple simulated annealing processes and periodically updates the population
 /// by discarding bad candidates and copying good ones.
 pub struct PopulationAnnealingOptimizer {
-    /// The optimizer will give up if there is no improvement of the score after this number of iterations
-    pub patience: usize,
-    /// Number of trial solutions to generate and evaluate at each iteration
-    pub n_trials: usize,
-    /// Returns to the best solution if there is no improvement after this number of iterations
-    pub return_iter: usize,
-    /// Initial temperature for the simulated annealing processes
-    pub initial_temperature: f64,
+    /// Base Simulated Annealing Optimizer
+    pub base_sa: SimulatedAnnealingOptimizer,
     /// Number of simulated annealing processes to run in parallel
     pub n_population: usize,
     /// Number of steps to run each simulated annealing before updating the population
@@ -30,26 +24,16 @@ pub struct PopulationAnnealingOptimizer {
 
 impl PopulationAnnealingOptimizer {
     /// Constructor of PopulationAnnealingOptimizer
-    ///
-    /// - `patience`: the optimizer will give up if there is no improvement of the score after this number of iterations
-    /// - `n_trials`: number of trial solutions to generate and evaluate at each iteration
-    /// - `return_iter`: returns to the best solution if there is no improvement after this number of iterations
-    /// - `initial_temperature`: initial temperature for the simulated annealing processes
+    /// - `base_sa`: base Simulated Annealing Optimizer
     /// - `n_population`: number of simulated annealing processes to run in parallel
     /// - `n_population_update`: number of steps to run each simulated annealing before updating the population
     pub fn new(
-        patience: usize,
-        n_trials: usize,
-        return_iter: usize,
-        initial_temperature: f64,
+        base_sa: SimulatedAnnealingOptimizer,
         n_population: usize,
         n_population_update: usize,
     ) -> Self {
         Self {
-            patience,
-            n_trials,
-            return_iter,
-            initial_temperature,
+            base_sa,
             n_population,
             n_population_update,
         }
@@ -83,19 +67,11 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         let mut population: Vec<(M::SolutionType, M::ScoreType)> =
             Vec::with_capacity(self.n_population);
 
-        for i in 0..self.n_population {
-            if i == 0 {
-                // Use the initial solution for the first member
-                population.push((initial_solution.clone(), initial_score));
-            } else {
-                // Generate a random solution for other members
-                if let Ok((solution, score)) = model.generate_random_solution(&mut rng) {
-                    population.push((solution, score));
-                } else {
-                    // If random solution generation fails, clone the initial solution
-                    population.push((initial_solution.clone(), initial_score));
-                }
-            }
+        for _ in 0..self.n_population {
+            // Generate a random solution for other members
+            let (solution, _, score) =
+                model.generate_trial_solution(initial_solution.clone(), initial_score, &mut rng);
+            population.push((solution, score));
         }
 
         // Track the best solution found
@@ -110,9 +86,10 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             }
         }
 
-        let mut current_temperature = self.initial_temperature;
+        let mut current_temperature = self.base_sa.initial_temperature;
         let mut iter = 0;
         let accepted_counter = 0;
+        let mut patience_counter = 0;
 
         // Main optimization loop
         while iter < n_iter {
@@ -125,28 +102,23 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             let mut new_population = Vec::with_capacity(self.n_population);
 
             // Process each member of the population
+            let mut next_temperature = current_temperature;
             for (solution, score) in population.iter() {
-                // Create a modified SA optimizer with the current parameters and temperature
-                let current_sa = SimulatedAnnealingOptimizer {
-                    patience: self.patience,
-                    n_trials: self.n_trials,
-                    return_iter: self.return_iter,
-                    initial_temperature: current_temperature,
-                };
-
                 // Run SA for n_population_update steps
-                let sa_n_iter = self.n_population_update.min(n_iter - iter);
                 let temp_callback = &mut |_progress: OptProgress<M::SolutionType, M::ScoreType>| {};
 
-                let (updated_solution, updated_score) = current_sa.optimize_with_temperature(
-                    model,
-                    solution.clone(),
-                    *score,
-                    sa_n_iter,
-                    time_limit.saturating_sub(duration),
-                    temp_callback,
-                    current_temperature,
-                );
+                let (updated_solution, updated_score, final_temperature) =
+                    self.base_sa.optimize_with_temperature_and_cooling_rate(
+                        model,
+                        solution.clone(),
+                        *score,
+                        self.n_population_update,
+                        time_limit.saturating_sub(duration),
+                        temp_callback,
+                        current_temperature,
+                        self.base_sa.cooling_rate,
+                    );
+                next_temperature = final_temperature;
 
                 new_population.push((updated_solution, updated_score));
 
@@ -155,17 +127,20 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                     best_score = updated_score;
                     best_solution.replace(new_population.last().unwrap().0.clone());
                 }
+            }
+            current_temperature = next_temperature;
 
-                iter += sa_n_iter;
-
-                // Check if we've exceeded the iteration limit early
-                if iter >= n_iter {
-                    break;
+            // Update the best solution if needed
+            patience_counter += self.n_population_update;
+            for (solution, score) in &new_population {
+                if *score < best_score {
+                    best_score = *score;
+                    best_solution.replace(solution.clone());
+                    patience_counter = 0;
                 }
             }
 
-            // If we've reached the iteration limit, break
-            if iter >= n_iter {
+            if patience_counter >= self.base_sa.patience {
                 break;
             }
 
@@ -174,47 +149,37 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             let mut weights = Vec::new();
             for &(_, score) in &new_population {
                 // Boltzmann factor: exp(-score / temperature)
-                let boltzmann_factor = (-score.into_inner() / current_temperature).exp();
+                let boltzmann_factor = (-score.into_inner() / current_temperature).exp().max(1e-8);
                 weights.push(boltzmann_factor);
             }
 
-            // Update the best solution if needed
-            for (solution, score) in &new_population {
-                if *score < best_score {
-                    best_score = *score;
-                    best_solution.replace(solution.clone());
-                }
+            // normalize weights
+            let weight_sum: f64 = weights.iter().sum();
+            for w in &mut weights {
+                *w /= weight_sum;
             }
 
-            // Resample the population based on the calculated weights
-            let mut new_gen_population = Vec::with_capacity(self.n_population);
             // Use stochastic universal sampling or roulette wheel sampling
             let slice_sampler = WeightedIndex::new(&weights).unwrap();
-
-            for _ in 0..self.n_population {
+            (0..self.n_population).for_each(|i| {
                 let idx = slice_sampler.sample(&mut rng);
-                new_gen_population.push(new_population[idx].clone());
-            }
-
-            population = new_gen_population;
+                population[i] = new_population[idx].clone();
+            });
 
             // Calculate new temperature using the same decay approach as SimulatedAnnealingOptimizer
             // Calculate temperature decay factor for the next round of n_population_update steps
-            if self.n_population_update > 0 {
-                let t_factor =
-                    (1e-2 / current_temperature).powf(1.0 / self.n_population_update as f64);
-                current_temperature *= t_factor;
+            let t_factor = (1e-2 / current_temperature).powf(1.0 / self.n_population_update as f64);
+            current_temperature *= t_factor;
+
+            if patience_counter >= self.base_sa.patience {
+                break;
             }
 
             // Invoke callback with progress information
+            iter += self.n_population_update;
             let progress =
                 OptProgress::new(iter, accepted_counter, best_solution.clone(), best_score);
             callback(progress);
-
-            // Check if we've exceeded the iteration limit
-            if iter >= n_iter {
-                break;
-            }
         }
 
         let final_best_solution = (*best_solution.borrow()).clone();

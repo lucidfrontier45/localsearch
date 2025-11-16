@@ -11,6 +11,16 @@ use crate::{
 
 use super::LocalSearchOptimizer;
 
+/// Tune cooling rate based on initial and final temperatures and number of iterations
+/// initial termperature will be cooled to final temperature after n_iter iterations
+/// - `initial_temperature` : initial temperature
+/// - `final_temperature` : final temperature
+/// - `n_iter` : number of iterations
+/// - returns : cooling rate
+pub fn tune_cooling_rate(initial_temperature: f64, final_temperature: f64, n_iter: usize) -> f64 {
+    (final_temperature / initial_temperature).powf(1.0 / n_iter as f64)
+}
+
 pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
     model: &M,
     initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
@@ -62,6 +72,8 @@ pub struct SimulatedAnnealingOptimizer {
     pub return_iter: usize,
     /// Initial temperature
     pub initial_temperature: f64,
+    /// Cooling rate
+    pub cooling_rate: f64,
 }
 
 impl SimulatedAnnealingOptimizer {
@@ -72,17 +84,20 @@ impl SimulatedAnnealingOptimizer {
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     /// - `return_iter` : returns to the best solution if there is no improvement after this number of iterations.
     /// - `initial_temperature` : initial temperature
+    /// - `cooling_rate` : cooling rate
     pub fn new(
         patience: usize,
         n_trials: usize,
         return_iter: usize,
         initial_temperature: f64,
+        cooling_rate: f64,
     ) -> Self {
         Self {
             patience,
             n_trials,
             return_iter,
             initial_temperature,
+            cooling_rate,
         }
     }
 }
@@ -94,7 +109,7 @@ impl SimulatedAnnealingOptimizer {
     /// - `n_warmup` : number of warmup iterations to run
     /// - `target_initial_prob` : target acceptance probability for uphill moves at the beginning
     pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
-        &self,
+        self,
         model: &M,
         initial_solution: Option<(M::SolutionType, M::ScoreType)>,
         n_warmup: usize,
@@ -104,10 +119,18 @@ impl SimulatedAnnealingOptimizer {
             tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
 
         SimulatedAnnealingOptimizer {
-            patience: self.patience,
-            n_trials: self.n_trials,
-            return_iter: self.return_iter,
             initial_temperature: tuned_temperature,
+            ..self
+        }
+    }
+
+    /// Tune cooling rate based on self.initial_temperature, final temperature of 1e-2
+    pub fn tune_cooling_rate(self, n_iter: usize) -> SimulatedAnnealingOptimizer {
+        let cooling_rate = tune_cooling_rate(self.initial_temperature, 1e-2, n_iter);
+
+        SimulatedAnnealingOptimizer {
+            cooling_rate,
+            ..self
         }
     }
 
@@ -121,7 +144,8 @@ impl SimulatedAnnealingOptimizer {
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
     /// - `initial_temperature` : initial temperature
-    pub fn optimize_with_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
+    /// - `cooling_rate` : cooling rate
+    pub fn optimize_with_temperature_and_cooling_rate<M: OptModel<ScoreType = NotNan<f64>>>(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
@@ -130,7 +154,8 @@ impl SimulatedAnnealingOptimizer {
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
         initial_temperature: f64,
-    ) -> (M::SolutionType, M::ScoreType) {
+        cooling_rate: f64,
+    ) -> (M::SolutionType, M::ScoreType, f64) {
         let start_time = Instant::now();
         let mut rng = rand::rng();
         let mut current_solution = initial_solution;
@@ -139,7 +164,6 @@ impl SimulatedAnnealingOptimizer {
         let mut best_score = current_score;
         let mut accepted_counter = 0;
         let mut temperature = initial_temperature;
-        let t_factor = (1e-2 / initial_temperature).powf(1.0 / n_iter as f64);
         let mut counter = 0;
 
         for it in 0..n_iter {
@@ -188,7 +212,7 @@ impl SimulatedAnnealingOptimizer {
                 break;
             }
 
-            temperature *= t_factor;
+            temperature *= cooling_rate;
 
             let progress =
                 OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
@@ -196,7 +220,7 @@ impl SimulatedAnnealingOptimizer {
         }
 
         let best_solution = (*best_solution.borrow()).clone();
-        (best_solution, best_score)
+        (best_solution, best_score, temperature)
     }
 }
 
@@ -218,14 +242,17 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        self.optimize_with_temperature(
-            model,
-            initial_solution,
-            initial_score,
-            n_iter,
-            time_limit,
-            callback,
-            self.initial_temperature,
-        )
+        let (best_solution, best_score, _final_temperature) = self
+            .optimize_with_temperature_and_cooling_rate(
+                model,
+                initial_solution,
+                initial_score,
+                n_iter,
+                time_limit,
+                callback,
+                self.initial_temperature,
+                self.cooling_rate,
+            );
+        (best_solution, best_score)
     }
 }
