@@ -12,7 +12,7 @@ use crate::{
 use super::LocalSearchOptimizer;
 
 /// Tune cooling rate based on initial and final temperatures and number of iterations
-/// initial termperature will be cooled to final temperature after n_iter iterations
+/// initial temperature will be cooled to final temperature after n_iter iterations
 /// - `initial_temperature` : initial temperature
 /// - `final_temperature` : final temperature
 /// - `n_iter` : number of iterations

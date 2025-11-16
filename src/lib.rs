@@ -15,7 +15,7 @@ pub use model::OptModel;
 mod time_wrapper;
 pub use time_wrapper::{Duration, Instant};
 
-/// Crate verison string
+/// Crate version string
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg(test)]

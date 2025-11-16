@@ -85,7 +85,7 @@ impl TSPModel {
     }
 }
 
-fn select_two_indides<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize, usize) {
+fn select_two_indices<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize, usize) {
     let n1 = rng.random_range(lb..ub);
     let n2 = loop {
         let n_ = rng.random_range(lb..ub);
@@ -103,7 +103,7 @@ impl OptModel for TSPModel {
     fn generate_random_solution<R: rand::Rng>(
         &self,
         rng: &mut R,
-    ) -> AnyResult<(self::SolutionType, self::ScoreType)> {
+    ) -> AnyResult<(Self::SolutionType, Self::ScoreType)> {
         let mut cities = self
             .distance_matrix
             .keys()
@@ -132,7 +132,7 @@ impl OptModel for TSPModel {
         current_score: Self::ScoreType,
         rng: &mut R,
     ) -> (Self::SolutionType, Self::TransitionType, Self::ScoreType) {
-        let (ind1, ind2) = select_two_indides(1, current_solution.len() - 1, rng);
+        let (ind1, ind2) = select_two_indices(1, current_solution.len() - 1, rng);
 
         let mut new_solution = current_solution.clone();
         for (i, ind) in (ind1..=ind2).enumerate() {
