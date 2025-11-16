@@ -2,6 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use ordered_float::NotNan;
 use rand::{distr::weighted::WeightedIndex, prelude::Distribution};
+use rayon::prelude::*;
 
 use crate::{
     Duration, Instant, OptModel,
@@ -98,30 +99,33 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 break;
             }
 
-            // Run each simulated annealing process for n_population_update steps
-            let mut new_population = Vec::with_capacity(self.n_population);
-
             // Process each member of the population
-            let mut next_temperature = current_temperature;
-            for (solution, score) in population.iter() {
-                // Run SA for n_population_update steps
-                let temp_callback = &mut |_progress: OptProgress<M::SolutionType, M::ScoreType>| {};
+            let new_population = population
+                .par_iter()
+                .map(|(solution, score)| {
+                    // Run SA for n_population_update steps
+                    let temp_callback =
+                        &mut |_progress: OptProgress<M::SolutionType, M::ScoreType>| {};
 
-                let (updated_solution, updated_score, final_temperature) =
-                    self.base_sa.optimize_with_temperature_and_cooling_rate(
-                        model,
-                        solution.clone(),
-                        *score,
-                        self.n_population_update,
-                        time_limit.saturating_sub(duration),
-                        temp_callback,
-                        current_temperature,
-                        self.base_sa.cooling_rate,
-                    );
-                next_temperature = final_temperature;
-                new_population.push((updated_solution, updated_score));
-            }
-            current_temperature = next_temperature;
+                    let (updated_solution, updated_score, final_temperature) =
+                        self.base_sa.optimize_with_temperature_and_cooling_rate(
+                            model,
+                            solution.clone(),
+                            *score,
+                            self.n_population_update,
+                            time_limit.saturating_sub(duration),
+                            temp_callback,
+                            current_temperature,
+                            self.base_sa.cooling_rate,
+                        );
+                    (updated_solution, updated_score, final_temperature)
+                })
+                .collect::<Vec<_>>();
+            current_temperature = new_population[0].2;
+            let new_population: Vec<(M::SolutionType, M::ScoreType)> = new_population
+                .into_iter()
+                .map(|(sol, score, _)| (sol, score))
+                .collect();
 
             // Update the best solution if needed
             patience_counter += self.n_population_update;
