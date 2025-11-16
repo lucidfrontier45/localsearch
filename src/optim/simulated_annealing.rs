@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, usize};
 
 use ordered_float::NotNan;
 use rand::Rng;
@@ -9,7 +9,7 @@ use crate::{
     callback::{OptCallbackFn, OptProgress},
 };
 
-use super::LocalSearchOptimizer;
+use super::{LocalSearchOptimizer, MetropolisOptimizer, metropolis};
 
 /// Tune cooling rate based on initial and final temperatures and number of iterations
 /// initial temperature will be cooled to final temperature after n_iter iterations
@@ -74,6 +74,8 @@ pub struct SimulatedAnnealingOptimizer {
     pub initial_temperature: f64,
     /// Cooling rate
     pub cooling_rate: f64,
+    /// Number of steps after which temperature is updated
+    pub temperature_update_cycle: usize,
 }
 
 impl SimulatedAnnealingOptimizer {
@@ -85,12 +87,14 @@ impl SimulatedAnnealingOptimizer {
     /// - `return_iter` : returns to the best solution if there is no improvement after this number of iterations.
     /// - `initial_temperature` : initial temperature
     /// - `cooling_rate` : cooling rate
+    /// - `temperature_update_cycle` : number of steps after which temperature is updated
     pub fn new(
         patience: usize,
         n_trials: usize,
         return_iter: usize,
         initial_temperature: f64,
         cooling_rate: f64,
+        temperature_update_cycle: usize,
     ) -> Self {
         Self {
             patience,
@@ -98,6 +102,7 @@ impl SimulatedAnnealingOptimizer {
             return_iter,
             initial_temperature,
             cooling_rate,
+            temperature_update_cycle,
         }
     }
 }
@@ -126,101 +131,16 @@ impl SimulatedAnnealingOptimizer {
 
     /// Tune cooling rate based on self.initial_temperature, final temperature of 1e-2
     pub fn tune_cooling_rate(self, n_iter: usize) -> SimulatedAnnealingOptimizer {
-        let cooling_rate = tune_cooling_rate(self.initial_temperature, 1e-2, n_iter);
+        let cooling_rate = tune_cooling_rate(
+            self.initial_temperature,
+            1e-2,
+            n_iter / self.temperature_update_cycle,
+        );
 
         SimulatedAnnealingOptimizer {
             cooling_rate,
             ..self
         }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    /// Start optimization with given temperature range
-    ///
-    /// - `model` : the model to optimize
-    /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
-    /// - `initial_score` : the initial score of the initial solution
-    /// - `n_iter`: maximum iterations
-    /// - `time_limit`: maximum iteration time
-    /// - `callback` : callback function that will be invoked at the end of each iteration
-    /// - `initial_temperature` : initial temperature
-    /// - `cooling_rate` : cooling rate
-    pub fn optimize_with_temperature_and_cooling_rate<M: OptModel<ScoreType = NotNan<f64>>>(
-        &self,
-        model: &M,
-        initial_solution: M::SolutionType,
-        initial_score: M::ScoreType,
-        n_iter: usize,
-        time_limit: Duration,
-        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        initial_temperature: f64,
-        cooling_rate: f64,
-    ) -> (M::SolutionType, M::ScoreType, f64) {
-        let start_time = Instant::now();
-        let mut rng = rand::rng();
-        let mut current_solution = initial_solution;
-        let mut current_score = initial_score;
-        let best_solution = Rc::new(RefCell::new(current_solution.clone()));
-        let mut best_score = current_score;
-        let mut accepted_counter = 0;
-        let mut temperature = initial_temperature;
-        let mut counter = 0;
-
-        for it in 0..n_iter {
-            let duration = Instant::now().duration_since(start_time);
-            if duration > time_limit {
-                break;
-            }
-            let (trial_solution, trial_score) = (0..self.n_trials)
-                .into_par_iter()
-                .map(|_| {
-                    let mut rng = rand::rng();
-                    let (solution, _, score) = model.generate_trial_solution(
-                        current_solution.clone(),
-                        current_score,
-                        &mut rng,
-                    );
-                    (solution, score)
-                })
-                .min_by_key(|(_, score)| *score)
-                .unwrap();
-
-            let ds = trial_score - current_score;
-            let p = (-ds / temperature).exp();
-            let r: f64 = rng.random();
-
-            if p > r {
-                current_solution = trial_solution;
-                current_score = trial_score;
-                accepted_counter += 1;
-            }
-
-            if current_score < best_score {
-                best_solution.replace(current_solution.clone());
-                best_score = current_score;
-                counter = 0;
-            }
-
-            counter += 1;
-
-            if counter == self.return_iter {
-                current_solution = best_solution.borrow().clone();
-                current_score = best_score;
-            }
-
-            if counter == self.patience {
-                break;
-            }
-
-            temperature *= cooling_rate;
-
-            let progress =
-                OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
-            callback(progress);
-        }
-
-        let best_solution = (*best_solution.borrow()).clone();
-        (best_solution, best_score, temperature)
     }
 }
 
@@ -239,20 +159,70 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
-        time_limit: Duration,
+        mut time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        let (best_solution, best_score, _final_temperature) = self
-            .optimize_with_temperature_and_cooling_rate(
+        let mut current_temperature = self.initial_temperature;
+        let mut current_solution = initial_solution;
+        let mut current_score = initial_score;
+        let mut best_solution = Rc::new(RefCell::new(current_solution.clone()));
+        let mut best_score = current_score;
+        let mut iter = 0;
+        let now = Instant::now();
+
+        while iter < n_iter {
+            let metropolis = MetropolisOptimizer {
+                patience: usize::MAX,
+                n_trials: self.n_trials,
+                return_iter: self.return_iter,
+                temperature: current_temperature,
+            };
+            // make dummy callback
+            let mut dummy_callback = |_: OptProgress<M::SolutionType, M::ScoreType>| {};
+            let (best, last) = metropolis.step(
                 model,
-                initial_solution,
-                initial_score,
-                n_iter,
+                current_solution,
+                current_score,
+                self.temperature_update_cycle,
                 time_limit,
-                callback,
-                self.initial_temperature,
-                self.cooling_rate,
+                &mut dummy_callback,
             );
+
+            // update best solution and best score
+            if best.1 < best_score {
+                best_solution.replace(best.0.clone());
+                best_score = best.1;
+            }
+
+            // update current solution
+            current_solution = last.0;
+            current_score = last.1;
+
+            // update temperature
+            current_temperature *= self.cooling_rate;
+
+            // update time limit
+            let elapsed = now.elapsed();
+            if elapsed >= time_limit {
+                break;
+            }
+            time_limit -= elapsed;
+
+            // update iter
+            iter += self.temperature_update_cycle;
+
+            // run callback
+            let progress = OptProgress {
+                iteration: iter,
+                accepted_count: 0,
+                best_solution: best_solution.clone(),
+                best_score,
+                current_solution: Rc::new(RefCell::new(current_solution.clone())),
+                current_score,
+            };
+            callback(progress);
+        }
+        let best_solution = (*best_solution.borrow()).clone();
         (best_solution, best_score)
     }
 }

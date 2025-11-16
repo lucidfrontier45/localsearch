@@ -47,15 +47,8 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
             phantom: PhantomData,
         }
     }
-}
 
-impl<ST, FT, M> LocalSearchOptimizer<M> for GenericLocalSearchOptimizer<ST, FT>
-where
-    ST: Ord + Sync + Send + Copy,
-    FT: TransitionProbabilityFn<ST>,
-    M: OptModel<ScoreType = ST>,
-{
-    /// Start optimization
+    /// Start optimization, returns the best solution and last solution
     ///
     /// - `model` : the model to optimize
     /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
@@ -63,7 +56,7 @@ where
     /// - `n_iter`: maximum iterations
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    fn optimize(
+    pub fn step<M: OptModel<ScoreType = ST>>(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
@@ -71,7 +64,10 @@ where
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-    ) -> (M::SolutionType, M::ScoreType) {
+    ) -> (
+        (M::SolutionType, M::ScoreType),
+        (M::SolutionType, M::ScoreType),
+    ) {
         let start_time = Instant::now();
         let mut rng = rand::rng();
         let mut current_solution = initial_solution;
@@ -132,6 +128,44 @@ where
         }
 
         let best_solution = (*best_solution.borrow()).clone();
-        (best_solution, best_score)
+        (
+            (best_solution, best_score),
+            (current_solution, current_score),
+        )
+    }
+}
+
+impl<ST, FT, M> LocalSearchOptimizer<M> for GenericLocalSearchOptimizer<ST, FT>
+where
+    ST: Ord + Sync + Send + Copy,
+    FT: TransitionProbabilityFn<ST>,
+    M: OptModel<ScoreType = ST>,
+{
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
+    /// - `initial_score` : the initial score of the initial solution
+    /// - `n_iter`: maximum iterations
+    /// - `time_limit`: maximum iteration time
+    /// - `callback` : callback function that will be invoked at the end of each iteration
+    fn optimize(
+        &self,
+        model: &M,
+        initial_solution: M::SolutionType,
+        initial_score: M::ScoreType,
+        n_iter: usize,
+        time_limit: Duration,
+        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
+    ) -> (M::SolutionType, M::ScoreType) {
+        let (best, _last) = self.step(
+            model,
+            initial_solution,
+            initial_score,
+            n_iter,
+            time_limit,
+            callback,
+        );
+        best
     }
 }

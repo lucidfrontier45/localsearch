@@ -273,13 +273,13 @@ fn main() {
     optimizers.push((
         "SimulatedAnnealingOptimizer",
         Box::new(
-            SimulatedAnnealingOptimizer::new(patience, 16, return_iter, 1.0, 0.1)
+            SimulatedAnnealingOptimizer::new(patience, 16, return_iter, 1.0, 0.1, 1)
                 .tune_temperature(&tsp_model, None, 200, 0.5)
                 .tune_cooling_rate(n_iter),
         ),
     ));
     optimizers.push(("PopulationAnnealingOptimizer", {
-        let base_sa = SimulatedAnnealingOptimizer::new(n_iter / 5, 16, return_iter, 1.0, 0.1)
+        let base_sa = SimulatedAnnealingOptimizer::new(n_iter / 5, 16, return_iter, 1.0, 0.1, 1)
             .tune_temperature(&tsp_model, None, 200, 0.5)
             .tune_cooling_rate(n_iter);
         Box::new(PopulationAnnealingOptimizer::new(base_sa, 16, n_iter / 50))

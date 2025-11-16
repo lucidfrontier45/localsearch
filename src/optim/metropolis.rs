@@ -1,9 +1,6 @@
 use ordered_float::NotNan;
 
-use crate::{
-    Duration, OptModel,
-    callback::OptCallbackFn,
-};
+use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer};
 
@@ -36,18 +33,15 @@ impl MetropolisOptimizer {
             temperature,
         }
     }
-}
 
-impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for MetropolisOptimizer {
-    /// Start optimization
-    ///
-    /// - `model` : the model to optimize
-    /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
-    /// - `initial_score` : the initial score of the initial solution
-    /// - `n_iter`: maximum iterations
-    /// - `time_limit`: maximum iteration time
-    /// - `callback` : callback function that will be invoked at the end of each iteration
-    fn optimize(
+    pub fn chnage_temperature(self, temperature: f64) -> Self {
+        Self {
+            temperature,
+            ..self
+        }
+    }
+
+    pub fn step<M: OptModel<ScoreType = NotNan<f64>>>(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
@@ -55,7 +49,10 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Metropoli
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-    ) -> (M::SolutionType, M::ScoreType) {
+    ) -> (
+        (M::SolutionType, M::ScoreType),
+        (M::SolutionType, M::ScoreType),
+    ) {
         let transition = |current: NotNan<f64>, trial: NotNan<f64>| {
             let ds = trial - current;
             if ds <= NotNan::new(0.0).unwrap() {
@@ -70,6 +67,43 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Metropoli
             self.return_iter,
             transition,
         );
-        generic_optimizer.optimize(model, initial_solution, initial_score, n_iter, time_limit, callback)
+        generic_optimizer.step(
+            model,
+            initial_solution,
+            initial_score,
+            n_iter,
+            time_limit,
+            callback,
+        )
+    }
+}
+
+impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for MetropolisOptimizer {
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
+    /// - `initial_score` : the initial score of the initial solution
+    /// - `n_iter`: maximum iterations
+    /// - `time_limit`: maximum iteration time
+    /// - `callback` : callback function that will be invoked at the end of each iteration
+    fn optimize(
+        &self,
+        model: &M,
+        initial_solution: <M as OptModel>::SolutionType,
+        initial_score: <M as OptModel>::ScoreType,
+        n_iter: usize,
+        time_limit: Duration,
+        callback: &mut dyn OptCallbackFn<<M as OptModel>::SolutionType, <M as OptModel>::ScoreType>,
+    ) -> (<M as OptModel>::SolutionType, <M as OptModel>::ScoreType) {
+        let (best, _last) = self.step(
+            model,
+            initial_solution,
+            initial_score,
+            n_iter,
+            time_limit,
+            callback,
+        );
+        best
     }
 }

@@ -11,7 +11,7 @@ use super::QuadraticModel;
 #[test]
 fn test() {
     let model = QuadraticModel::new(3, vec![2.0, 0.0, -3.5], (-10.0, 10.0));
-    let base_sa = SimulatedAnnealingOptimizer::new(10000, 10, 10, 1.0, 0.99);
+    let base_sa = SimulatedAnnealingOptimizer::new(10000, 10, 10, 1.0, 0.99, 1);
     let opt = PopulationAnnealingOptimizer::new(base_sa, 10, 100);
     let (final_solution, final_score) = opt
         .run(&model, None, 5000, Duration::from_secs(10))
