@@ -12,8 +12,8 @@ use localsearch::{
     OptModel, OptProgress,
     optim::{
         AdaptiveSimulatedAnnealingOptimizer, EpsilonGreedyOptimizer, HillClimbingOptimizer,
-        LocalSearchOptimizer, RelativeAnnealingOptimizer, SimulatedAnnealingOptimizer, TabuList,
-        TabuSearchOptimizer,
+        LocalSearchOptimizer, PopulationAnnealingOptimizer, RelativeAnnealingOptimizer,
+        SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
     },
     utils::RingBuffer,
 };
@@ -223,7 +223,7 @@ fn create_pbar(n_iter: u64) -> ProgressBar {
             ).unwrap()
             .progress_chars("#>-")
     );
-    pb.set_draw_target(ProgressDrawTarget::stderr_with_hz(10));
+    pb.set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
     pb
 }
 
@@ -254,6 +254,7 @@ fn main() {
 
     let pb = create_pbar(n_iter as u64);
     let mut callback = |op: OptProgress<SolutionType, ScoreType>| {
+        // eprintln!("iter {}, score {}", op.iter, op.score);
         let ratio = op.accepted_count as f64 / op.iter as f64;
         pb.set_message(format!(
             "best score {:.4e}, count = {}, acceptance ratio {:.2e}",
@@ -264,121 +265,85 @@ fn main() {
         pb.set_position(op.iter as u64);
     };
 
-    println!("run hill climbing");
-    let optimizer = HillClimbingOptimizer::new(patience, 16);
-    let (final_solution, final_score) = optimizer
-        .run_with_callback(
-            &tsp_model,
-            initial_solution.clone(),
-            n_iter,
-            time_limit,
-            &mut callback,
-        )
-        .unwrap();
-    println!(
-        "final score = {}, num of cities {}",
-        final_score,
-        final_solution.len()
-    );
-    pb.finish_and_clear();
-    pb.reset();
+    let mut optimizers: Vec<(&str, Box<dyn LocalSearchOptimizer<TSPModel>>)> = vec![];
+    optimizers.push((
+        "HillClimbingOptimizer",
+        Box::new(HillClimbingOptimizer::new(patience, 16)),
+    ));
+    optimizers.push((
+        "SimulatedAnnealingOptimizer",
+        Box::new(
+            SimulatedAnnealingOptimizer::new(patience, 16, return_iter, 1.0, 0.1)
+                .tune_temperature(&tsp_model, None, 200, 0.5)
+                .tune_cooling_rate(n_iter),
+        ),
+    ));
+    optimizers.push(("PopulationAnnealingOptimizer", {
+        let base_sa = SimulatedAnnealingOptimizer::new(n_iter / 5, 16, return_iter, 1.0, 0.1)
+            .tune_temperature(&tsp_model, None, 200, 0.5)
+            .tune_cooling_rate(n_iter);
+        Box::new(PopulationAnnealingOptimizer::new(base_sa, 16, n_iter / 50))
+    }));
+    optimizers.push((
+        "AdaptiveSimulatedAnnealingOptimizer",
+        Box::new(
+            AdaptiveSimulatedAnnealingOptimizer::new(
+                patience,
+                16,
+                return_iter,
+                1.0,
+                0.99,
+                n_iter / 10,
+            )
+            .tune_temperature(&tsp_model, None, 200, 0.5)
+            .tune_cooling_rate(n_iter),
+        ),
+    ));
+    optimizers.push((
+        "TabuSearchOptimizer",
+        Box::new(TabuSearchOptimizer::<DequeTabuList>::new(
+            patience,
+            128,
+            return_iter,
+            20,
+        )),
+    ));
+    optimizers.push((
+        "EpsilonGreedyOptimizer",
+        Box::new(EpsilonGreedyOptimizer::new(patience, 128, return_iter, 0.3)),
+    ));
+    optimizers.push((
+        "RelativeAnnealingOptimizer",
+        Box::new(RelativeAnnealingOptimizer::new(
+            patience,
+            128,
+            return_iter,
+            1e1,
+        )),
+    ));
+    for (name, optimizer) in optimizers {
+        println!("run {}", name);
+        pb.reset();
+        let (final_solution, final_score) = optimizer
+            .run_with_callback(
+                &tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                &mut callback,
+            )
+            .unwrap();
+        pb.finish_and_clear();
+        println!(
+            "final score = {}, num of cities {}",
+            final_score,
+            final_solution.len()
+        );
+    }
 
-    println!("run annealing");
-    let optimizer = SimulatedAnnealingOptimizer::new(patience, 16, return_iter, 1.0)
-        .tune_temperature(&tsp_model, None, 200, 0.5);
-    let (final_solution, final_score) = optimizer
-        .run_with_callback(
-            &tsp_model,
-            initial_solution.clone(),
-            n_iter,
-            time_limit,
-            &mut callback,
-        )
-        .unwrap();
-    println!(
-        "final score = {}, num of cities {}",
-        final_score,
-        final_solution.len()
-    );
-    pb.finish_and_clear();
-    pb.reset();
-
-    println!("run adaptive simulated annealing");
-    let optimizer =
-        AdaptiveSimulatedAnnealingOptimizer::new(patience, 16, return_iter, 1.0, return_iter * 5)
-            .tune_temperature(&tsp_model, None, 200, 0.5);
-    let (final_solution, final_score) = optimizer
-        .run_with_callback(
-            &tsp_model,
-            initial_solution.clone(),
-            n_iter,
-            time_limit,
-            &mut callback,
-        )
-        .unwrap();
-    println!(
-        "final score = {}, num of cities {}",
-        final_score,
-        final_solution.len()
-    );
-    pb.finish_and_clear();
-    pb.reset();
-
-    println!("run tabu search");
-    let optimizer = TabuSearchOptimizer::<DequeTabuList>::new(patience, 128, return_iter, 20);
-    let (final_solution, final_score) = optimizer
-        .run_with_callback(
-            &tsp_model,
-            initial_solution.clone(),
-            n_iter,
-            time_limit,
-            &mut callback,
-        )
-        .unwrap();
-    println!(
-        "final score = {}, num of cities {}",
-        final_score,
-        final_solution.len()
-    );
-    pb.finish_and_clear();
-    pb.reset();
-
-    println!("run epsilon greedy");
-    let optimizer = EpsilonGreedyOptimizer::new(patience, 128, return_iter, 0.3);
-    let (final_solution, final_score) = optimizer
-        .run_with_callback(
-            &tsp_model,
-            initial_solution.clone(),
-            n_iter,
-            time_limit,
-            &mut callback,
-        )
-        .unwrap();
-    println!(
-        "final score = {}, num of cities {}",
-        final_score,
-        final_solution.len()
-    );
-    pb.finish_and_clear();
-    pb.reset();
-
-    println!("run relative annealing");
-    let optimizer = RelativeAnnealingOptimizer::new(patience, 128, return_iter, 1e1);
-    let (final_solution, final_score) = optimizer
-        .run_with_callback(
-            &tsp_model,
-            initial_solution,
-            n_iter,
-            time_limit,
-            &mut callback,
-        )
-        .unwrap();
-    println!(
-        "final score = {}, num of cities {}",
-        final_score,
-        final_solution.len()
-    );
-
+    if args.len() < 3 {
+        return;
+    }
     let opt_route_file = args.get(2).unwrap();
     let opt_solution = read_lines(opt_route_file)
         .unwrap()

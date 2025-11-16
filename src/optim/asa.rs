@@ -9,8 +9,8 @@ use crate::{
     callback::{OptCallbackFn, OptProgress},
 };
 
-use super::LocalSearchOptimizer;
 use super::simulated_annealing::tune_temperature;
+use super::{LocalSearchOptimizer, simulated_annealing::tune_cooling_rate};
 
 const MIN_TEMPERATURE: f64 = 0.01;
 
@@ -23,6 +23,7 @@ pub struct AdaptiveSimulatedAnnealingOptimizer {
     n_trials: usize,
     return_iter: usize,
     initial_temperature: f64,
+    cooling_rate: f64,
     reanneal_interval: usize,
 }
 
@@ -43,6 +44,7 @@ impl AdaptiveSimulatedAnnealingOptimizer {
         n_trials: usize,
         return_iter: usize,
         initial_temperature: f64,
+        cooling_rate: f64,
         reanneal_interval: usize,
     ) -> Self {
         let initial_temperature = initial_temperature.max(MIN_TEMPERATURE);
@@ -52,13 +54,14 @@ impl AdaptiveSimulatedAnnealingOptimizer {
             n_trials,
             return_iter,
             initial_temperature,
+            cooling_rate,
             reanneal_interval: reanneal_interval.max(1),
         }
     }
 
     /// Tune the initial temperature based on acceptance rate from warm-up trials.
     pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
-        &self,
+        self,
         model: &M,
         initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
         n_warmup: usize,
@@ -71,12 +74,19 @@ impl AdaptiveSimulatedAnnealingOptimizer {
             target_initial_prob,
         );
 
-        AdaptiveSimulatedAnnealingOptimizer {
-            patience: self.patience,
-            n_trials: self.n_trials,
-            return_iter: self.return_iter,
+        Self {
             initial_temperature: tuned_temperature,
-            reanneal_interval: self.reanneal_interval,
+            ..self
+        }
+    }
+
+    /// Tune cooling rate based on self.initial_temperature, final temperature of 1e-2
+    pub fn tune_cooling_rate(self, n_iter: usize) -> Self {
+        let cooling_rate = tune_cooling_rate(self.initial_temperature, 1e-2, n_iter);
+
+        Self {
+            cooling_rate,
+            ..self
         }
     }
 }
