@@ -10,12 +10,24 @@ use crate::{
 
 use super::{LocalSearchOptimizer, TransitionProbabilityFn};
 
+/// Result of an optimization step, containing information about the best and last solutions,
+/// as well as the transitions that were accepted or rejected during the step.
+///
+/// The transition tuples represent `(from_score, to_score)` pairs, indicating the score before
+/// and after a proposed move. Accepted transitions are those that were applied; rejected transitions
+/// are those that were considered but not applied.
 pub struct StepResult<S, ST> {
+    /// The best solution found during this step.
     pub best_solution: S,
+    /// The score of the best solution found during this step.
     pub best_score: ST,
+    /// The last solution at the end of this step (may differ from the best).
     pub last_solution: S,
+    /// The score of the last solution at the end of this step.
     pub last_score: ST,
+    /// List of accepted transitions as `(from_score, to_score)` pairs.
     pub accepted_transitions: Vec<(ST, ST)>,
+    /// List of rejected transitions as `(from_score, to_score)` pairs.
     pub rejected_transitions: Vec<(ST, ST)>,
 }
 
