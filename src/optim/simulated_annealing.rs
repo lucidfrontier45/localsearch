@@ -264,78 +264,14 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        let mut current_temperature = self.initial_temperature;
-        let mut current_solution = initial_solution;
-        let mut current_score = initial_score;
-        let best_solution = Rc::new(RefCell::new(current_solution.clone()));
-        let mut best_score = current_score;
-        let mut iter = 0;
-        let mut patience_counter = 0;
-        let now = Instant::now();
-        let mut remaining_time_limit = time_limit;
-        let mut accepted_counter = 0;
-
-        while iter < n_iter {
-            let metropolis = MetropolisOptimizer {
-                patience: usize::MAX,
-                n_trials: self.n_trials,
-                return_iter: usize::MAX,
-                temperature: current_temperature,
-            };
-            // make dummy callback
-            let mut dummy_callback = |_: OptProgress<M::SolutionType, M::ScoreType>| {};
-            let step_result = metropolis.step(
-                model,
-                current_solution,
-                current_score,
-                self.update_frequency,
-                remaining_time_limit,
-                &mut dummy_callback,
-            );
-            patience_counter += self.update_frequency;
-
-            // update current solution
-            current_solution = step_result.last_solution;
-            current_score = step_result.last_score;
-
-            // update best solution and best score
-            if step_result.best_score < best_score {
-                best_solution.replace(step_result.best_solution);
-                best_score = step_result.best_score;
-                patience_counter = 0;
-            }
-
-            // check patience
-            if patience_counter >= self.patience {
-                break;
-            }
-
-            // update temperature
-            current_temperature *= self.cooling_rate;
-
-            // update time limit
-            let elapsed = now.elapsed();
-            if elapsed >= time_limit {
-                break;
-            }
-            remaining_time_limit = time_limit - elapsed;
-
-            // update iter
-            iter += self.update_frequency;
-
-            let n_accepted = step_result.accepted_transitions.len();
-            accepted_counter += n_accepted;
-
-            // run callback
-            let progress = OptProgress {
-                iter,
-                accepted_count: accepted_counter,
-                solution: best_solution.clone(),
-                score: best_score,
-            };
-            callback(progress);
-        }
-        let best_solution = (*best_solution.borrow()).clone();
-        (best_solution, best_score)
+        let step_result = self.step(
+            model,
+            initial_solution,
+            initial_score,
+            n_iter,
+            time_limit,
+            callback,
+        );
+        (step_result.best_solution, step_result.best_score)
     }
 }
