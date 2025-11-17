@@ -65,5 +65,6 @@ mod test_logistic_annealing;
 mod test_population_annealing;
 mod test_relative_annealing;
 mod test_simulated_annealing;
+mod test_metropolis;
 mod test_tabu_search;
 mod test_trait_object;

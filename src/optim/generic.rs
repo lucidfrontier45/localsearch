@@ -10,8 +10,29 @@ use crate::{
 
 use super::{LocalSearchOptimizer, TransitionProbabilityFn};
 
+/// Result of an optimization step, containing information about the best and last solutions,
+/// as well as the transitions that were accepted or rejected during the step.
+///
+/// The transition tuples represent `(from_score, to_score)` pairs, indicating the score before
+/// and after a proposed move. Accepted transitions are those that were applied; rejected transitions
+/// are those that were considered but not applied.
+pub struct StepResult<S, ST> {
+    /// The best solution found during this step.
+    pub best_solution: S,
+    /// The score of the best solution found during this step.
+    pub best_score: ST,
+    /// The last solution at the end of this step (may differ from the best).
+    pub last_solution: S,
+    /// The score of the last solution at the end of this step.
+    pub last_score: ST,
+    /// List of accepted transitions as `(from_score, to_score)` pairs.
+    pub accepted_transitions: Vec<(ST, ST)>,
+    /// List of rejected transitions as `(from_score, to_score)` pairs.
+    pub rejected_transitions: Vec<(ST, ST)>,
+}
+
 /// Optimizer that implements local search algorithm
-/// Given a functin f that converts a float number to probability,
+/// Given a function f that converts a float number to probability,
 /// the trial solution is accepted by the following procedure
 ///
 /// 1. p <- f(current_score, trial_score)
@@ -47,15 +68,8 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
             phantom: PhantomData,
         }
     }
-}
 
-impl<ST, FT, M> LocalSearchOptimizer<M> for GenericLocalSearchOptimizer<ST, FT>
-where
-    ST: Ord + Sync + Send + Copy,
-    FT: TransitionProbabilityFn<ST>,
-    M: OptModel<ScoreType = ST>,
-{
-    /// Start optimization
+    /// Start optimization, returns the best solution and last solution
     ///
     /// - `model` : the model to optimize
     /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
@@ -63,7 +77,7 @@ where
     /// - `n_iter`: maximum iterations
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    fn optimize(
+    pub fn step<M: OptModel<ScoreType = ST>>(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
@@ -71,7 +85,7 @@ where
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-    ) -> (M::SolutionType, M::ScoreType) {
+    ) -> StepResult<M::SolutionType, M::ScoreType> {
         let start_time = Instant::now();
         let mut rng = rand::rng();
         let mut current_solution = initial_solution;
@@ -80,6 +94,9 @@ where
         let mut best_score = current_score;
         let mut accepted_counter = 0;
         let mut counter = 0;
+
+        let mut accepted_transitions = Vec::with_capacity(n_iter);
+        let mut rejected_transitions = Vec::with_capacity(n_iter);
 
         for it in 0..n_iter {
             let duration = Instant::now().duration_since(start_time);
@@ -104,9 +121,12 @@ where
             let r: f64 = rng.random();
 
             if p > r {
+                accepted_transitions.push((current_score, trial_score));
+                accepted_counter += 1;
                 current_solution = trial_solution;
                 current_score = trial_score;
-                accepted_counter += 1;
+            } else {
+                rejected_transitions.push((current_score, trial_score));
             }
 
             if current_score < best_score {
@@ -132,6 +152,48 @@ where
         }
 
         let best_solution = (*best_solution.borrow()).clone();
-        (best_solution, best_score)
+        StepResult {
+            best_solution,
+            best_score,
+            last_solution: current_solution,
+            last_score: current_score,
+            accepted_transitions,
+            rejected_transitions,
+        }
+    }
+}
+
+impl<ST, FT, M> LocalSearchOptimizer<M> for GenericLocalSearchOptimizer<ST, FT>
+where
+    ST: Ord + Sync + Send + Copy,
+    FT: TransitionProbabilityFn<ST>,
+    M: OptModel<ScoreType = ST>,
+{
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
+    /// - `initial_score` : the initial score of the initial solution
+    /// - `n_iter`: maximum iterations
+    /// - `time_limit`: maximum iteration time
+    /// - `callback` : callback function that will be invoked at the end of each iteration
+    fn optimize(
+        &self,
+        model: &M,
+        initial_solution: M::SolutionType,
+        initial_score: M::ScoreType,
+        n_iter: usize,
+        time_limit: Duration,
+        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
+    ) -> (M::SolutionType, M::ScoreType) {
+        let step_result = self.step(
+            model,
+            initial_solution,
+            initial_score,
+            n_iter,
+            time_limit,
+            callback,
+        );
+        (step_result.best_solution, step_result.best_score)
     }
 }
