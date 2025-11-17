@@ -207,6 +207,10 @@ impl SimulatedAnnealingOptimizer {
             rejected_transitions.extend(step_result.rejected_transitions);
 
             // check patience
+            if patience_counter >= self.return_iter {
+                current_solution = (*best_solution.borrow()).clone();
+                current_score = best_score;
+            }
             if patience_counter >= self.patience {
                 break;
             }
