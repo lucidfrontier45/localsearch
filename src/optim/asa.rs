@@ -9,7 +9,7 @@ use crate::{
     callback::{OptCallbackFn, OptProgress},
 };
 
-use super::simulated_annealing::tune_temperature;
+use super::simulated_annealing::tune_initial_temperature;
 use super::{LocalSearchOptimizer, simulated_annealing::tune_cooling_rate};
 
 const MIN_TEMPERATURE: f64 = 0.01;
@@ -67,7 +67,7 @@ impl AdaptiveSimulatedAnnealingOptimizer {
         n_warmup: usize,
         target_initial_prob: f64,
     ) -> Self {
-        let tuned_temperature = tune_temperature(
+        let tuned_temperature = tune_initial_temperature(
             model,
             initial_solution_and_score,
             n_warmup,

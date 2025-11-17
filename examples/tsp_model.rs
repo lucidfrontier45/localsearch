@@ -245,7 +245,7 @@ fn main() {
     let tsp_model = TSPModel::from_coords(&coords);
 
     let n_iter: usize = 50000;
-    let return_iter = 100;
+    let return_iter = n_iter / 50;
     let time_limit = Duration::from_secs(60);
     let patience = n_iter / 2;
 
@@ -265,62 +265,66 @@ fn main() {
         pb.set_position(op.iter as u64);
     };
 
-    let mut optimizers: Vec<(&str, Box<dyn LocalSearchOptimizer<TSPModel>>)> = vec![];
-    optimizers.push((
-        "HillClimbingOptimizer",
-        Box::new(HillClimbingOptimizer::new(patience, 16)),
-    ));
-    optimizers.push((
-        "SimulatedAnnealingOptimizer",
-        Box::new(
-            SimulatedAnnealingOptimizer::new(patience, 16, return_iter, 1.0, 0.1, 1)
+    let optimizers: Vec<(&str, Box<dyn LocalSearchOptimizer<TSPModel>>)> = vec![
+        (
+            "HillClimbingOptimizer",
+            Box::new(HillClimbingOptimizer::new(patience, 16)),
+        ),
+        (
+            "SimulatedAnnealingOptimizer",
+            Box::new(
+                SimulatedAnnealingOptimizer::new(patience, 16, return_iter, 1.0, 0.9, n_iter / 100)
+                    .tune_initial_temperature(&tsp_model, None, 200, 0.5)
+                    .tune_cooling_rate(n_iter),
+            ),
+        ),
+        (
+            "PopulationAnnealingOptimizer",
+            Box::new(
+                PopulationAnnealingOptimizer::new(patience, 10, 1.0, 0.9, 16, n_iter / 100)
+                    .tune_initial_temperature(&tsp_model, None, 200, 0.5)
+                    .tune_cooling_rate(n_iter),
+            ),
+        ),
+        (
+            "AdaptiveSimulatedAnnealingOptimizer",
+            Box::new(
+                AdaptiveSimulatedAnnealingOptimizer::new(
+                    patience,
+                    16,
+                    return_iter,
+                    1.0,
+                    0.99,
+                    n_iter / 10,
+                )
                 .tune_temperature(&tsp_model, None, 200, 0.5)
                 .tune_cooling_rate(n_iter),
+            ),
         ),
-    ));
-    optimizers.push(("PopulationAnnealingOptimizer", {
-        let base_sa = SimulatedAnnealingOptimizer::new(n_iter / 5, 16, return_iter, 1.0, 0.1, 1)
-            .tune_temperature(&tsp_model, None, 200, 0.5)
-            .tune_cooling_rate(n_iter);
-        Box::new(PopulationAnnealingOptimizer::new(base_sa, 16, n_iter / 50))
-    }));
-    optimizers.push((
-        "AdaptiveSimulatedAnnealingOptimizer",
-        Box::new(
-            AdaptiveSimulatedAnnealingOptimizer::new(
+        (
+            "TabuSearchOptimizer",
+            Box::new(TabuSearchOptimizer::<DequeTabuList>::new(
                 patience,
-                16,
+                128,
                 return_iter,
-                1.0,
-                0.99,
-                n_iter / 10,
-            )
-            .tune_temperature(&tsp_model, None, 200, 0.5)
-            .tune_cooling_rate(n_iter),
+                20,
+            )),
         ),
-    ));
-    optimizers.push((
-        "TabuSearchOptimizer",
-        Box::new(TabuSearchOptimizer::<DequeTabuList>::new(
-            patience,
-            128,
-            return_iter,
-            20,
-        )),
-    ));
-    optimizers.push((
-        "EpsilonGreedyOptimizer",
-        Box::new(EpsilonGreedyOptimizer::new(patience, 128, return_iter, 0.3)),
-    ));
-    optimizers.push((
-        "RelativeAnnealingOptimizer",
-        Box::new(RelativeAnnealingOptimizer::new(
-            patience,
-            128,
-            return_iter,
-            1e1,
-        )),
-    ));
+        (
+            "EpsilonGreedyOptimizer",
+            Box::new(EpsilonGreedyOptimizer::new(patience, 128, return_iter, 0.3)),
+        ),
+        (
+            "RelativeAnnealingOptimizer",
+            Box::new(RelativeAnnealingOptimizer::new(
+                patience,
+                128,
+                return_iter,
+                1e1,
+            )),
+        ),
+    ];
+
     for (name, optimizer) in optimizers {
         println!("run {}", name);
         pb.reset();
@@ -333,7 +337,7 @@ fn main() {
                 &mut callback,
             )
             .unwrap();
-        pb.finish_and_clear();
+        // pb.finish_and_clear();
         println!(
             "final score = {}, num of cities {}",
             final_score,

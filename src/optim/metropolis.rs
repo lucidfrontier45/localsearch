@@ -34,13 +34,7 @@ impl MetropolisOptimizer {
         }
     }
 
-    pub fn chnage_temperature(self, temperature: f64) -> Self {
-        Self {
-            temperature,
-            ..self
-        }
-    }
-
+    /// Perform one optimization step
     pub fn step<M: OptModel<ScoreType = NotNan<f64>>>(
         &self,
         model: &M,
