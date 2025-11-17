@@ -137,7 +137,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 &mut dummy_callback,
             );
 
-            //  Update current solution and score
+            // Update current solution and score
             current_solution = step_result.last_solution;
             current_score = step_result.last_score;
 
