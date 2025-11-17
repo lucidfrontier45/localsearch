@@ -60,7 +60,7 @@ impl PopulationAnnealingOptimizer {
         }
     }
 
-    /// Tune initial temperature based by drawing random trials
+    /// Tune initial temperature by drawing random trials
     pub fn tune_initial_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
         self,
         model: &M,
