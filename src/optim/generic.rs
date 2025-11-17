@@ -109,10 +109,10 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
             let r: f64 = rng.random();
 
             if p > r {
-                current_solution = trial_solution;
-                current_score = trial_score;
                 accepted_transitions.push((current_score, trial_score));
                 accepted_counter += 1;
+                current_solution = trial_solution;
+                current_score = trial_score;
             } else {
                 rejected_transitions.push((current_score, trial_score));
             }
