@@ -107,7 +107,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         let mut current_score = initial_score;
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
-        let mut patience_counter = 0;
+        let mut stagnation_counter = 0;
         let mut iter = 0;
         let mut dummy_callback = &mut |_: OptProgress<M::SolutionType, M::ScoreType>| {};
         let mut accepted_counter = 0;
@@ -137,13 +137,13 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
 
             // update counters
             iter += self.reanneal_interval;
-            patience_counter += self.reanneal_interval;
+            stagnation_counter += self.reanneal_interval;
 
             // update best solution
             if step_result.best_score < best_score {
                 best_solution.replace(step_result.best_solution.clone());
                 best_score = step_result.best_score;
-                patience_counter = 0;
+                stagnation_counter = 0;
             }
 
             // update current solution
@@ -151,7 +151,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             current_score = step_result.last_score;
 
             // check patience
-            if patience_counter >= self.patience {
+            if stagnation_counter >= self.patience {
                 break;
             }
 

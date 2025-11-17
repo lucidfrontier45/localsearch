@@ -93,7 +93,7 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
         let mut accepted_counter = 0;
-        let mut counter = 0;
+        let mut stagnation_counter = 0;
 
         let mut accepted_transitions = Vec::with_capacity(n_iter);
         let mut rejected_transitions = Vec::with_capacity(n_iter);
@@ -132,17 +132,17 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
             if current_score < best_score {
                 best_solution.replace(current_solution.clone());
                 best_score = current_score;
-                counter = 0;
+                stagnation_counter = 0;
             }
 
-            counter += 1;
+            stagnation_counter += 1;
 
-            if counter == self.return_iter {
+            if stagnation_counter == self.return_iter {
                 current_solution = best_solution.borrow().clone();
                 current_score = best_score;
             }
 
-            if counter == self.patience {
+            if stagnation_counter == self.patience {
                 break;
             }
 

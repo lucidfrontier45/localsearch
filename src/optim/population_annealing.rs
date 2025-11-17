@@ -141,7 +141,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
 
         let mut current_temperature = self.initial_temperature;
         let mut iter = 0;
-        let mut patience_counter = 0;
+        let mut stagnation_counter = 0;
 
         // Main optimization loop
         while iter < n_iter {
@@ -179,15 +179,15 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             current_temperature *= self.cooling_rate;
 
             // Update the best solution if needed
-            patience_counter += self.update_frequency;
+            stagnation_counter += self.update_frequency;
             let best_step_result = step_results.iter().min_by_key(|r| r.best_score).unwrap();
             if best_step_result.best_score < best_score {
                 best_score = best_step_result.best_score;
                 best_solution.replace(best_step_result.best_solution.clone());
-                patience_counter = 0;
+                stagnation_counter = 0;
             }
 
-            if patience_counter >= self.patience {
+            if stagnation_counter >= self.patience {
                 break;
             }
 

@@ -109,7 +109,7 @@ where
         let mut current_score = initial_score;
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
-        let mut counter = 0;
+        let mut stagnation_counter = 0;
         let mut accepted_counter = 0;
 
         for it in 0..n_iter {
@@ -139,7 +139,7 @@ where
                 if score < best_score {
                     best_score = score;
                     best_solution.replace(solution.clone());
-                    counter = 0;
+                    stagnation_counter = 0;
                 }
                 tabu_list.append(trans);
                 current_score = score;
@@ -147,14 +147,14 @@ where
                 accepted_counter += 1;
             }
 
-            counter += 1;
+            stagnation_counter += 1;
 
-            if counter == self.return_iter {
+            if stagnation_counter == self.return_iter {
                 current_solution = best_solution.borrow().clone();
                 current_score = best_score;
             }
 
-            if counter == self.patience {
+            if stagnation_counter == self.patience {
                 break;
             }
 

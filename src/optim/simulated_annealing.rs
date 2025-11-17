@@ -164,7 +164,7 @@ impl SimulatedAnnealingOptimizer {
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
         let mut iter = 0;
-        let mut patience_counter = 0;
+        let mut stagnation_counter = 0;
         let now = Instant::now();
         let mut remaining_time_limit = time_limit;
         let mut accepted_counter = 0;
@@ -188,7 +188,7 @@ impl SimulatedAnnealingOptimizer {
                 remaining_time_limit,
                 &mut dummy_callback,
             );
-            patience_counter += self.update_frequency;
+            stagnation_counter += self.update_frequency;
 
             // update current solution
             current_solution = step_result.last_solution;
@@ -198,7 +198,7 @@ impl SimulatedAnnealingOptimizer {
             if step_result.best_score < best_score {
                 best_solution.replace(step_result.best_solution);
                 best_score = step_result.best_score;
-                patience_counter = 0;
+                stagnation_counter = 0;
             }
 
             let n_accepted = step_result.accepted_transitions.len();
@@ -207,11 +207,11 @@ impl SimulatedAnnealingOptimizer {
             rejected_transitions.extend(step_result.rejected_transitions);
 
             // check patience
-            if patience_counter >= self.return_iter {
+            if stagnation_counter >= self.return_iter {
                 current_solution = (*best_solution.borrow()).clone();
                 current_score = best_score;
             }
-            if patience_counter >= self.patience {
+            if stagnation_counter >= self.patience {
                 break;
             }
 
