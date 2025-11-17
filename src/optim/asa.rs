@@ -135,33 +135,33 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 &mut dummy_callback,
             );
 
-            // 1. Update current solution and score
+            //  Update current solution and score
             current_solution = step_result.last_solution;
             current_score = step_result.last_score;
 
-            // 2. Update best solution and score
+            // Update best solution and score
             if step_result.best_score < best_score {
                 best_solution.replace(step_result.best_solution.clone());
                 best_score = step_result.best_score;
                 stagnation_counter = 0;
             }
 
-            // 3. Update accepted counter
+            // Update accepted counter
             let n_accepted = step_result.accepted_transitions.len();
             accepted_counter += n_accepted;
 
-            // 4. Update stagnation counter
+            // Update stagnation counter
             stagnation_counter += self.reanneal_interval;
 
-            // 7. Check patience
+            // Check patience
             if stagnation_counter >= self.patience {
                 break;
             }
 
-            // 8. Update iteration counter
+            // Update iteration counter
             iter += self.reanneal_interval;
 
-            // 9. Invoke callback
+            // Invoke callback
             let progress =
                 OptProgress::new(iter, accepted_counter, best_solution.clone(), best_score);
             callback(progress);
