@@ -63,17 +63,17 @@ pub fn tune_initial_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
 #[derive(Clone, Copy)]
 pub struct SimulatedAnnealingOptimizer {
     /// The optimizer will give up if there is no improvement of the score after this number of iterations
-    pub patience: usize,
+    patience: usize,
     /// Number of trial solutions to generate and evaluate at each iteration
-    pub n_trials: usize,
+    n_trials: usize,
     /// Returns to the best solution if there is no improvement after this number of iterations
-    pub return_iter: usize,
+    return_iter: usize,
     /// Initial temperature
-    pub initial_temperature: f64,
+    initial_temperature: f64,
     /// Cooling rate
-    pub cooling_rate: f64,
+    cooling_rate: f64,
     /// Number of steps after which temperature is updated
-    pub update_frequency: usize,
+    update_frequency: usize,
 }
 
 impl SimulatedAnnealingOptimizer {
@@ -172,12 +172,12 @@ impl SimulatedAnnealingOptimizer {
         let mut rejected_transitions = Vec::with_capacity(n_iter);
 
         while iter < n_iter {
-            let metropolis = MetropolisOptimizer {
-                patience: usize::MAX,
-                n_trials: self.n_trials,
-                return_iter: usize::MAX,
-                temperature: current_temperature,
-            };
+            let metropolis = MetropolisOptimizer::new(
+                usize::MAX,
+                self.n_trials,
+                usize::MAX,
+                current_temperature,
+            );
             // make dummy callback
             let mut dummy_callback = |_: OptProgress<M::SolutionType, M::ScoreType>| {};
             let step_result = metropolis.step(

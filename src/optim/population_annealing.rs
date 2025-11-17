@@ -150,12 +150,12 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 break;
             }
 
-            let metropolis = metropolis::MetropolisOptimizer {
-                patience: usize::MAX,
-                n_trials: self.n_trials,
-                return_iter: usize::MAX,
-                temperature: current_temperature,
-            };
+            let metropolis = metropolis::MetropolisOptimizer::new(
+                usize::MAX,
+                self.n_trials,
+                usize::MAX,
+                current_temperature,
+            );
 
             // Process each member of the population
             let step_results = population

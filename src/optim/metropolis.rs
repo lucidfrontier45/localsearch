@@ -8,13 +8,13 @@ use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer, generic::StepResu
 #[derive(Clone, Copy)]
 pub struct MetropolisOptimizer {
     /// The optimizer will give up if there is no improvement of the score after this number of iterations
-    pub patience: usize,
+    patience: usize,
     /// Number of trial solutions to generate and evaluate at each iteration
-    pub n_trials: usize,
+    n_trials: usize,
     /// Returns to the best solution if there is no improvement after this number of iterations
-    pub return_iter: usize,
+    return_iter: usize,
     /// Constant temperature
-    pub temperature: f64,
+    temperature: f64,
 }
 
 impl MetropolisOptimizer {
