@@ -1,16 +1,14 @@
 use std::{cell::RefCell, rc::Rc};
 
 use ordered_float::NotNan;
-use rand::Rng;
-use rayon::prelude::*;
 
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
 };
 
-use super::simulated_annealing::tune_initial_temperature;
 use super::{LocalSearchOptimizer, simulated_annealing::tune_cooling_rate};
+use super::{SimulatedAnnealingOptimizer, simulated_annealing::tune_initial_temperature};
 
 const MIN_TEMPERATURE: f64 = 0.01;
 
@@ -81,8 +79,9 @@ impl AdaptiveSimulatedAnnealingOptimizer {
     }
 
     /// Tune cooling rate based on self.initial_temperature, final temperature of 1e-2
-    pub fn tune_cooling_rate(self, n_iter: usize) -> Self {
-        let cooling_rate = tune_cooling_rate(self.initial_temperature, 1e-2, n_iter);
+    pub fn tune_cooling_rate(self) -> Self {
+        let cooling_rate =
+            tune_cooling_rate(self.initial_temperature, 1e-2, self.reanneal_interval);
 
         Self {
             cooling_rate,
@@ -104,89 +103,58 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
         let start_time = Instant::now();
-        let mut rng = rand::rng();
         let mut current_solution = initial_solution;
         let mut current_score = initial_score;
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
-        let mut accepted_counter = 0;
-        let mut stagnation_counter = 0;
-        let mut step_counter = 0;
-        let mut temperature = self.initial_temperature;
-        let cooling_factor =
-            (MIN_TEMPERATURE / self.initial_temperature).powf(1.0 / self.reanneal_interval as f64);
+        let mut patience_counter = 0;
+        let mut iter = 0;
+        let mut dummy_callback = &mut |_: OptProgress<M::SolutionType, M::ScoreType>| {};
 
-        for it in 0..n_iter {
-            if Instant::now().duration_since(start_time) > time_limit {
+        while iter < n_iter {
+            let duration = Instant::now().duration_since(start_time);
+            if duration > time_limit {
                 break;
             }
 
-            let (trial_solution, trial_score) = (0..self.n_trials)
-                .into_par_iter()
-                .map(|_| {
-                    let mut rng = rand::rng();
-                    let (solution, _, score) = model.generate_trial_solution(
-                        current_solution.clone(),
-                        current_score,
-                        &mut rng,
-                    );
-                    (solution, score)
-                })
-                .min_by_key(|(_, score)| *score)
-                .unwrap();
+            let sa = SimulatedAnnealingOptimizer::new(
+                usize::MAX,
+                self.n_trials,
+                usize::MAX,
+                self.initial_temperature,
+                self.cooling_rate,
+                1,
+            );
+            let (solution, score) = sa.optimize(
+                model,
+                current_solution,
+                current_score,
+                self.reanneal_interval,
+                time_limit,
+                &mut dummy_callback,
+            );
 
-            let ds = trial_score - current_score;
-            let mut accepted = false;
+            // update counters
+            iter += self.reanneal_interval;
+            patience_counter += self.reanneal_interval;
 
-            if ds <= NotNan::new(0.0).unwrap() {
-                accepted = true;
-            } else {
-                let p = (-ds / temperature.max(MIN_TEMPERATURE)).exp();
-                if rng.random::<f64>() < p {
-                    accepted = true;
-                }
+            // update best solution
+            if score < best_score {
+                best_solution.replace(solution.clone());
+                best_score = score;
+                patience_counter = 0;
             }
 
-            if accepted {
-                current_solution = trial_solution;
-                current_score = trial_score;
-                accepted_counter += 1;
-            }
+            // update current solution
+            current_solution = solution;
+            current_score = score;
 
-            if current_score < best_score {
-                best_solution.replace(current_solution.clone());
-                best_score = current_score;
-                stagnation_counter = 0;
-            } else {
-                stagnation_counter += 1;
-            }
-
-            temperature = (self.initial_temperature * cooling_factor.powf(step_counter as f64))
-                .max(MIN_TEMPERATURE);
-
-            step_counter += 1;
-
-            if self.reanneal_interval > 0
-                && stagnation_counter > 0
-                && stagnation_counter % self.reanneal_interval == 0
-            {
-                current_solution = best_solution.borrow().clone();
-                current_score = best_score;
-                temperature = self.initial_temperature;
-                step_counter = 0;
-            }
-
-            if stagnation_counter == self.return_iter {
-                current_solution = best_solution.borrow().clone();
-                current_score = best_score;
-            }
-
-            if stagnation_counter == self.patience {
+            // check patience
+            if patience_counter >= self.patience {
                 break;
             }
 
-            let progress =
-                OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
+            let progress = OptProgress::new(iter, 0, best_solution.clone(), best_score);
             callback(progress);
         }
 

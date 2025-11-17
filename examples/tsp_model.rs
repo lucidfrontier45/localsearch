@@ -279,14 +279,6 @@ fn main() {
             ),
         ),
         (
-            "PopulationAnnealingOptimizer",
-            Box::new(
-                PopulationAnnealingOptimizer::new(patience, 10, 1.0, 0.9, 16, n_iter / 100)
-                    .tune_initial_temperature(&tsp_model, None, 200, 0.5)
-                    .tune_cooling_rate(n_iter),
-            ),
-        ),
-        (
             "AdaptiveSimulatedAnnealingOptimizer",
             Box::new(
                 AdaptiveSimulatedAnnealingOptimizer::new(
@@ -295,10 +287,18 @@ fn main() {
                     return_iter,
                     1.0,
                     0.99,
-                    n_iter / 10,
+                    n_iter / 25,
                 )
                 .tune_temperature(&tsp_model, None, 200, 0.5)
-                .tune_cooling_rate(n_iter),
+                .tune_cooling_rate(),
+            ),
+        ),
+        (
+            "PopulationAnnealingOptimizer",
+            Box::new(
+                PopulationAnnealingOptimizer::new(patience, 10, 1.0, 0.9, 16, n_iter / 100)
+                    .tune_initial_temperature(&tsp_model, None, 200, 0.5)
+                    .tune_cooling_rate(n_iter),
             ),
         ),
         (
