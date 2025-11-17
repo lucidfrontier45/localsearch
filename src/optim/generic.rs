@@ -20,7 +20,7 @@ pub struct StepResult<S, ST> {
 }
 
 /// Optimizer that implements local search algorithm
-/// Given a functin f that converts a float number to probability,
+/// Given a function f that converts a float number to probability,
 /// the trial solution is accepted by the following procedure
 ///
 /// 1. p <- f(current_score, trial_score)
