@@ -164,7 +164,9 @@ impl SimulatedAnnealingOptimizer {
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
         let mut iter = 0;
-        let mut stagnation_counter = 0;
+        // Separate counters: one to trigger return-to-best, one for early stopping (patience)
+        let mut return_stagnation_counter = 0;
+        let mut patience_stagnation_counter = 0;
         let now = Instant::now();
         let mut remaining_time_limit = time_limit;
         let mut accepted_counter = 0;
@@ -197,7 +199,8 @@ impl SimulatedAnnealingOptimizer {
             if step_result.best_score < best_score {
                 best_solution.replace(step_result.best_solution);
                 best_score = step_result.best_score;
-                stagnation_counter = 0;
+                return_stagnation_counter = 0;
+                patience_stagnation_counter = 0;
             }
 
             // Update accepted counter and transitions
@@ -206,20 +209,22 @@ impl SimulatedAnnealingOptimizer {
             accepted_transitions.extend(step_result.accepted_transitions);
             rejected_transitions.extend(step_result.rejected_transitions);
 
-            // Update stagnation counter
-            stagnation_counter += self.update_frequency;
+            // Update stagnation counters
+            return_stagnation_counter += self.update_frequency;
+            patience_stagnation_counter += self.update_frequency;
 
             // Check and handle return to best
-            if stagnation_counter >= self.return_iter {
+            if return_stagnation_counter >= self.return_iter {
                 current_solution = (*best_solution.borrow()).clone();
                 current_score = best_score;
+                return_stagnation_counter = 0;
             }
 
             // Update algorithm-specific state
             current_temperature *= self.cooling_rate;
 
             // Check patience
-            if stagnation_counter >= self.patience {
+            if patience_stagnation_counter >= self.patience {
                 break;
             }
 

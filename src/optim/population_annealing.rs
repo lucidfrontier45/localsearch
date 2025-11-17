@@ -141,7 +141,9 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
 
         let mut current_temperature = self.initial_temperature;
         let mut iter = 0;
-        let mut stagnation_counter = 0;
+        // Separate counters for return-to-best and patience
+        let mut return_stagnation_counter = 0;
+        let mut patience_stagnation_counter = 0;
 
         // Main optimization loop
         while iter < n_iter {
@@ -181,7 +183,8 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             if best_step_result.best_score < best_score {
                 best_score = best_step_result.best_score;
                 best_solution.replace(best_step_result.best_solution.clone());
-                stagnation_counter = 0;
+                return_stagnation_counter = 0;
+                patience_stagnation_counter = 0;
             }
 
             // Update accepted counter
@@ -191,8 +194,18 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 .sum();
             accepted_counter += n_accepted / self.population_size;
 
-            // Update stagnation counter
-            stagnation_counter += self.update_frequency;
+            // Update stagnation counters
+            return_stagnation_counter += self.update_frequency;
+            patience_stagnation_counter += self.update_frequency;
+
+            // Check and handle return to best
+            if return_stagnation_counter >= self.update_frequency {
+                // revert population members' current solutions to the best found so far
+                for member in population.iter_mut() {
+                    *member = ((*best_solution.borrow()).clone(), best_score);
+                }
+                return_stagnation_counter = 0;
+            }
 
             // Update algorithm-specific state
             current_temperature *= self.cooling_rate;
@@ -224,7 +237,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             });
 
             // Check patience
-            if stagnation_counter >= self.patience {
+            if patience_stagnation_counter >= self.patience {
                 break;
             }
 
