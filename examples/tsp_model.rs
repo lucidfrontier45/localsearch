@@ -337,7 +337,7 @@ fn main() {
                 &mut callback,
             )
             .unwrap();
-        // pb.finish_and_clear();
+        pb.finish_and_clear();
         println!(
             "final score = {}, num of cities {}",
             final_score,
