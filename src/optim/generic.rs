@@ -10,6 +10,15 @@ use crate::{
 
 use super::{LocalSearchOptimizer, TransitionProbabilityFn};
 
+pub struct StepResult<S, ST> {
+    pub best_solution: S,
+    pub best_score: ST,
+    pub last_solution: S,
+    pub last_score: ST,
+    pub accepted_transitions: Vec<(ST, ST)>,
+    pub rejected_transitions: Vec<(ST, ST)>,
+}
+
 /// Optimizer that implements local search algorithm
 /// Given a functin f that converts a float number to probability,
 /// the trial solution is accepted by the following procedure
@@ -64,10 +73,7 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-    ) -> (
-        (M::SolutionType, M::ScoreType),
-        (M::SolutionType, M::ScoreType),
-    ) {
+    ) -> StepResult<M::SolutionType, M::ScoreType> {
         let start_time = Instant::now();
         let mut rng = rand::rng();
         let mut current_solution = initial_solution;
@@ -76,6 +82,9 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
         let mut best_score = current_score;
         let mut accepted_counter = 0;
         let mut counter = 0;
+
+        let mut accepted_transitions = Vec::with_capacity(n_iter);
+        let mut rejected_transitions = Vec::with_capacity(n_iter);
 
         for it in 0..n_iter {
             let duration = Instant::now().duration_since(start_time);
@@ -102,7 +111,10 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
             if p > r {
                 current_solution = trial_solution;
                 current_score = trial_score;
+                accepted_transitions.push((current_score, trial_score));
                 accepted_counter += 1;
+            } else {
+                rejected_transitions.push((current_score, trial_score));
             }
 
             if current_score < best_score {
@@ -128,10 +140,14 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
         }
 
         let best_solution = (*best_solution.borrow()).clone();
-        (
-            (best_solution, best_score),
-            (current_solution, current_score),
-        )
+        StepResult {
+            best_solution,
+            best_score,
+            last_solution: current_solution,
+            last_score: current_score,
+            accepted_transitions,
+            rejected_transitions,
+        }
     }
 }
 
@@ -158,7 +174,7 @@ where
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        let (best, _last) = self.step(
+        let step_result = self.step(
             model,
             initial_solution,
             initial_score,
@@ -166,6 +182,6 @@ where
             time_limit,
             callback,
         );
-        best
+        (step_result.best_solution, step_result.best_score)
     }
 }

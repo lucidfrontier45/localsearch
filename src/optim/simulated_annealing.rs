@@ -7,7 +7,7 @@ use crate::{
     callback::{OptCallbackFn, OptProgress},
 };
 
-use super::{LocalSearchOptimizer, MetropolisOptimizer};
+use super::{LocalSearchOptimizer, MetropolisOptimizer, generic::StepResult};
 
 /// Tune cooling rate based on initial and final temperatures and number of iterations
 /// initial temperature will be cooled to final temperature after n_iter iterations
@@ -140,6 +140,110 @@ impl SimulatedAnnealingOptimizer {
             ..self
         }
     }
+
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
+    /// - `initial_score` : the initial score of the initial solution
+    /// - `n_iter`: maximum iterations
+    /// - `time_limit`: maximum iteration time
+    /// - `callback` : callback function that will be invoked at the end of each iteration
+    pub fn step<M: OptModel<ScoreType = NotNan<f64>>>(
+        &self,
+        model: &M,
+        initial_solution: M::SolutionType,
+        initial_score: M::ScoreType,
+        n_iter: usize,
+        time_limit: Duration,
+        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
+    ) -> StepResult<M::SolutionType, M::ScoreType> {
+        let mut current_temperature = self.initial_temperature;
+        let mut current_solution = initial_solution;
+        let mut current_score = initial_score;
+        let best_solution = Rc::new(RefCell::new(current_solution.clone()));
+        let mut best_score = current_score;
+        let mut iter = 0;
+        let mut patience_counter = 0;
+        let now = Instant::now();
+        let mut remaining_time_limit = time_limit;
+        let mut accepted_counter = 0;
+        let mut accepted_transitions = Vec::with_capacity(n_iter);
+        let mut rejected_transitions = Vec::with_capacity(n_iter);
+
+        while iter < n_iter {
+            let metropolis = MetropolisOptimizer {
+                patience: usize::MAX,
+                n_trials: self.n_trials,
+                return_iter: usize::MAX,
+                temperature: current_temperature,
+            };
+            // make dummy callback
+            let mut dummy_callback = |_: OptProgress<M::SolutionType, M::ScoreType>| {};
+            let step_result = metropolis.step(
+                model,
+                current_solution,
+                current_score,
+                self.update_frequency,
+                remaining_time_limit,
+                &mut dummy_callback,
+            );
+            patience_counter += self.update_frequency;
+
+            // update current solution
+            current_solution = step_result.last_solution;
+            current_score = step_result.last_score;
+
+            // update best solution and best score
+            if step_result.best_score < best_score {
+                best_solution.replace(step_result.best_solution);
+                best_score = step_result.best_score;
+                patience_counter = 0;
+            }
+
+            let n_accepted = step_result.accepted_transitions.len();
+            accepted_counter += n_accepted;
+            accepted_transitions.extend(step_result.accepted_transitions);
+            rejected_transitions.extend(step_result.rejected_transitions);
+
+            // check patience
+            if patience_counter >= self.patience {
+                break;
+            }
+
+            // update temperature
+            current_temperature *= self.cooling_rate;
+
+            // update time limit
+            let elapsed = now.elapsed();
+            if elapsed >= time_limit {
+                break;
+            }
+            remaining_time_limit = time_limit - elapsed;
+
+            // update iter
+            iter += self.update_frequency;
+
+            // run callback
+            let progress = OptProgress {
+                iter,
+                accepted_count: accepted_counter,
+                solution: best_solution.clone(),
+                score: best_score,
+            };
+            callback(progress);
+        }
+
+        let best_solution = (*best_solution.borrow()).clone();
+        StepResult {
+            best_solution,
+            best_score,
+            last_solution: current_solution,
+            last_score: current_score,
+            accepted_transitions,
+            rejected_transitions,
+        }
+    }
 }
 
 impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for SimulatedAnnealingOptimizer {
@@ -169,6 +273,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         let mut patience_counter = 0;
         let now = Instant::now();
         let mut remaining_time_limit = time_limit;
+        let mut accepted_counter = 0;
 
         while iter < n_iter {
             let metropolis = MetropolisOptimizer {
@@ -179,7 +284,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
             };
             // make dummy callback
             let mut dummy_callback = |_: OptProgress<M::SolutionType, M::ScoreType>| {};
-            let (best, last) = metropolis.step(
+            let step_result = metropolis.step(
                 model,
                 current_solution,
                 current_score,
@@ -190,13 +295,13 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
             patience_counter += self.update_frequency;
 
             // update current solution
-            current_solution = last.0;
-            current_score = last.1;
+            current_solution = step_result.last_solution;
+            current_score = step_result.last_score;
 
             // update best solution and best score
-            if best.1 < best_score {
-                best_solution.replace(best.0.clone());
-                best_score = best.1;
+            if step_result.best_score < best_score {
+                best_solution.replace(step_result.best_solution);
+                best_score = step_result.best_score;
                 patience_counter = 0;
             }
 
@@ -218,10 +323,13 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
             // update iter
             iter += self.update_frequency;
 
+            let n_accepted = step_result.accepted_transitions.len();
+            accepted_counter += n_accepted;
+
             // run callback
             let progress = OptProgress {
                 iter,
-                accepted_count: 0,
+                accepted_count: accepted_counter,
                 solution: best_solution.clone(),
                 score: best_score,
             };

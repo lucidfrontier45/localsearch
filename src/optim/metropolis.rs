@@ -2,7 +2,7 @@ use ordered_float::NotNan;
 
 use crate::{Duration, OptModel, callback::OptCallbackFn};
 
-use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer};
+use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer, generic::StepResult};
 
 /// Optimizer that implements the Metropolis algorithm with constant temperature
 #[derive(Clone, Copy)]
@@ -43,10 +43,7 @@ impl MetropolisOptimizer {
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-    ) -> (
-        (M::SolutionType, M::ScoreType),
-        (M::SolutionType, M::ScoreType),
-    ) {
+    ) -> StepResult<M::SolutionType, M::ScoreType> {
         let transition = |current: NotNan<f64>, trial: NotNan<f64>| {
             let ds = trial - current;
             if ds <= NotNan::new(0.0).unwrap() {
@@ -90,7 +87,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Metropoli
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<<M as OptModel>::SolutionType, <M as OptModel>::ScoreType>,
     ) -> (<M as OptModel>::SolutionType, <M as OptModel>::ScoreType) {
-        let (best, _last) = self.step(
+        let step_result = self.step(
             model,
             initial_solution,
             initial_score,
@@ -98,6 +95,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Metropoli
             time_limit,
             callback,
         );
-        best
+        (step_result.best_solution, step_result.best_score)
     }
 }

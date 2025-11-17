@@ -110,6 +110,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         let mut patience_counter = 0;
         let mut iter = 0;
         let mut dummy_callback = &mut |_: OptProgress<M::SolutionType, M::ScoreType>| {};
+        let mut accepted_counter = 0;
 
         while iter < n_iter {
             let duration = Instant::now().duration_since(start_time);
@@ -125,7 +126,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 self.cooling_rate,
                 1,
             );
-            let (solution, score) = sa.optimize(
+            let step_result = sa.step(
                 model,
                 current_solution,
                 current_score,
@@ -139,22 +140,26 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             patience_counter += self.reanneal_interval;
 
             // update best solution
-            if score < best_score {
-                best_solution.replace(solution.clone());
-                best_score = score;
+            if step_result.best_score < best_score {
+                best_solution.replace(step_result.best_solution.clone());
+                best_score = step_result.best_score;
                 patience_counter = 0;
             }
 
             // update current solution
-            current_solution = solution;
-            current_score = score;
+            current_solution = step_result.last_solution;
+            current_score = step_result.last_score;
 
             // check patience
             if patience_counter >= self.patience {
                 break;
             }
 
-            let progress = OptProgress::new(iter, 0, best_solution.clone(), best_score);
+            let n_accepted = step_result.accepted_transitions.len();
+            accepted_counter += n_accepted;
+
+            let progress =
+                OptProgress::new(iter, accepted_counter, best_solution.clone(), best_score);
             callback(progress);
         }
 

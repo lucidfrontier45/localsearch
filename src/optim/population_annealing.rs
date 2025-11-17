@@ -114,6 +114,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
     ) -> (M::SolutionType, M::ScoreType) {
         let start_time = Instant::now();
         let mut rng = rand::rng();
+        let mut accepted_counter = 0;
 
         // Initialize population with random solutions or copies of the initial solution
         let mut population: Vec<(M::SolutionType, M::ScoreType)> =
@@ -140,7 +141,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
 
         let mut current_temperature = self.initial_temperature;
         let mut iter = 0;
-        let accepted_counter = 0;
         let mut patience_counter = 0;
 
         // Main optimization loop
@@ -180,20 +180,28 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
 
             // Update the best solution if needed
             patience_counter += self.update_frequency;
-            for ((solution, score), _) in &step_results {
-                if *score < best_score {
-                    best_score = *score;
-                    best_solution.replace(solution.clone());
-                    patience_counter = 0;
-                }
+            let best_step_result = step_results.iter().min_by_key(|r| r.best_score).unwrap();
+            if best_step_result.best_score < best_score {
+                best_score = best_step_result.best_score;
+                best_solution.replace(best_step_result.best_solution.clone());
+                patience_counter = 0;
             }
 
             if patience_counter >= self.patience {
                 break;
             }
 
-            let new_population: Vec<(M::SolutionType, M::ScoreType)> =
-                step_results.into_iter().map(|(_best, last)| last).collect();
+            let n_accepted: usize = step_results
+                .iter()
+                .map(|r| r.accepted_transitions.len())
+                .sum();
+
+            accepted_counter += n_accepted / self.population_size;
+
+            let new_population: Vec<(M::SolutionType, M::ScoreType)> = step_results
+                .into_iter()
+                .map(|r| (r.last_solution, r.last_score))
+                .collect();
 
             // Population update: resample based on Boltzmann distribution weights
             // Calculate weights for each solution based on the current temperature
