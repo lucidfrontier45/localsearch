@@ -188,47 +188,50 @@ impl SimulatedAnnealingOptimizer {
                 remaining_time_limit,
                 &mut dummy_callback,
             );
-            stagnation_counter += self.update_frequency;
 
-            // update current solution
+            // Update current solution and score
             current_solution = step_result.last_solution;
             current_score = step_result.last_score;
 
-            // update best solution and best score
+            // Update best solution and score
             if step_result.best_score < best_score {
                 best_solution.replace(step_result.best_solution);
                 best_score = step_result.best_score;
                 stagnation_counter = 0;
             }
 
+            // Update accepted counter and transitions
             let n_accepted = step_result.accepted_transitions.len();
             accepted_counter += n_accepted;
             accepted_transitions.extend(step_result.accepted_transitions);
             rejected_transitions.extend(step_result.rejected_transitions);
 
-            // check patience
+            // Update stagnation counter
+            stagnation_counter += self.update_frequency;
+
+            // Check and handle return to best
             if stagnation_counter >= self.return_iter {
                 current_solution = (*best_solution.borrow()).clone();
                 current_score = best_score;
             }
+
+            // Update algorithm-specific state
+            current_temperature *= self.cooling_rate;
+
+            // Check patience
             if stagnation_counter >= self.patience {
                 break;
             }
 
-            // update temperature
-            current_temperature *= self.cooling_rate;
-
-            // update time limit
+            // Update time and iteration counters
             let elapsed = now.elapsed();
             if elapsed >= time_limit {
                 break;
             }
             remaining_time_limit = time_limit - elapsed;
-
-            // update iter
             iter += self.update_frequency;
 
-            // run callback
+            // Invoke callback
             let progress = OptProgress {
                 iter,
                 accepted_count: accepted_counter,

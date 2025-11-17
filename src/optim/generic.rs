@@ -121,31 +121,40 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
             let r: f64 = rng.random();
 
             if p > r {
+                // Update accepted counter and transitions
                 accepted_transitions.push((current_score, trial_score));
                 accepted_counter += 1;
+
+                // Update current solution and score
                 current_solution = trial_solution;
                 current_score = trial_score;
             } else {
                 rejected_transitions.push((current_score, trial_score));
             }
 
+            // Update best solution and score
+            // Reset stagnation counter if improved
             if current_score < best_score {
                 best_solution.replace(current_solution.clone());
                 best_score = current_score;
                 stagnation_counter = 0;
             }
 
+            // Update stagnation counter
             stagnation_counter += 1;
 
+            // Check and handle return to best
             if stagnation_counter == self.return_iter {
                 current_solution = best_solution.borrow().clone();
                 current_score = best_score;
             }
 
+            // Check patience
             if stagnation_counter == self.patience {
                 break;
             }
 
+            // Invoke callback
             let progress =
                 OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
             callback(progress);

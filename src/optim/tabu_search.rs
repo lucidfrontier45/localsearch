@@ -136,28 +136,39 @@ where
             let res = find_accepted_solution::<M, T>(samples, &tabu_list, best_score);
 
             if let Some((solution, trans, score)) = res {
-                if score < best_score {
-                    best_score = score;
-                    best_solution.replace(solution.clone());
-                    stagnation_counter = 0;
-                }
-                tabu_list.append(trans);
+                // Update current solution and score
                 current_score = score;
                 current_solution = solution;
+
+                // Update best solution and score
+                if current_score < best_score {
+                    best_score = current_score;
+                    best_solution.replace(current_solution.clone());
+                    stagnation_counter = 0;
+                }
+
+                // Update accepted counter
                 accepted_counter += 1;
+
+                // Update algorithm-specific state
+                tabu_list.append(trans);
             }
 
+            // Update stagnation counter
             stagnation_counter += 1;
 
+            // Check and handle return to best
             if stagnation_counter == self.return_iter {
                 current_solution = best_solution.borrow().clone();
                 current_score = best_score;
             }
 
+            // Check patience
             if stagnation_counter == self.patience {
                 break;
             }
 
+            // Invoke callback
             let progress =
                 OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
             callback(progress);

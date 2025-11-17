@@ -176,10 +176,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 })
                 .collect::<Vec<_>>();
 
-            current_temperature *= self.cooling_rate;
-
-            // Update the best solution if needed
-            stagnation_counter += self.update_frequency;
+            // Update best solution and score
             let best_step_result = step_results.iter().min_by_key(|r| r.best_score).unwrap();
             if best_step_result.best_score < best_score {
                 best_score = best_step_result.best_score;
@@ -187,17 +184,18 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 stagnation_counter = 0;
             }
 
-            if stagnation_counter >= self.patience {
-                break;
-            }
-
+            // Update accepted counter
             let n_accepted: usize = step_results
                 .iter()
                 .map(|r| r.accepted_transitions.len())
                 .sum();
-
             accepted_counter += n_accepted / self.population_size;
 
+            // Update stagnation counter
+            stagnation_counter += self.update_frequency;
+
+            // Update algorithm-specific state
+            current_temperature *= self.cooling_rate;
             let new_population: Vec<(M::SolutionType, M::ScoreType)> = step_results
                 .into_iter()
                 .map(|r| (r.last_solution, r.last_score))
@@ -225,8 +223,15 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 population[i] = new_population[idx].clone();
             });
 
-            // Invoke callback with progress information
+            // Check patience
+            if stagnation_counter >= self.patience {
+                break;
+            }
+
+            // Update iteration counter
             iter += self.update_frequency;
+
+            // Invoke callback
             let progress =
                 OptProgress::new(iter, accepted_counter, best_solution.clone(), best_score);
             callback(progress);
