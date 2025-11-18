@@ -7,44 +7,50 @@ use crate::{
     callback::{OptCallbackFn, OptProgress},
 };
 
-use super::{LocalSearchOptimizer, simulated_annealing::tune_cooling_rate};
-use super::{SimulatedAnnealingOptimizer, simulated_annealing::tune_initial_temperature};
+use super::{LocalSearchOptimizer, MetropolisOptimizer, simulated_annealing::tune_temperature};
 
 const MIN_TEMPERATURE: f64 = 0.01;
 
-/// Adaptive simulated annealing optimizer that tunes temperature based on acceptance rate and re-anneals when stagnating.
-/// Uses exponential cooling schedule that cools from initial_temperature to 0.01 over reanneal_interval steps.
+/// Adaptive simulated annealing optimizer that adjusts temperature based on acceptance rate.
+/// Temperature updates continuously using T_new = T_current * exp(eta * (target_acc - acc))
+/// to keep the acceptance rate close to target_acc.
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
-pub struct AdaptiveSimulatedAnnealingOptimizer {
+pub struct AdaptiveAnnealingOptimizer {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
     initial_temperature: f64,
-    cooling_rate: f64,
-    reanneal_interval: usize,
+    update_frequency: usize,
+    eta: f64,
+    target_acc: f64,
 }
 
-impl AdaptiveSimulatedAnnealingOptimizer {
+impl AdaptiveAnnealingOptimizer {
     /// Create a new adaptive simulated annealing optimizer.
     ///
     /// - `patience`: stop if no improvement is seen for this many iterations.
     /// - `n_trials`: number of trial solutions to evaluate per iteration.
     /// - `return_iter`: revert to the best solution when there is no improvement for this many iterations.
     /// - `initial_temperature`: starting temperature, clamped to the enforced minimum of 0.01.
-    /// - `adapt_interval`: number of iterations between temperature adaptation steps.
-    /// - `target_acceptance`: desired acceptance rate for uphill moves (between 0 and 1).
-    /// - `adaptation_step`: relative adjustment applied when acceptance rate deviates from the target.
-    /// - `reanneal_interval`: iterations without improvement before re-annealing; temperature cools exponentially to 0.01 over this many steps.
+    /// - `update_frequency`: number of iterations between temperature adaptation steps.
+    /// - `eta`: hyperparameter controlling adaptation sensitivity (must be > 0).
+    /// - `target_acc`: target acceptance rate for uphill moves (between 0 and 1).
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         patience: usize,
         n_trials: usize,
         return_iter: usize,
         initial_temperature: f64,
-        cooling_rate: f64,
-        reanneal_interval: usize,
+        update_frequency: usize,
+        eta: f64,
+        target_acc: f64,
     ) -> Self {
+        assert!(eta > 0.0, "eta must be positive");
+        assert!(
+            (0.0..=1.0).contains(&target_acc),
+            "target_acc must be between 0 and 1"
+        );
         let initial_temperature = initial_temperature.max(MIN_TEMPERATURE);
 
         Self {
@@ -52,8 +58,9 @@ impl AdaptiveSimulatedAnnealingOptimizer {
             n_trials,
             return_iter,
             initial_temperature,
-            cooling_rate,
-            reanneal_interval: reanneal_interval.max(1),
+            update_frequency: update_frequency.max(1),
+            eta,
+            target_acc,
         }
     }
 
@@ -63,36 +70,18 @@ impl AdaptiveSimulatedAnnealingOptimizer {
         model: &M,
         initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
         n_warmup: usize,
-        target_initial_prob: f64,
     ) -> Self {
-        let tuned_temperature = tune_initial_temperature(
-            model,
-            initial_solution_and_score,
-            n_warmup,
-            target_initial_prob,
-        );
+        let tuned_temperature =
+            tune_temperature(model, initial_solution_and_score, n_warmup, self.target_acc);
 
         Self {
             initial_temperature: tuned_temperature,
             ..self
         }
     }
-
-    /// Tune cooling rate based on self.initial_temperature, final temperature of 1e-2
-    pub fn tune_cooling_rate(self) -> Self {
-        let cooling_rate =
-            tune_cooling_rate(self.initial_temperature, 1e-2, self.reanneal_interval);
-
-        Self {
-            cooling_rate,
-            ..self
-        }
-    }
 }
 
-impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
-    for AdaptiveSimulatedAnnealingOptimizer
-{
+impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveAnnealingOptimizer {
     fn optimize(
         &self,
         model: &M,
@@ -105,6 +94,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         let start_time = Instant::now();
         let mut current_solution = initial_solution;
         let mut current_score = initial_score;
+        let mut current_temperature = self.initial_temperature;
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
         // Separate counters for return-to-best and patience
@@ -120,25 +110,23 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 break;
             }
 
-            let sa = SimulatedAnnealingOptimizer::new(
+            let metropolis = MetropolisOptimizer::new(
                 usize::MAX,
                 self.n_trials,
                 usize::MAX,
-                self.initial_temperature,
-                self.cooling_rate,
-                1,
+                current_temperature,
             );
-            let step_result = sa.step(
+            let step_result = metropolis.step(
                 model,
                 current_solution,
                 current_score,
-                self.reanneal_interval,
+                self.update_frequency,
                 time_limit,
                 &mut dummy_callback,
             );
 
             // 1. Update time and iteration counters
-            iter += self.reanneal_interval;
+            iter += self.update_frequency;
 
             // 2. Update best solution and score
             if step_result.best_score < best_score {
@@ -147,8 +135,8 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 return_stagnation_counter = 0;
                 patience_stagnation_counter = 0;
             } else {
-                return_stagnation_counter += self.reanneal_interval;
-                patience_stagnation_counter += self.reanneal_interval;
+                return_stagnation_counter += self.update_frequency;
+                patience_stagnation_counter += self.update_frequency;
             }
 
             // 3. Update accepted counter
@@ -171,7 +159,10 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 break;
             }
 
-            // 7. Update algorithm-specific state (none)
+            // 7. Update temperature adaptively
+            let acc = n_accepted as f64 / self.update_frequency as f64;
+            current_temperature *= (self.eta * (self.target_acc - acc)).exp();
+            current_temperature = current_temperature.max(MIN_TEMPERATURE);
 
             // 8. Invoke callback
             let progress =
