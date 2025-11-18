@@ -121,12 +121,8 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
                 .min_by_key(|(_, score)| *score)
                 .unwrap();
 
-            let p = (self.score_func)(current_score, trial_score);
-            let r: f64 = rng.random();
-            let accepted = p > r;
-
             // 2. Update best solution and score
-            if accepted && trial_score < best_score {
+            if trial_score < best_score {
                 best_solution.replace(trial_solution.clone());
                 best_score = trial_score;
                 return_stagnation_counter = 0;
@@ -137,6 +133,14 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
             }
 
             // 3. Update accepted counter and transitions
+            let accepted = if trial_score < current_score {
+                true
+            } else {
+                let p = (self.score_func)(current_score, trial_score);
+                let r: f64 = rng.random();
+                p > r
+            };
+
             if accepted {
                 accepted_transitions.push((current_score, trial_score));
                 accepted_counter += 1;
