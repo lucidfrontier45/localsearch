@@ -196,9 +196,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
             // 3. Update accepted counter and transitions
             let n_accepted = step_result.accepted_transitions.len();
             accepted_counter += n_accepted;
-            // accepted_transitions.extend(step_result.accepted_transitions);
-            // rejected_transitions.extend(step_result.rejected_transitions);
-
             // 4. Update current solution and score
             current_solution = step_result.last_solution.clone();
             current_score = step_result.last_score;
