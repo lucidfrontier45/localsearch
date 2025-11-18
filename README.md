@@ -11,6 +11,9 @@ All of the algorithms are parallelized with Rayon.
 4. Epsilon Greedy Search, a variant of Hill Climbing which accepts the trial solution with a constant probability even if the score of the trial solution is worse than the previous one.
 5. Relative Annealing, a variant of Simulated Annealing which uses relative score diff to calculate transition probability.
 6. Logistic Annealing, a variant of Relative Annealing which uses logistic function instead of simple exponential.
+7. Adaptive Annealing, a variant of Simulated Annealing with adaptive target acceptance rate scheduling.
+8. Metropolis, a Markov chain Monte Carlo method that accepts better solutions always and worse ones with probability exp(-ΔE / T), using a constant temperature for exploration.
+9. Population Annealing, which runs multiple simulated annealing processes in parallel and periodically updates the population by discarding bad candidates and copying good ones.
 
 # How to use
 
