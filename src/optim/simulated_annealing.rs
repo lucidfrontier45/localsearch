@@ -19,8 +19,11 @@ pub fn tune_cooling_rate(initial_temperature: f64, final_temperature: f64, n_ite
     (final_temperature / initial_temperature).powf(1.0 / n_iter as f64)
 }
 
+// Calculate target based on target_prob
+// p = exp(-ds / T) => T = -ds / ln(p)
+// Average across all energy differences
 fn calculate_temperature_from_acceptance_prob(
-    energy_diffs: Vec<f64>,
+    energy_diffs: &[f64],
     target_acceptance_prob: f64,
 ) -> f64 {
     let average_energy_diff = energy_diffs.iter().sum::<f64>() / energy_diffs.len() as f64;
@@ -28,14 +31,11 @@ fn calculate_temperature_from_acceptance_prob(
     (-average_energy_diff / ln_prob).max(1.0)
 }
 
-pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
+fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
     model: &M,
     initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
     n_warmup: usize,
-    target_prob: f64,
-) -> f64 {
-    // 1. First run n_warmup completely random iterations from initial_solution
-    // 2. calculate temperature so that the average acceptance probability of sampled trial solutions are target_initial_prob
+) -> Vec<f64> {
     let mut rng = rand::rng();
     let (mut current_solution, mut current_score) =
         initial_solution_and_score.unwrap_or(model.generate_random_solution(&mut rng).unwrap());
@@ -54,13 +54,20 @@ pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
         current_score = trial_score;
     }
 
-    // Calculate initial_temperature based on target_prob
-    // p = exp(-ds / T) => T = -ds / ln(p)
-    // Average across all energy differences
+    energy_diffs
+}
+
+pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
+    model: &M,
+    initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
+    n_warmup: usize,
+    target_prob: f64,
+) -> f64 {
+    let energy_diffs = gather_energy_diffs(model, initial_solution_and_score, n_warmup);
     if energy_diffs.is_empty() {
         1.0
     } else {
-        calculate_temperature_from_acceptance_prob(energy_diffs, target_prob)
+        calculate_temperature_from_acceptance_prob(&energy_diffs, target_prob)
     }
 }
 
