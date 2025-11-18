@@ -88,7 +88,7 @@ impl AdaptiveAnnealingOptimizer {
     ///
     /// * `patience` - The number of iterations without improvement before terminating the optimization.
     /// * `n_trials` - The number of candidate solutions to evaluate per iteration.
-    /// * `return_iter` - The iteration interval at which to potentially revert to a previous state.
+    /// * `return_iter` - The number of iterations without improvement before reverting to the best solution.
     /// * `initial_target_acc` - The initial target acceptance rate for the annealing process.
     /// * `final_target_acc` - The final target acceptance rate for the annealing process.
     /// * `update_frequency` - The frequency (in iterations) at which adaptive parameters are updated.
