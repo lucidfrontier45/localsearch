@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use ordered_float::NotNan;
-use rand::{distr::weighted::WeightedIndex, prelude::Distribution};
+use rand::{Rng as _, distr::weighted::WeightedIndex, prelude::Distribution};
 use rayon::prelude::*;
 
 use crate::{
@@ -22,6 +22,8 @@ pub struct PopulationAnnealingOptimizer {
     patience: usize,
     /// Number of trial solutions to generate and evaluate at each iteration
     n_trials: usize,
+    /// Number of iterations without improvement before reverting to the best solution
+    return_iter: usize,
     /// Initial temperature
     initial_temperature: f64,
     /// Cooling rate
@@ -38,6 +40,7 @@ impl PopulationAnnealingOptimizer {
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
+    /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
     /// - `initial_temperature` : initial temperature
     /// - `cooling_rate` : cooling rate
     /// - `update_frequency` : number of steps to run each simulated annealing before updating the population
@@ -45,6 +48,7 @@ impl PopulationAnnealingOptimizer {
     pub fn new(
         patience: usize,
         n_trials: usize,
+        return_iter: usize,
         initial_temperature: f64,
         cooling_rate: f64,
         update_frequency: usize,
@@ -53,6 +57,7 @@ impl PopulationAnnealingOptimizer {
         Self {
             patience,
             n_trials,
+            return_iter,
             initial_temperature,
             cooling_rate,
             update_frequency,
@@ -141,7 +146,9 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
 
         let mut current_temperature = self.initial_temperature;
         let mut iter = 0;
-        let mut patience_counter = 0;
+        // Separate counters for return-to-best and patience
+        let mut return_stagnation_counter = 0;
+        let mut patience_stagnation_counter = 0;
 
         // Main optimization loop
         while iter < n_iter {
@@ -176,28 +183,45 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 })
                 .collect::<Vec<_>>();
 
-            current_temperature *= self.cooling_rate;
+            // 1. Update time and iteration counters
+            iter += self.update_frequency;
 
-            // Update the best solution if needed
-            patience_counter += self.update_frequency;
+            // 2. Update best solution and score
             let best_step_result = step_results.iter().min_by_key(|r| r.best_score).unwrap();
             if best_step_result.best_score < best_score {
                 best_score = best_step_result.best_score;
                 best_solution.replace(best_step_result.best_solution.clone());
-                patience_counter = 0;
+                return_stagnation_counter = 0;
+                patience_stagnation_counter = 0;
+            } else {
+                return_stagnation_counter += self.update_frequency;
+                patience_stagnation_counter += self.update_frequency;
             }
 
-            if patience_counter >= self.patience {
-                break;
-            }
-
+            // 3. Update accepted counter
             let n_accepted: usize = step_results
                 .iter()
                 .map(|r| r.accepted_transitions.len())
                 .sum();
-
             accepted_counter += n_accepted / self.population_size;
 
+            // 4. Update current solution and score (population updated in algo specific)
+
+            // 5. Check and handle return to best
+            if return_stagnation_counter >= self.return_iter {
+                // randomly select a member to revert
+                let idx = rng.random_range(0..self.population_size);
+                population[idx] = ((*best_solution.borrow()).clone(), best_score);
+                return_stagnation_counter = 0;
+            }
+
+            // 6. Check patience
+            if patience_stagnation_counter >= self.patience {
+                break;
+            }
+
+            // 7. Update algorithm-specific state
+            current_temperature *= self.cooling_rate;
             let new_population: Vec<(M::SolutionType, M::ScoreType)> = step_results
                 .into_iter()
                 .map(|r| (r.last_solution, r.last_score))
@@ -225,8 +249,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 population[i] = new_population[idx].clone();
             });
 
-            // Invoke callback with progress information
-            iter += self.update_frequency;
+            // 8. Invoke callback
             let progress =
                 OptProgress::new(iter, accepted_counter, best_solution.clone(), best_score);
             callback(progress);

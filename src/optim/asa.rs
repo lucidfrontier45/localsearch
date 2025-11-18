@@ -107,7 +107,9 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         let mut current_score = initial_score;
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
-        let mut patience_counter = 0;
+        // Separate counters for return-to-best and patience
+        let mut return_stagnation_counter = 0;
+        let mut patience_stagnation_counter = 0;
         let mut iter = 0;
         let mut dummy_callback = &mut |_: OptProgress<M::SolutionType, M::ScoreType>| {};
         let mut accepted_counter = 0;
@@ -135,29 +137,43 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 &mut dummy_callback,
             );
 
-            // update counters
+            // 1. Update time and iteration counters
             iter += self.reanneal_interval;
-            patience_counter += self.reanneal_interval;
 
-            // update best solution
+            // 2. Update best solution and score
             if step_result.best_score < best_score {
                 best_solution.replace(step_result.best_solution.clone());
                 best_score = step_result.best_score;
-                patience_counter = 0;
+                return_stagnation_counter = 0;
+                patience_stagnation_counter = 0;
+            } else {
+                return_stagnation_counter += self.reanneal_interval;
+                patience_stagnation_counter += self.reanneal_interval;
             }
 
-            // update current solution
-            current_solution = step_result.last_solution;
-            current_score = step_result.last_score;
-
-            // check patience
-            if patience_counter >= self.patience {
-                break;
-            }
-
+            // 3. Update accepted counter
             let n_accepted = step_result.accepted_transitions.len();
             accepted_counter += n_accepted;
 
+            // 4. Update current solution and score
+            current_solution = step_result.last_solution;
+            current_score = step_result.last_score;
+
+            // 5. Check and handle return to best
+            if return_stagnation_counter >= self.return_iter {
+                current_solution = (*best_solution.borrow()).clone();
+                current_score = best_score;
+                return_stagnation_counter = 0;
+            }
+
+            // 6. Check patience
+            if patience_stagnation_counter >= self.patience {
+                break;
+            }
+
+            // 7. Update algorithm-specific state (none)
+
+            // 8. Invoke callback
             let progress =
                 OptProgress::new(iter, accepted_counter, best_solution.clone(), best_score);
             callback(progress);

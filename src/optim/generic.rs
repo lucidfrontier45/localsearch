@@ -93,16 +93,20 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
         let mut accepted_counter = 0;
-        let mut counter = 0;
+        // Separate stagnation counters: one for triggering a return to best, one for early stopping (patience)
+        let mut return_stagnation_counter = 0;
+        let mut patience_stagnation_counter = 0;
 
         let mut accepted_transitions = Vec::with_capacity(n_iter);
         let mut rejected_transitions = Vec::with_capacity(n_iter);
 
         for it in 0..n_iter {
+            // 1. Update time and iteration counters
             let duration = Instant::now().duration_since(start_time);
             if duration > time_limit {
                 break;
             }
+
             let (trial_solution, trial_score) = (0..self.n_trials)
                 .into_par_iter()
                 .map(|_| {
@@ -117,35 +121,54 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
                 .min_by_key(|(_, score)| *score)
                 .unwrap();
 
-            let p = (self.score_func)(current_score, trial_score);
-            let r: f64 = rng.random();
+            // 2. Update best solution and score
+            if trial_score < best_score {
+                best_solution.replace(trial_solution.clone());
+                best_score = trial_score;
+                return_stagnation_counter = 0;
+                patience_stagnation_counter = 0;
+            } else {
+                return_stagnation_counter += 1;
+                patience_stagnation_counter += 1;
+            }
 
-            if p > r {
+            // 3. Update accepted counter and transitions
+            let accepted = if trial_score < current_score {
+                true
+            } else {
+                let p = (self.score_func)(current_score, trial_score);
+                let r: f64 = rng.random();
+                p > r
+            };
+
+            if accepted {
                 accepted_transitions.push((current_score, trial_score));
                 accepted_counter += 1;
-                current_solution = trial_solution;
-                current_score = trial_score;
             } else {
                 rejected_transitions.push((current_score, trial_score));
             }
 
-            if current_score < best_score {
-                best_solution.replace(current_solution.clone());
-                best_score = current_score;
-                counter = 0;
+            // 4. Update current solution and score
+            if accepted {
+                current_solution = trial_solution;
+                current_score = trial_score;
             }
 
-            counter += 1;
-
-            if counter == self.return_iter {
+            // 5. Check and handle return to best
+            if return_stagnation_counter == self.return_iter {
                 current_solution = best_solution.borrow().clone();
                 current_score = best_score;
+                return_stagnation_counter = 0;
             }
 
-            if counter == self.patience {
+            // 6. Check patience
+            if patience_stagnation_counter == self.patience {
                 break;
             }
 
+            // 7. Update algorithm-specific state (none)
+
+            // 8. Invoke callback
             let progress =
                 OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
             callback(progress);

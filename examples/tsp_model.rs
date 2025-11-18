@@ -296,9 +296,17 @@ fn main() {
         (
             "PopulationAnnealingOptimizer",
             Box::new(
-                PopulationAnnealingOptimizer::new(patience, 10, 1.0, 0.9, n_iter / 100, 16)
-                    .tune_initial_temperature(&tsp_model, None, 200, 0.5)
-                    .tune_cooling_rate(n_iter),
+                PopulationAnnealingOptimizer::new(
+                    patience,
+                    10,
+                    return_iter,
+                    1.0,
+                    0.9,
+                    n_iter / 100,
+                    16,
+                )
+                .tune_initial_temperature(&tsp_model, None, 200, 0.5)
+                .tune_cooling_rate(n_iter),
             ),
         ),
         (
