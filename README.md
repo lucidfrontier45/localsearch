@@ -19,7 +19,7 @@ All of the algorithms are parallelized with Rayon.
 
 ```toml
 [dependencies]
-localsearch = "0.18.1"
+localsearch = "0.19.0"
 ```
 
 You need to implement your own model that implements `OptModel` trait. Actual optimization is handled by each algorithm functions. Here is a simple example to optimize a quadratic function with Hill Climbing algorithm.
