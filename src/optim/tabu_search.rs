@@ -136,13 +136,8 @@ where
 
             let res = find_accepted_solution::<M, T>(samples, &tabu_list, best_score);
 
-            // 3. Update accepted counter and transitions (no transitions here)
-            let accepted = res.is_some();
-            if accepted {
-                accepted_counter += 1;
-            }
-
             if let Some((solution, trans, score)) = res {
+                // Accepted
                 // 2. Update best solution and score
                 if score < best_score {
                     best_score = score;
@@ -154,6 +149,9 @@ where
                     patience_stagnation_counter += 1;
                 }
 
+                // 3. Update accepted counter and transitions (no transitions here)
+                accepted_counter += 1;
+
                 // 4. Update current solution and score
                 current_score = score;
                 current_solution = solution;
@@ -161,6 +159,7 @@ where
                 // 7. Update algorithm-specific state
                 tabu_list.append(trans);
             } else {
+                // rejected
                 // If no accepted, increment stagnation
                 return_stagnation_counter += 1;
                 patience_stagnation_counter += 1;
