@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use ordered_float::NotNan;
-use rand::{distr::weighted::WeightedIndex, prelude::Distribution};
+use rand::{Rng as _, distr::weighted::WeightedIndex, prelude::Distribution};
 use rayon::prelude::*;
 
 use crate::{
@@ -22,6 +22,8 @@ pub struct PopulationAnnealingOptimizer {
     patience: usize,
     /// Number of trial solutions to generate and evaluate at each iteration
     n_trials: usize,
+    /// Number of iterations without improvement before reverting to the best solution
+    return_iter: usize,
     /// Initial temperature
     initial_temperature: f64,
     /// Cooling rate
@@ -38,6 +40,7 @@ impl PopulationAnnealingOptimizer {
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
+    /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
     /// - `initial_temperature` : initial temperature
     /// - `cooling_rate` : cooling rate
     /// - `update_frequency` : number of steps to run each simulated annealing before updating the population
@@ -45,6 +48,7 @@ impl PopulationAnnealingOptimizer {
     pub fn new(
         patience: usize,
         n_trials: usize,
+        return_iter: usize,
         initial_temperature: f64,
         cooling_rate: f64,
         update_frequency: usize,
@@ -53,6 +57,7 @@ impl PopulationAnnealingOptimizer {
         Self {
             patience,
             n_trials,
+            return_iter,
             initial_temperature,
             cooling_rate,
             update_frequency,
@@ -204,10 +209,9 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
 
             // 5. Check and handle return to best
             if return_stagnation_counter >= self.return_iter {
-                // revert population members' current solutions to the best found so far
-                for member in population.iter_mut() {
-                    *member = ((*best_solution.borrow()).clone(), best_score);
-                }
+                // randomly select a member to revert
+                let idx = rng.random_range(0..self.population_size);
+                population[idx] = ((*best_solution.borrow()).clone(), best_score);
                 return_stagnation_counter = 0;
             }
 
