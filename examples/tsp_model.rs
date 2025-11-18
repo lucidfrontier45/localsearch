@@ -280,10 +280,15 @@ fn main() {
         ),
         (
             "AdaptiveAnnealingOptimizer",
-            Box::new(
-                AdaptiveAnnealingOptimizer::new(patience, 16, return_iter, 1.0, 100, 1.0, 0.3)
-                    .tune_temperature(&tsp_model, None, 200),
-            ),
+            Box::new(AdaptiveAnnealingOptimizer::new(
+                patience,
+                16,
+                return_iter,
+                0.5,
+                0.1,
+                100,
+                Default::default(),
+            )),
         ),
         (
             "PopulationAnnealingOptimizer",
