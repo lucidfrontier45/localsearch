@@ -106,6 +106,14 @@ impl AdaptiveAnnealingOptimizer {
         update_frequency: usize,
         target_acc_schedule_mode: TargetAccScheduleMode,
     ) -> Self {
+        assert!(
+            (0.0..=1.0).contains(&initial_target_acc),
+            "initial_target_acc must be between 0.0 and 1.0"
+        );
+        assert!(
+            (0.0..=1.0).contains(&final_target_acc),
+            "final_target_acc must be between 0.0 and 1.0"
+        );
         Self {
             patience,
             n_trials,
