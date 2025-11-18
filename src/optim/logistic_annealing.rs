@@ -1,6 +1,6 @@
 use ordered_float::NotNan;
 
-use crate::{callback::OptCallbackFn, Duration, OptModel};
+use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer};
 
@@ -12,7 +12,7 @@ fn transition_prob<T: Into<f64>>(current: T, trial: T, w: f64) -> f64 {
 }
 
 /// Optimizer that implements logistic annealing algorithm
-/// In this model, unlike simulated annealing, wether accept the trial solution or not is calculated based on relative score difference
+/// In this model, unlike simulated annealing, whether accept the trial solution or not is calculated based on relative score difference
 ///
 /// 1. d <- (trial_score - current_score) / current_score
 /// 2. p <- 2.0 / (1.0 + exp(w * d))

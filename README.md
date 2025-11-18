@@ -8,15 +8,18 @@ All of the algorithms are parallelized with Rayon.
 1. Hill Climbing.
 2. Tabu Search. To use this optimizer you also need to implement your problem specific tabu list.
 3. Simulated Annealing
-4. Epsilon Greedy Search, a variant of Hill Climbing which accepts the trial solution with a constant probabilith even if the score of the trial solution is worse than the previous one.
+4. Epsilon Greedy Search, a variant of Hill Climbing which accepts the trial solution with a constant probability even if the score of the trial solution is worse than the previous one.
 5. Relative Annealing, a variant of Simulated Annealing which uses relative score diff to calculate transition probability.
 6. Logistic Annealing, a variant of Relative Annealing which uses logistic function instead of simple exponential.
+7. Adaptive Annealing, a variant of Simulated Annealing with adaptive target acceptance rate scheduling.
+8. Metropolis, a Markov chain Monte Carlo method that accepts better solutions always and worse ones with probability exp(-ΔE / T), using a constant temperature for exploration.
+9. Population Annealing, which runs multiple simulated annealing processes in parallel and periodically updates the population by discarding bad candidates and copying good ones.
 
 # How to use
 
 ```toml
 [dependencies]
-localsearch = "0.18.1"
+localsearch = "0.19.0"
 ```
 
 You need to implement your own model that implements `OptModel` trait. Actual optimization is handled by each algorithm functions. Here is a simple example to optimize a quadratic function with Hill Climbing algorithm.
@@ -105,9 +108,9 @@ fn main() {
     println!("running Hill Climbing optimizer");
     let n_iter = 10000;
     let time_limit = Duration::from_secs_f32(1.0);
-    let patiance = 1000;
+    let patience = 1000;
     let n_trials = 50;
-    let opt = HillClimbingOptimizer::new(patiance, n_trials);
+    let opt = HillClimbingOptimizer::new(patience, n_trials);
     let pb = create_pbar(n_iter as u64);
     let mut callback = |op: OptProgress<SolutionType, ScoreType>| {
         pb.set_message(format!("best score {:e}", op.score.into_inner()));
@@ -120,10 +123,10 @@ fn main() {
 }
 ```
 
-In addition you can also add `preprocess_initial_solution` and `postprocess_final_solution` to your model.
-`preprocess_initial_solution` is called before start of optimization iteration.
-If initial solution is not supplied, `generate_initial_solution` is called and the generate solution is then passed to `preprocess_initial_solution`.
-`postprocess_final_solution` is called after the optimization iteration.
+In addition you can also add `preprocess_solution` and `postprocess_solution` to your model.
+`preprocess_solution` is called before start of optimization iteration.
+If initial solution is not supplied, `generate_initial_solution` is called and the generated solution is then passed to `preprocess_solution`.
+`postprocess_solution` is called after the optimization iteration.
 
 
 Further details can be found at API document, example and test codes.

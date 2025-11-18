@@ -2,14 +2,14 @@ use std::time::Duration;
 
 use approx::assert_abs_diff_eq;
 
-use crate::optim::{LocalSearchOptimizer, SimulatedAnnealingOptimizer};
+use crate::optim::{LocalSearchOptimizer, MetropolisOptimizer};
 
 use super::QuadraticModel;
 
 #[test]
 fn test() {
     let model = QuadraticModel::new(3, vec![2.0, 0.0, -3.5], (-10.0, 10.0));
-    let opt = SimulatedAnnealingOptimizer::new(10000, 10, 10, 1.0, 0.99, 1);
+    let opt = MetropolisOptimizer::new(10000, 10, 10, 1.0);
     let (final_solution, final_score) = opt
         .run(&model, None, 5000, Duration::from_secs(10))
         .unwrap();

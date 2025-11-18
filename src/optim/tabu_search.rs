@@ -3,8 +3,8 @@ use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 use rayon::prelude::*;
 
 use crate::{
-    callback::{OptCallbackFn, OptProgress},
     Duration, Instant, OptModel,
+    callback::{OptCallbackFn, OptProgress},
 };
 
 use super::LocalSearchOptimizer;
@@ -109,7 +109,8 @@ where
         let mut current_score = initial_score;
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
-        let mut counter = 0;
+        let mut return_stagnation_counter = 0;
+        let mut patience_stagnation_counter = 0;
         let mut accepted_counter = 0;
 
         for it in 0..n_iter {
@@ -136,28 +137,47 @@ where
             let res = find_accepted_solution::<M, T>(samples, &tabu_list, best_score);
 
             if let Some((solution, trans, score)) = res {
+                // Accepted
+                // 2. Update best solution and score
                 if score < best_score {
                     best_score = score;
                     best_solution.replace(solution.clone());
-                    counter = 0;
+                    return_stagnation_counter = 0;
+                    patience_stagnation_counter = 0;
+                } else {
+                    return_stagnation_counter += 1;
+                    patience_stagnation_counter += 1;
                 }
-                tabu_list.append(trans);
+
+                // 3. Update accepted counter and transitions (no transitions here)
+                accepted_counter += 1;
+
+                // 4. Update current solution and score
                 current_score = score;
                 current_solution = solution;
-                accepted_counter += 1;
+
+                // 7. Update algorithm-specific state
+                tabu_list.append(trans);
+            } else {
+                // rejected
+                // If no accepted, increment stagnation
+                return_stagnation_counter += 1;
+                patience_stagnation_counter += 1;
             }
 
-            counter += 1;
-
-            if counter == self.return_iter {
+            // 5. Check and handle return to best
+            if return_stagnation_counter == self.return_iter {
                 current_solution = best_solution.borrow().clone();
                 current_score = best_score;
+                return_stagnation_counter = 0;
             }
 
-            if counter == self.patience {
+            // 6. Check patience
+            if patience_stagnation_counter == self.patience {
                 break;
             }
 
+            // 8. Invoke callback
             let progress =
                 OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
             callback(progress);

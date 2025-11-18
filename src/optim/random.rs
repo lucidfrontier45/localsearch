@@ -2,23 +2,21 @@ use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 use super::{EpsilonGreedyOptimizer, LocalSearchOptimizer};
 
-/// Optimizer that implements simple hill climbing algorithm
+/// Optimizer that implements random search algorithm
 #[derive(Clone, Copy)]
-pub struct HillClimbingOptimizer {
+pub struct RandomSearchOptimizer {
     patience: usize,
-    n_trials: usize,
 }
 
-impl HillClimbingOptimizer {
+impl RandomSearchOptimizer {
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
-    /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
-    pub fn new(patience: usize, n_trials: usize) -> Self {
-        Self { patience, n_trials }
+    pub fn new(patience: usize) -> Self {
+        Self { patience }
     }
 }
 
-impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
+impl<M: OptModel> LocalSearchOptimizer<M> for RandomSearchOptimizer {
     /// Start optimization
     ///
     /// - `model` : the model to optimize
@@ -36,7 +34,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        let optimizer = EpsilonGreedyOptimizer::new(self.patience, self.n_trials, usize::MAX, 0.0);
+        let optimizer = EpsilonGreedyOptimizer::new(self.patience, 1, usize::MAX, 1.0);
         optimizer.optimize(
             model,
             initial_solution,

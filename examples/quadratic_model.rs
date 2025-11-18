@@ -3,8 +3,8 @@ use std::time::Duration;
 use anyhow::Result as AnyResult;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
-    optim::{HillClimbingOptimizer, LocalSearchOptimizer},
     OptModel, OptProgress,
+    optim::{HillClimbingOptimizer, LocalSearchOptimizer},
 };
 use ordered_float::NotNan;
 use rand::{self, distr::Uniform, prelude::Distribution};
@@ -81,9 +81,9 @@ fn main() {
     println!("running Hill Climbing optimizer");
     let n_iter = 10000;
     let time_limit = Duration::from_secs_f32(1.0);
-    let patiance = 1000;
+    let patience = 1000;
     let n_trials = 50;
-    let opt = HillClimbingOptimizer::new(patiance, n_trials);
+    let opt = HillClimbingOptimizer::new(patience, n_trials);
     let pb = create_pbar(n_iter as u64);
     let mut callback = |op: OptProgress<SolutionType, ScoreType>| {
         pb.set_message(format!("best score {:e}", op.score.into_inner()));

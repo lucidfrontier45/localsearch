@@ -9,22 +9,19 @@ use std::{
 use anyhow::Result as AnyResult;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
+    OptModel, OptProgress,
     optim::{
-        EpsilonGreedyOptimizer, HillClimbingOptimizer, LocalSearchOptimizer,
-        RelativeAnnealingOptimizer, SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
+        AdaptiveAnnealingOptimizer, EpsilonGreedyOptimizer, HillClimbingOptimizer,
+        LocalSearchOptimizer, PopulationAnnealingOptimizer, RelativeAnnealingOptimizer,
+        SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
     },
     utils::RingBuffer,
-    OptModel, OptProgress,
 };
 use ordered_float::NotNan;
 use rand::seq::SliceRandom;
 
 fn min_sorted(c1: usize, c2: usize) -> (usize, usize) {
-    if c1 < c2 {
-        (c1, c2)
-    } else {
-        (c2, c1)
-    }
+    if c1 < c2 { (c1, c2) } else { (c2, c1) }
 }
 
 type Edge = (usize, usize);
@@ -88,7 +85,7 @@ impl TSPModel {
     }
 }
 
-fn select_two_indides<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize, usize) {
+fn select_two_indices<R: rand::Rng>(lb: usize, ub: usize, rng: &mut R) -> (usize, usize) {
     let n1 = rng.random_range(lb..ub);
     let n2 = loop {
         let n_ = rng.random_range(lb..ub);
@@ -106,7 +103,7 @@ impl OptModel for TSPModel {
     fn generate_random_solution<R: rand::Rng>(
         &self,
         rng: &mut R,
-    ) -> AnyResult<(self::SolutionType, self::ScoreType)> {
+    ) -> AnyResult<(Self::SolutionType, Self::ScoreType)> {
         let mut cities = self
             .distance_matrix
             .keys()
@@ -135,7 +132,7 @@ impl OptModel for TSPModel {
         current_score: Self::ScoreType,
         rng: &mut R,
     ) -> (Self::SolutionType, Self::TransitionType, Self::ScoreType) {
-        let (ind1, ind2) = select_two_indides(1, current_solution.len() - 1, rng);
+        let (ind1, ind2) = select_two_indices(1, current_solution.len() - 1, rng);
 
         let mut new_solution = current_solution.clone();
         for (i, ind) in (ind1..=ind2).enumerate() {
@@ -226,7 +223,7 @@ fn create_pbar(n_iter: u64) -> ProgressBar {
             ).unwrap()
             .progress_chars("#>-")
     );
-    pb.set_draw_target(ProgressDrawTarget::stderr_with_hz(10));
+    pb.set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
     pb
 }
 
@@ -247,7 +244,8 @@ fn main() {
 
     let tsp_model = TSPModel::from_coords(&coords);
 
-    let n_iter: usize = 20000;
+    let n_iter: usize = 50000;
+    let return_iter = n_iter / 50;
     let time_limit = Duration::from_secs(60);
     let patience = n_iter / 2;
 
@@ -256,6 +254,7 @@ fn main() {
 
     let pb = create_pbar(n_iter as u64);
     let mut callback = |op: OptProgress<SolutionType, ScoreType>| {
+        // eprintln!("iter {}, score {}", op.iter, op.score);
         let ratio = op.accepted_count as f64 / op.iter as f64;
         pb.set_message(format!(
             "best score {:.4e}, count = {}, acceptance ratio {:.2e}",
@@ -266,99 +265,86 @@ fn main() {
         pb.set_position(op.iter as u64);
     };
 
-    println!("run hill climbing");
-    let optimizer = HillClimbingOptimizer::new(1000, 200);
-    let (final_solution, final_score) = optimizer
-        .run_with_callback(
-            &tsp_model,
-            initial_solution.clone(),
-            n_iter,
-            time_limit,
-            &mut callback,
-        )
-        .unwrap();
-    println!(
-        "final score = {}, num of cities {}",
-        final_score,
-        final_solution.len()
-    );
-    pb.finish_and_clear();
-    pb.reset();
+    let optimizers: Vec<(&str, Box<dyn LocalSearchOptimizer<TSPModel>>)> = vec![
+        (
+            "HillClimbingOptimizer",
+            Box::new(HillClimbingOptimizer::new(patience, 16)),
+        ),
+        (
+            "SimulatedAnnealingOptimizer",
+            Box::new(
+                SimulatedAnnealingOptimizer::new(patience, 16, return_iter, 1.0, 0.9, 100)
+                    .tune_initial_temperature(&tsp_model, None, 200, 0.5)
+                    .tune_cooling_rate(n_iter),
+            ),
+        ),
+        (
+            "AdaptiveAnnealingOptimizer",
+            Box::new(AdaptiveAnnealingOptimizer::new(
+                patience,
+                16,
+                return_iter,
+                0.5,
+                0.1,
+                100,
+                Default::default(),
+            )),
+        ),
+        (
+            "PopulationAnnealingOptimizer",
+            Box::new(
+                PopulationAnnealingOptimizer::new(patience, 10, return_iter, 1.0, 0.9, 100, 16)
+                    .tune_initial_temperature(&tsp_model, None, 200, 0.5)
+                    .tune_cooling_rate(n_iter),
+            ),
+        ),
+        (
+            "TabuSearchOptimizer",
+            Box::new(TabuSearchOptimizer::<DequeTabuList>::new(
+                patience,
+                128,
+                return_iter,
+                10,
+            )),
+        ),
+        (
+            "EpsilonGreedyOptimizer",
+            Box::new(EpsilonGreedyOptimizer::new(patience, 128, return_iter, 0.3)),
+        ),
+        (
+            "RelativeAnnealingOptimizer",
+            Box::new(RelativeAnnealingOptimizer::new(
+                patience,
+                128,
+                return_iter,
+                1e1,
+            )),
+        ),
+    ];
 
-    println!("run tabu search");
-    let optimizer = TabuSearchOptimizer::<DequeTabuList>::new(patience, 200, 10, 20);
-    let (final_solution, final_score) = optimizer
-        .run_with_callback(
-            &tsp_model,
-            initial_solution.clone(),
-            n_iter,
-            time_limit,
-            &mut callback,
-        )
-        .unwrap();
-    println!(
-        "final score = {}, num of cities {}",
-        final_score,
-        final_solution.len()
-    );
-    pb.finish_and_clear();
-    pb.reset();
+    for (name, optimizer) in optimizers {
+        println!("run {}", name);
+        pb.reset();
+        let (final_solution, final_score) = optimizer
+            .run_with_callback(
+                &tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                &mut callback,
+            )
+            .unwrap();
+        pb.finish_and_clear();
+        println!(
+            "final score = {}, num of cities {}",
+            final_score,
+            final_solution.len()
+        );
+    }
 
-    println!("run annealing");
-    let optimizer = SimulatedAnnealingOptimizer::new(patience, 200, 200.0, 50.0);
-    let (final_solution, final_score) = optimizer
-        .run_with_callback(
-            &tsp_model,
-            initial_solution.clone(),
-            n_iter,
-            time_limit,
-            &mut callback,
-        )
-        .unwrap();
-    println!(
-        "final score = {}, num of cities {}",
-        final_score,
-        final_solution.len()
-    );
-    pb.finish_and_clear();
-    pb.reset();
-
-    println!("run epsilon greedy");
-    let optimizer = EpsilonGreedyOptimizer::new(patience, 200, 10, 0.3);
-    let (final_solution, final_score) = optimizer
-        .run_with_callback(
-            &tsp_model,
-            initial_solution.clone(),
-            n_iter,
-            time_limit,
-            &mut callback,
-        )
-        .unwrap();
-    println!(
-        "final score = {}, num of cities {}",
-        final_score,
-        final_solution.len()
-    );
-    pb.finish_and_clear();
-    pb.reset();
-
-    println!("run relative annealing");
-    let optimizer = RelativeAnnealingOptimizer::new(patience, 200, 10, 1e1);
-    let (final_solution, final_score) = optimizer
-        .run_with_callback(
-            &tsp_model,
-            initial_solution,
-            n_iter,
-            time_limit,
-            &mut callback,
-        )
-        .unwrap();
-    println!(
-        "final score = {}, num of cities {}",
-        final_score,
-        final_solution.len()
-    );
-
+    if args.len() < 3 {
+        return;
+    }
     let opt_route_file = args.get(2).unwrap();
     let opt_solution = read_lines(opt_route_file)
         .unwrap()
