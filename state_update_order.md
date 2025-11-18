@@ -12,7 +12,7 @@ After calling the internal step function (e.g., `metropolis.step`, `generic.step
 4. **Update current solution and score** from the step result (e.g., `current_solution = step_result.last_solution; current_score = step_result.last_score;`).
 5. **Check and handle return to best** (if stagnation >= return_iter, reset current to best).
 6. **Check patience** (if stagnation >= patience, break).
-7(optional). **Update algorithm-specific state** (e.g., temperature cooling, tabu list append, population resampling). This does not have to be strictly here. Should be in some other place if that is more suitable.
+7. (optional) **Update algorithm-specific state** (e.g., temperature cooling, tabu list append, population resampling). This does not have to be strictly here. Should be in some other place if that is more suitable.
 8. **Invoke callback** with progress.
 
 ## Rationale
