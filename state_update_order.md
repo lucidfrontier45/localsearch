@@ -7,7 +7,7 @@ This document outlines the unified order for updating state variables after the 
 After calling the internal step function (e.g., `metropolis.step`, `generic.step`, etc.), update state variables in the following sequence:
 
 1. **Update time and iteration counters** (e.g., elapsed time checks, iter increments).
-2. **Update best solution and score** if the step result's best is an improvement (e.g., `if step_result.best_score < best_score { ... }`), and reset stagnation counter if improved. If no best solution was updated, increse stagnation counters.
+2. **Update best solution and score** if the step result's best is an improvement (e.g., `if step_result.best_score < best_score { ... }`), and reset stagnation counter if improved. If no best solution was updated, increment stagnation counters.
 3. **Update accepted counter and transitions** (e.g., accumulate accepted transitions and increment counter).
 4. **Update current solution and score** from the step result (e.g., `current_solution = step_result.last_solution; current_score = step_result.last_score;`).
 5. **Check and handle return to best** (if stagnation >= return_iter, reset current to best).
