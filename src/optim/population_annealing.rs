@@ -11,7 +11,7 @@ use crate::{
 
 use super::{
     LocalSearchOptimizer, metropolis,
-    simulated_annealing::{tune_cooling_rate, tune_initial_temperature},
+    simulated_annealing::{tune_cooling_rate, tune_temperature},
 };
 
 /// Optimizer that implements the population annealing algorithm
@@ -74,7 +74,7 @@ impl PopulationAnnealingOptimizer {
         target_initial_prob: f64,
     ) -> Self {
         let tuned_temperature =
-            tune_initial_temperature(model, initial_solution, n_warmup, target_initial_prob);
+            tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
 
         Self {
             initial_temperature: tuned_temperature,

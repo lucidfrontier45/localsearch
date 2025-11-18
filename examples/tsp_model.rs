@@ -11,7 +11,7 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     OptModel, OptProgress,
     optim::{
-        AdaptiveSimulatedAnnealingOptimizer, EpsilonGreedyOptimizer, HillClimbingOptimizer,
+        AdaptiveAnnealingOptimizer, EpsilonGreedyOptimizer, HillClimbingOptimizer,
         LocalSearchOptimizer, PopulationAnnealingOptimizer, RelativeAnnealingOptimizer,
         SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
     },
@@ -273,40 +273,29 @@ fn main() {
         (
             "SimulatedAnnealingOptimizer",
             Box::new(
-                SimulatedAnnealingOptimizer::new(patience, 16, return_iter, 1.0, 0.9, n_iter / 100)
+                SimulatedAnnealingOptimizer::new(patience, 16, return_iter, 1.0, 0.9, 100)
                     .tune_initial_temperature(&tsp_model, None, 200, 0.5)
                     .tune_cooling_rate(n_iter),
             ),
         ),
         (
-            "AdaptiveSimulatedAnnealingOptimizer",
-            Box::new(
-                AdaptiveSimulatedAnnealingOptimizer::new(
-                    patience,
-                    16,
-                    return_iter,
-                    1.0,
-                    0.99,
-                    n_iter / 25,
-                )
-                .tune_temperature(&tsp_model, None, 200, 0.5)
-                .tune_cooling_rate(),
-            ),
+            "AdaptiveAnnealingOptimizer",
+            Box::new(AdaptiveAnnealingOptimizer::new(
+                patience,
+                16,
+                return_iter,
+                0.5,
+                0.1,
+                100,
+                Default::default(),
+            )),
         ),
         (
             "PopulationAnnealingOptimizer",
             Box::new(
-                PopulationAnnealingOptimizer::new(
-                    patience,
-                    10,
-                    return_iter,
-                    1.0,
-                    0.9,
-                    n_iter / 100,
-                    16,
-                )
-                .tune_initial_temperature(&tsp_model, None, 200, 0.5)
-                .tune_cooling_rate(n_iter),
+                PopulationAnnealingOptimizer::new(patience, 10, return_iter, 1.0, 0.9, 100, 16)
+                    .tune_initial_temperature(&tsp_model, None, 200, 0.5)
+                    .tune_cooling_rate(n_iter),
             ),
         ),
         (
