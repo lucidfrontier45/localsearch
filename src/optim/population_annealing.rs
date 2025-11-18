@@ -203,7 +203,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             // 4. Update current solution and score (population updated in algo specific)
 
             // 5. Check and handle return to best
-            if return_stagnation_counter >= self.update_frequency {
+            if return_stagnation_counter >= self.return_iter {
                 // revert population members' current solutions to the best found so far
                 for member in population.iter_mut() {
                     *member = ((*best_solution.borrow()).clone(), best_score);
