@@ -137,6 +137,10 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 &mut dummy_callback,
             );
 
+            // Update accepted counter
+            let n_accepted = step_result.accepted_transitions.len();
+            accepted_counter += n_accepted;
+
             // Update current solution and score
             current_solution = step_result.last_solution;
             current_score = step_result.last_score;
@@ -149,11 +153,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 patience_stagnation_counter = 0;
             }
 
-            // Update accepted counter
-            let n_accepted = step_result.accepted_transitions.len();
-            accepted_counter += n_accepted;
-
-            // Update stagnation counters
+            // Update stagnation counter
             return_stagnation_counter += self.reanneal_interval;
             patience_stagnation_counter += self.reanneal_interval;
 
@@ -169,7 +169,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 break;
             }
 
-            // Update iteration counter
+            // Update time and iteration counters
             iter += self.reanneal_interval;
 
             // Invoke callback

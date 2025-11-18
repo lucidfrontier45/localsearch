@@ -191,9 +191,18 @@ impl SimulatedAnnealingOptimizer {
                 &mut dummy_callback,
             );
 
+            // Update accepted counter and transitions
+            let n_accepted = step_result.accepted_transitions.len();
+            accepted_counter += n_accepted;
+            accepted_transitions.extend(step_result.accepted_transitions);
+            rejected_transitions.extend(step_result.rejected_transitions);
+
             // Update current solution and score
             current_solution = step_result.last_solution;
             current_score = step_result.last_score;
+
+            // Update algorithm-specific state
+            current_temperature *= self.cooling_rate;
 
             // Update best solution and score
             if step_result.best_score < best_score {
@@ -203,13 +212,7 @@ impl SimulatedAnnealingOptimizer {
                 patience_stagnation_counter = 0;
             }
 
-            // Update accepted counter and transitions
-            let n_accepted = step_result.accepted_transitions.len();
-            accepted_counter += n_accepted;
-            accepted_transitions.extend(step_result.accepted_transitions);
-            rejected_transitions.extend(step_result.rejected_transitions);
-
-            // Update stagnation counters
+            // Update stagnation counter
             return_stagnation_counter += self.update_frequency;
             patience_stagnation_counter += self.update_frequency;
 
@@ -219,9 +222,6 @@ impl SimulatedAnnealingOptimizer {
                 current_score = best_score;
                 return_stagnation_counter = 0;
             }
-
-            // Update algorithm-specific state
-            current_temperature *= self.cooling_rate;
 
             // Check patience
             if patience_stagnation_counter >= self.patience {
