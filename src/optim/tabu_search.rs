@@ -136,43 +136,49 @@ where
 
             let res = find_accepted_solution::<M, T>(samples, &tabu_list, best_score);
 
-            if let Some((solution, trans, score)) = res {
-                // Update accepted counter
+            // 3. Update accepted counter and transitions (no transitions here)
+            let accepted = res.is_some();
+            if accepted {
                 accepted_counter += 1;
+            }
 
-                // Update current solution and score
+            if let Some((solution, trans, score)) = res {
+                // 2. Update best solution and score
+                if score < best_score {
+                    best_score = score;
+                    best_solution.replace(solution.clone());
+                    return_stagnation_counter = 0;
+                    patience_stagnation_counter = 0;
+                } else {
+                    return_stagnation_counter += 1;
+                    patience_stagnation_counter += 1;
+                }
+
+                // 4. Update current solution and score
                 current_score = score;
                 current_solution = solution;
 
-                // Update algorithm-specific state
+                // 7. Update algorithm-specific state
                 tabu_list.append(trans);
-
-                // Update best solution and score
-                if current_score < best_score {
-                    best_score = current_score;
-                    best_solution.replace(current_solution.clone());
-                    return_stagnation_counter = 0;
-                    patience_stagnation_counter = 0;
-                }
+            } else {
+                // If no accepted, increment stagnation
+                return_stagnation_counter += 1;
+                patience_stagnation_counter += 1;
             }
 
-            // Update stagnation counters
-            return_stagnation_counter += 1;
-            patience_stagnation_counter += 1;
-
-            // Check and handle return to best
+            // 5. Check and handle return to best
             if return_stagnation_counter == self.return_iter {
                 current_solution = best_solution.borrow().clone();
                 current_score = best_score;
                 return_stagnation_counter = 0;
             }
 
-            // Check patience
+            // 6. Check patience
             if patience_stagnation_counter == self.patience {
                 break;
             }
 
-            // Invoke callback
+            // 8. Invoke callback
             let progress =
                 OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
             callback(progress);

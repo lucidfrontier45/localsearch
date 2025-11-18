@@ -178,27 +178,31 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 })
                 .collect::<Vec<_>>();
 
-            // Update best solution and score
+            // 1. Update time and iteration counters
+            iter += self.update_frequency;
+
+            // 2. Update best solution and score
             let best_step_result = step_results.iter().min_by_key(|r| r.best_score).unwrap();
             if best_step_result.best_score < best_score {
                 best_score = best_step_result.best_score;
                 best_solution.replace(best_step_result.best_solution.clone());
                 return_stagnation_counter = 0;
                 patience_stagnation_counter = 0;
+            } else {
+                return_stagnation_counter += self.update_frequency;
+                patience_stagnation_counter += self.update_frequency;
             }
 
-            // Update accepted counter
+            // 3. Update accepted counter
             let n_accepted: usize = step_results
                 .iter()
                 .map(|r| r.accepted_transitions.len())
                 .sum();
             accepted_counter += n_accepted / self.population_size;
 
-            // Update stagnation counters
-            return_stagnation_counter += self.update_frequency;
-            patience_stagnation_counter += self.update_frequency;
+            // 4. Update current solution and score (population updated in algo specific)
 
-            // Check and handle return to best
+            // 5. Check and handle return to best
             if return_stagnation_counter >= self.update_frequency {
                 // revert population members' current solutions to the best found so far
                 for member in population.iter_mut() {
@@ -207,7 +211,12 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 return_stagnation_counter = 0;
             }
 
-            // Update algorithm-specific state
+            // 6. Check patience
+            if patience_stagnation_counter >= self.patience {
+                break;
+            }
+
+            // 7. Update algorithm-specific state
             current_temperature *= self.cooling_rate;
             let new_population: Vec<(M::SolutionType, M::ScoreType)> = step_results
                 .into_iter()
@@ -236,15 +245,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 population[i] = new_population[idx].clone();
             });
 
-            // Check patience
-            if patience_stagnation_counter >= self.patience {
-                break;
-            }
-
-            // Update iteration counter
-            iter += self.update_frequency;
-
-            // Invoke callback
+            // 8. Invoke callback
             let progress =
                 OptProgress::new(iter, accepted_counter, best_solution.clone(), best_score);
             callback(progress);

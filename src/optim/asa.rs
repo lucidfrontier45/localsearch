@@ -137,42 +137,43 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 &mut dummy_callback,
             );
 
-            // Update accepted counter
-            let n_accepted = step_result.accepted_transitions.len();
-            accepted_counter += n_accepted;
+            // 1. Update time and iteration counters
+            iter += self.reanneal_interval;
 
-            // Update current solution and score
-            current_solution = step_result.last_solution;
-            current_score = step_result.last_score;
-
-            // Update best solution and score
+            // 2. Update best solution and score
             if step_result.best_score < best_score {
                 best_solution.replace(step_result.best_solution.clone());
                 best_score = step_result.best_score;
                 return_stagnation_counter = 0;
                 patience_stagnation_counter = 0;
+            } else {
+                return_stagnation_counter += self.reanneal_interval;
+                patience_stagnation_counter += self.reanneal_interval;
             }
 
-            // Update stagnation counter
-            return_stagnation_counter += self.reanneal_interval;
-            patience_stagnation_counter += self.reanneal_interval;
+            // 3. Update accepted counter
+            let n_accepted = step_result.accepted_transitions.len();
+            accepted_counter += n_accepted;
 
-            // Check and handle return to best
+            // 4. Update current solution and score
+            current_solution = step_result.last_solution;
+            current_score = step_result.last_score;
+
+            // 5. Check and handle return to best
             if return_stagnation_counter >= self.return_iter {
                 current_solution = (*best_solution.borrow()).clone();
                 current_score = best_score;
                 return_stagnation_counter = 0;
             }
 
-            // Check patience
+            // 6. Check patience
             if patience_stagnation_counter >= self.patience {
                 break;
             }
 
-            // Update time and iteration counters
-            iter += self.reanneal_interval;
+            // 7. Update algorithm-specific state (none)
 
-            // Invoke callback
+            // 8. Invoke callback
             let progress =
                 OptProgress::new(iter, accepted_counter, best_solution.clone(), best_score);
             callback(progress);

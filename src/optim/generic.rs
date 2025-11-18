@@ -101,10 +101,12 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
         let mut rejected_transitions = Vec::with_capacity(n_iter);
 
         for it in 0..n_iter {
+            // 1. Update time and iteration counters
             let duration = Instant::now().duration_since(start_time);
             if duration > time_limit {
                 break;
             }
+
             let (trial_solution, trial_score) = (0..self.n_trials)
                 .into_par_iter()
                 .map(|_| {
@@ -121,45 +123,48 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
 
             let p = (self.score_func)(current_score, trial_score);
             let r: f64 = rng.random();
+            let accepted = p > r;
 
-            if p > r {
-                // Update accepted counter and transitions
+            // 2. Update best solution and score
+            if accepted && trial_score < best_score {
+                best_solution.replace(trial_solution.clone());
+                best_score = trial_score;
+                return_stagnation_counter = 0;
+                patience_stagnation_counter = 0;
+            } else {
+                return_stagnation_counter += 1;
+                patience_stagnation_counter += 1;
+            }
+
+            // 3. Update accepted counter and transitions
+            if accepted {
                 accepted_transitions.push((current_score, trial_score));
                 accepted_counter += 1;
-
-                // Update current solution and score
-                current_solution = trial_solution;
-                current_score = trial_score;
             } else {
                 rejected_transitions.push((current_score, trial_score));
             }
 
-            // Update best solution and score
-            // Reset stagnation counters if improved
-            if current_score < best_score {
-                best_solution.replace(current_solution.clone());
-                best_score = current_score;
-                return_stagnation_counter = 0;
-                patience_stagnation_counter = 0;
+            // 4. Update current solution and score
+            if accepted {
+                current_solution = trial_solution;
+                current_score = trial_score;
             }
 
-            // Update stagnation counters
-            return_stagnation_counter += 1;
-            patience_stagnation_counter += 1;
-
-            // Check and handle return to best
+            // 5. Check and handle return to best
             if return_stagnation_counter == self.return_iter {
                 current_solution = best_solution.borrow().clone();
                 current_score = best_score;
                 return_stagnation_counter = 0;
             }
 
-            // Check patience
+            // 6. Check patience
             if patience_stagnation_counter == self.patience {
                 break;
             }
 
-            // Invoke callback
+            // 7. Update algorithm-specific state (none)
+
+            // 8. Invoke callback
             let progress =
                 OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
             callback(progress);
