@@ -24,41 +24,86 @@ pub enum TargetAccScheduleMode {
     Cosine,
 }
 
-fn update_target_acc(
+/// Scheduler for adaptive annealing optimizer
+#[derive(Clone, Copy, Debug)]
+pub struct AdaptiveScheduler {
     initial_target_acc: f64,
     final_target_acc: f64,
-    current_iter: usize,
-    total_iter: usize,
     schedule_mode: TargetAccScheduleMode,
-) -> f64 {
-    let fraction = current_iter as f64 / total_iter as f64;
-    match schedule_mode {
-        TargetAccScheduleMode::Linear => {
-            // linearly cool from initial_target_acc to final_target_acc
-            initial_target_acc + fraction * (final_target_acc - initial_target_acc)
-        }
-        TargetAccScheduleMode::Exponential => {
-            // cool from initial_target_acc to final_target_acc exponentially
-            initial_target_acc * (final_target_acc / initial_target_acc).powf(fraction)
-        }
-        TargetAccScheduleMode::Cosine => {
-            // cosine schedule
-            final_target_acc
-                + 0.5 * (initial_target_acc - final_target_acc) * (1.0 + (PI * fraction).cos())
+    // speed parameter for temperature update
+    gamma: f64,
+}
+
+impl Default for AdaptiveScheduler {
+    fn default() -> Self {
+        Self {
+            initial_target_acc: 0.5,
+            final_target_acc: 0.05,
+            schedule_mode: TargetAccScheduleMode::Cosine,
+            gamma: 0.05,
         }
     }
 }
 
-fn update_temperature<ST>(
-    current_temp: f64,
-    target_acc: f64,
-    step_result: &StepResult<ST, NotNan<f64>>,
-) -> f64 {
-    let n_accepted = step_result.accepted_transitions.len();
-    let n_rejected = step_result.rejected_transitions.len();
-    let n_total = n_accepted + n_rejected;
-    let acc = n_accepted as f64 / n_total as f64;
-    current_temp * (target_acc / acc)
+impl AdaptiveScheduler {
+    /// Creates a new `AdaptiveScheduler` instance with the specified parameters.
+    /// # Arguments
+    /// * `initial_target_acc` - The initial target acceptance rate.
+    /// * `final_target_acc` - The final target acceptance rate.
+    /// * `schedule_mode` - The scheduling mode for target acceptance rate.
+    /// * `gamma` - The speed parameter for temperature update.
+    /// # Returns
+    /// A new `AdaptiveScheduler` configured with the provided parameters.
+    pub fn new(
+        initial_target_acc: f64,
+        final_target_acc: f64,
+        schedule_mode: TargetAccScheduleMode,
+        gamma: f64,
+    ) -> Self {
+        Self {
+            initial_target_acc,
+            final_target_acc,
+            schedule_mode,
+            gamma,
+        }
+    }
+
+    fn calculate_target_acc(&self, current_iter: usize, total_iter: usize) -> f64 {
+        let initial_target_acc = self.initial_target_acc;
+        let final_target_acc = self.final_target_acc;
+        let schedule_mode = self.schedule_mode;
+        let fraction = current_iter as f64 / total_iter as f64;
+        match schedule_mode {
+            TargetAccScheduleMode::Linear => {
+                // linearly cool from initial_target_acc to final_target_acc
+                initial_target_acc + fraction * (final_target_acc - initial_target_acc)
+            }
+            TargetAccScheduleMode::Exponential => {
+                // cool from initial_target_acc to final_target_acc exponentially
+                initial_target_acc * (final_target_acc / initial_target_acc).powf(fraction)
+            }
+            TargetAccScheduleMode::Cosine => {
+                // cosine schedule
+                final_target_acc
+                    + 0.5 * (initial_target_acc - final_target_acc) * (1.0 + (PI * fraction).cos())
+            }
+        }
+    }
+
+    fn update_temperature<ST>(
+        &self,
+        current_temp: f64,
+        current_iter: usize,
+        total_iter: usize,
+        step_result: &StepResult<ST, NotNan<f64>>,
+    ) -> f64 {
+        let n_accepted = step_result.accepted_transitions.len();
+        let n_rejected = step_result.rejected_transitions.len();
+        let n_total = n_accepted + n_rejected;
+        let acc = n_accepted as f64 / n_total as f64;
+        let target_acc = self.calculate_target_acc(current_iter, total_iter);
+        current_temp * ((self.gamma * (target_acc - acc) / target_acc).exp())
+    }
 }
 
 /// Optimizer that implements the adaptive annealing algorithm which tries to adapt temperature
@@ -71,14 +116,10 @@ pub struct AdaptiveAnnealingOptimizer {
     n_trials: usize,
     /// Returns to the best solution if there is no improvement after this number of iterations
     return_iter: usize,
-    /// Initial target acceptance rate
-    initial_target_acc: f64,
-    /// Final target acceptance rate
-    final_target_acc: f64,
-    /// Number of steps after which temperature is updated
+    /// Frequency (in iterations) at which adaptive parameters are updated
     update_frequency: usize,
-    /// Target acceptance rate scheduling mode
-    target_acc_schedule_mode: TargetAccScheduleMode,
+    /// Scheduler for target acceptance rate
+    scheduler: AdaptiveScheduler,
 }
 
 impl AdaptiveAnnealingOptimizer {
@@ -89,10 +130,8 @@ impl AdaptiveAnnealingOptimizer {
     /// * `patience` - The number of iterations without improvement before terminating the optimization.
     /// * `n_trials` - The number of candidate solutions to evaluate per iteration.
     /// * `return_iter` - The number of iterations without improvement before reverting to the best solution.
-    /// * `initial_target_acc` - The initial target acceptance rate for the annealing process.
-    /// * `final_target_acc` - The final target acceptance rate for the annealing process.
     /// * `update_frequency` - The frequency (in iterations) at which adaptive parameters are updated.
-    /// * `target_acc_schedule_mode` - The scheduling mode for adjusting the target acceptance rate over time.
+    /// * `scheduler` - The adaptive scheduler for target acceptance rate.
     ///
     /// # Returns
     ///
@@ -101,27 +140,15 @@ impl AdaptiveAnnealingOptimizer {
         patience: usize,
         n_trials: usize,
         return_iter: usize,
-        initial_target_acc: f64,
-        final_target_acc: f64,
         update_frequency: usize,
-        target_acc_schedule_mode: TargetAccScheduleMode,
+        scheduler: AdaptiveScheduler,
     ) -> Self {
-        assert!(
-            (0.0..=1.0).contains(&initial_target_acc),
-            "initial_target_acc must be between 0.0 and 1.0"
-        );
-        assert!(
-            (0.0..=1.0).contains(&final_target_acc),
-            "final_target_acc must be between 0.0 and 1.0"
-        );
         Self {
             patience,
             n_trials,
             return_iter,
-            initial_target_acc,
-            final_target_acc,
             update_frequency,
-            target_acc_schedule_mode,
+            scheduler,
         }
     }
 }
@@ -148,7 +175,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
             model,
             Some((initial_solution.clone(), initial_score)),
             self.update_frequency,
-            self.initial_target_acc,
+            self.scheduler.initial_target_acc,
         );
         let mut current_solution = initial_solution;
         let mut current_score = initial_score;
@@ -161,8 +188,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
         let now = Instant::now();
         let mut remaining_time_limit = time_limit;
         let mut accepted_counter = 0;
-        // let mut accepted_transitions = Vec::with_capacity(n_iter);
-        // let mut rejected_transitions = Vec::with_capacity(n_iter);
 
         while iter < n_iter {
             let metropolis = MetropolisOptimizer::new(
@@ -221,15 +246,9 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
             }
 
             // 7. Update algorithm-specific state
-            let current_target_acc = update_target_acc(
-                self.initial_target_acc,
-                self.final_target_acc,
-                iter,
-                n_iter,
-                self.target_acc_schedule_mode,
-            );
             current_temperature =
-                update_temperature(current_temperature, current_target_acc, &step_result);
+                self.scheduler
+                    .update_temperature(current_temperature, iter, n_iter, &step_result);
 
             // 8. Invoke callback
             let progress = OptProgress {
