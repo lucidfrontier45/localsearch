@@ -284,8 +284,6 @@ fn main() {
                 patience,
                 16,
                 return_iter,
-                0.5,
-                0.1,
                 100,
                 Default::default(),
             )),
