@@ -102,7 +102,7 @@ impl AdaptiveScheduler {
         let n_total = n_accepted + n_rejected;
         let acc = n_accepted as f64 / n_total as f64;
         let target_acc = self.calculate_target_acc(current_iter, total_iter);
-        current_temp * ((self.gamma * (target_acc - acc) / acc).exp())
+        current_temp * ((self.gamma * (target_acc - acc) / target_acc).exp())
     }
 }
 
