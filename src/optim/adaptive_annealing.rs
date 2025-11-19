@@ -188,8 +188,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
         let now = Instant::now();
         let mut remaining_time_limit = time_limit;
         let mut accepted_counter = 0;
-        // let mut accepted_transitions = Vec::with_capacity(n_iter);
-        // let mut rejected_transitions = Vec::with_capacity(n_iter);
 
         while iter < n_iter {
             let metropolis = MetropolisOptimizer::new(
