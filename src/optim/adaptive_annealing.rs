@@ -26,7 +26,7 @@ pub enum TargetAccScheduleMode {
 
 /// Scheduler for adaptive annealing optimizer
 #[derive(Clone, Copy, Debug)]
-pub struct AddaptiveScheduler {
+pub struct AdaptiveScheduler {
     initial_target_acc: f64,
     final_target_acc: f64,
     schedule_mode: TargetAccScheduleMode,
@@ -34,7 +34,7 @@ pub struct AddaptiveScheduler {
     gamma: f64,
 }
 
-impl Default for AddaptiveScheduler {
+impl Default for AdaptiveScheduler {
     fn default() -> Self {
         Self {
             initial_target_acc: 0.5,
@@ -45,15 +45,15 @@ impl Default for AddaptiveScheduler {
     }
 }
 
-impl AddaptiveScheduler {
-    /// Creates a new `AddaptiveScheduler` instance with the specified parameters.
+impl AdaptiveScheduler {
+    /// Creates a new `AdaptiveScheduler` instance with the specified parameters.
     /// # Arguments
     /// * `initial_target_acc` - The initial target acceptance rate.
     /// * `final_target_acc` - The final target acceptance rate.
     /// * `schedule_mode` - The scheduling mode for target acceptance rate.
     /// * `gamma` - The speed parameter for temperature update.
     /// # Returns
-    /// A new `AddaptiveScheduler` configured with the provided parameters.
+    /// A new `AdaptiveScheduler` configured with the provided parameters.
     pub fn new(
         initial_target_acc: f64,
         final_target_acc: f64,
@@ -119,7 +119,7 @@ pub struct AdaptiveAnnealingOptimizer {
     /// Frequency (in iterations) at which adaptive parameters are updated
     update_frequency: usize,
     /// Scheduler for target acceptance rate
-    scheduler: AddaptiveScheduler,
+    scheduler: AdaptiveScheduler,
 }
 
 impl AdaptiveAnnealingOptimizer {
@@ -141,7 +141,7 @@ impl AdaptiveAnnealingOptimizer {
         n_trials: usize,
         return_iter: usize,
         update_frequency: usize,
-        scheduler: AddaptiveScheduler,
+        scheduler: AdaptiveScheduler,
     ) -> Self {
         Self {
             patience,
