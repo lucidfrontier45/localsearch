@@ -97,6 +97,7 @@ impl AdaptiveScheduler {
         total_iter: usize,
         step_result: &StepResult<ST, NotNan<f64>>,
     ) -> f64 {
+        // T = T * exp(gamma * (target_acc - acc) / target_acc)
         let n_accepted = step_result.accepted_transitions.len();
         let n_rejected = step_result.rejected_transitions.len();
         let n_total = n_accepted + n_rejected;
