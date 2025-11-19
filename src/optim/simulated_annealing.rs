@@ -1,6 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use ordered_float::NotNan;
+use rayon::prelude::*;
 
 use crate::{
     Duration, Instant, OptModel,
@@ -37,22 +38,23 @@ fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
     n_warmup: usize,
 ) -> Vec<f64> {
     let mut rng = rand::rng();
-    let (mut current_solution, mut current_score) =
+    let (current_solution, current_score) =
         initial_solution_and_score.unwrap_or(model.generate_random_solution(&mut rng).unwrap());
 
-    let mut energy_diffs = Vec::new();
-
-    for _ in 0..n_warmup {
-        let (trial_solution, _, trial_score) =
-            model.generate_trial_solution(current_solution.clone(), current_score, &mut rng);
-        let ds = trial_score - current_score;
-        if ds <= NotNan::new(0.0).unwrap() {
-            continue;
-        }
-        energy_diffs.push(ds.into_inner());
-        current_solution = trial_solution;
-        current_score = trial_score;
-    }
+    let energy_diffs: Vec<f64> = (0..n_warmup)
+        .into_par_iter()
+        .filter_map(|_| {
+            let mut rng = rand::rng();
+            let (_, _, trial_score) =
+                model.generate_trial_solution(current_solution.clone(), current_score, &mut rng);
+            let ds = trial_score - current_score;
+            if ds > NotNan::new(0.0).unwrap() {
+                Some(ds.into_inner())
+            } else {
+                None
+            }
+        })
+        .collect();
 
     energy_diffs
 }
