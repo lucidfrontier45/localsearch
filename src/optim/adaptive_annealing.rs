@@ -53,12 +53,13 @@ fn update_temperature<ST>(
     current_temp: f64,
     target_acc: f64,
     step_result: &StepResult<ST, NotNan<f64>>,
+    gamma: f64,
 ) -> f64 {
     let n_accepted = step_result.accepted_transitions.len();
     let n_rejected = step_result.rejected_transitions.len();
     let n_total = n_accepted + n_rejected;
     let acc = n_accepted as f64 / n_total as f64;
-    current_temp * (target_acc / acc)
+    current_temp * ((gamma * (target_acc - acc) / acc).exp())
 }
 
 /// Optimizer that implements the adaptive annealing algorithm which tries to adapt temperature
@@ -77,6 +78,8 @@ pub struct AdaptiveAnnealingOptimizer {
     final_target_acc: f64,
     /// Number of steps after which temperature is updated
     update_frequency: usize,
+    /// Gamma parameter for temperature update formula
+    gamma: f64,
     /// Target acceptance rate scheduling mode
     target_acc_schedule_mode: TargetAccScheduleMode,
 }
@@ -92,6 +95,7 @@ impl AdaptiveAnnealingOptimizer {
     /// * `initial_target_acc` - The initial target acceptance rate for the annealing process.
     /// * `final_target_acc` - The final target acceptance rate for the annealing process.
     /// * `update_frequency` - The frequency (in iterations) at which adaptive parameters are updated.
+    /// * `gamma` - The gamma parameter for temperature update formula.
     /// * `target_acc_schedule_mode` - The scheduling mode for adjusting the target acceptance rate over time.
     ///
     /// # Returns
@@ -104,6 +108,7 @@ impl AdaptiveAnnealingOptimizer {
         initial_target_acc: f64,
         final_target_acc: f64,
         update_frequency: usize,
+        gamma: f64,
         target_acc_schedule_mode: TargetAccScheduleMode,
     ) -> Self {
         assert!(
@@ -121,6 +126,7 @@ impl AdaptiveAnnealingOptimizer {
             initial_target_acc,
             final_target_acc,
             update_frequency,
+            gamma,
             target_acc_schedule_mode,
         }
     }
@@ -229,7 +235,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
                 self.target_acc_schedule_mode,
             );
             current_temperature =
-                update_temperature(current_temperature, current_target_acc, &step_result);
+                update_temperature(current_temperature, current_target_acc, &step_result, self.gamma);
 
             // 8. Invoke callback
             let progress = OptProgress {
