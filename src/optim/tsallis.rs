@@ -105,7 +105,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        // Rc<ReffCell> of the current best score
+        // Rc<RefCell> of the current best score
         let offset = Rc::new(RefCell::new(initial_score.into_inner()));
 
         // create transition probability function
