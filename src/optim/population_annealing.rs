@@ -81,7 +81,7 @@ impl PopulationAnnealingOptimizer {
         }
     }
 
-    /// Tune cooling rate to reach near-zero temperature at the end of optimization
+    /// Tune cooling rate to reach high inverse temperature (beta ~ 1e2) at the end of optimization
     pub fn tune_cooling_rate(self, n_iter: usize) -> Self {
         let cooling_rate =
             tune_cooling_rate(self.initial_beta, 1e2, n_iter / self.update_frequency);
