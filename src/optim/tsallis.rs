@@ -9,7 +9,14 @@ use crate::{
 
 use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer};
 
-fn tsallis_transition_prob(current: f64, trial: f64, offset: f64, beta: f64, q: f64, xi: f64) -> f64 {
+fn tsallis_transition_prob(
+    current: f64,
+    trial: f64,
+    offset: f64,
+    beta: f64,
+    q: f64,
+    xi: f64,
+) -> f64 {
     let delta_e = trial - current;
     let denominator = current - offset + xi;
     let d = delta_e / denominator;
@@ -24,12 +31,12 @@ fn tsallis_transition_prob(current: f64, trial: f64, offset: f64, beta: f64, q: 
 fn tsallis_transition_prob_wrapper(
     current: NotNan<f64>,
     trial: NotNan<f64>,
-    offset: Rc<RefCell<f64>>, 
+    offset: Rc<RefCell<f64>>,
     beta: f64,
     q: f64,
     xi: f64,
 ) -> f64 {
-        tsallis_transition_prob(
+    tsallis_transition_prob(
         current.into_inner(),
         trial.into_inner(),
         *offset.borrow(),
@@ -110,7 +117,14 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
 
         // create transition probability function
         let transition_prob = |current: NotNan<f64>, trial: NotNan<f64>| {
-            tsallis_transition_prob_wrapper(current, trial, offset.clone(), self.beta, self.q, self.xi)
+            tsallis_transition_prob_wrapper(
+                current,
+                trial,
+                offset.clone(),
+                self.beta,
+                self.q,
+                self.xi,
+            )
         };
 
         // wrap callback to update offset
