@@ -24,8 +24,8 @@ pub struct PopulationAnnealingOptimizer {
     n_trials: usize,
     /// Number of iterations without improvement before reverting to the best solution
     return_iter: usize,
-    /// Initial temperature
-    initial_temperature: f64,
+    /// Initial inverse temperature
+    initial_beta: f64,
     /// Cooling rate
     cooling_rate: f64,
     /// Number of steps to run each simulated annealing before updating the population
@@ -41,7 +41,7 @@ impl PopulationAnnealingOptimizer {
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
-    /// - `initial_temperature` : initial temperature
+    /// - `initial_beta` : initial inverse temperature
     /// - `cooling_rate` : cooling rate
     /// - `update_frequency` : number of steps to run each simulated annealing before updating the population
     /// - `population_size` : number of simulated annealing processes to run in parallel
@@ -49,7 +49,7 @@ impl PopulationAnnealingOptimizer {
         patience: usize,
         n_trials: usize,
         return_iter: usize,
-        initial_temperature: f64,
+        initial_beta: f64,
         cooling_rate: f64,
         update_frequency: usize,
         population_size: usize,
@@ -58,14 +58,14 @@ impl PopulationAnnealingOptimizer {
             patience,
             n_trials,
             return_iter,
-            initial_temperature,
+            initial_beta,
             cooling_rate,
             update_frequency,
             population_size,
         }
     }
 
-    /// Tune initial temperature by drawing random trials
+    /// Tune initial inverse temperature by drawing random trials
     pub fn tune_initial_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
         self,
         model: &M,
@@ -73,22 +73,18 @@ impl PopulationAnnealingOptimizer {
         n_warmup: usize,
         target_initial_prob: f64,
     ) -> Self {
-        let tuned_temperature =
-            tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
+        let tuned_beta = tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
 
         Self {
-            initial_temperature: tuned_temperature,
+            initial_beta: tuned_beta,
             ..self
         }
     }
 
-    /// Tune cooling rate to reach near-zero temperature at the end of optimization
+    /// Tune cooling rate to reach high inverse temperature (beta ~ 1e2) at the end of optimization
     pub fn tune_cooling_rate(self, n_iter: usize) -> Self {
-        let cooling_rate = tune_cooling_rate(
-            self.initial_temperature,
-            1e-2,
-            n_iter / self.update_frequency,
-        );
+        let cooling_rate =
+            tune_cooling_rate(self.initial_beta, 1e2, n_iter / self.update_frequency);
 
         Self {
             cooling_rate,
@@ -143,7 +139,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             }
         }
 
-        let mut current_temperature = self.initial_temperature;
+        let mut current_beta = self.initial_beta;
         let mut iter = 0;
         // Separate counters for return-to-best and patience
         let mut return_stagnation_counter = 0;
@@ -157,10 +153,10 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             }
 
             let metropolis = metropolis::MetropolisOptimizer::new(
-                usize::MAX,
+                self.patience,
                 self.n_trials,
-                usize::MAX,
-                current_temperature,
+                self.return_iter,
+                current_beta,
             );
 
             // Process each member of the population
@@ -220,7 +216,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             }
 
             // 7. Update algorithm-specific state
-            current_temperature *= self.cooling_rate;
+            current_beta *= self.cooling_rate;
             let new_population: Vec<(M::SolutionType, M::ScoreType)> = step_results
                 .into_iter()
                 .map(|r| (r.last_solution, r.last_score))
@@ -230,8 +226,8 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             // Calculate weights for each solution based on the current temperature
             let mut weights = Vec::new();
             for &(_, score) in &new_population {
-                // Boltzmann factor: exp(-score / temperature)
-                let boltzmann_factor = (-score.into_inner() / current_temperature).exp().max(1e-8);
+                // Boltzmann factor: exp(-beta * score)
+                let boltzmann_factor = (-current_beta * score.into_inner()).exp().max(1e-8);
                 weights.push(boltzmann_factor);
             }
 

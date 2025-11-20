@@ -4,7 +4,7 @@ use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer, generic::StepResult};
 
-/// Optimizer that implements the Metropolis algorithm with constant temperature
+/// Optimizer that implements the Metropolis algorithm with constant beta
 #[derive(Clone, Copy)]
 pub struct MetropolisOptimizer {
     /// The optimizer will give up if there is no improvement of the score after this number of iterations
@@ -13,8 +13,8 @@ pub struct MetropolisOptimizer {
     n_trials: usize,
     /// Returns to the best solution if there is no improvement after this number of iterations
     return_iter: usize,
-    /// Constant temperature
-    temperature: f64,
+    /// Inverse temperature (beta)
+    beta: f64,
 }
 
 impl MetropolisOptimizer {
@@ -24,13 +24,13 @@ impl MetropolisOptimizer {
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     /// - `return_iter` : returns to the best solution if there is no improvement after this number of iterations.
-    /// - `temperature` : constant temperature
-    pub fn new(patience: usize, n_trials: usize, return_iter: usize, temperature: f64) -> Self {
+    /// - `beta` : inverse temperature
+    pub fn new(patience: usize, n_trials: usize, return_iter: usize, beta: f64) -> Self {
         Self {
             patience,
             n_trials,
             return_iter,
-            temperature,
+            beta,
         }
     }
 
@@ -49,7 +49,7 @@ impl MetropolisOptimizer {
             if ds <= NotNan::new(0.0).unwrap() {
                 1.0
             } else {
-                (-ds.into_inner() / self.temperature).exp()
+                (-self.beta * ds.into_inner()).exp()
             }
         };
         let generic_optimizer = GenericLocalSearchOptimizer::new(

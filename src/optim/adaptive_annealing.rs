@@ -92,15 +92,15 @@ impl AdaptiveScheduler {
 
     fn update_temperature<ST>(
         &self,
-        current_temp: f64,
+        current_beta: f64,
         current_iter: usize,
         total_iter: usize,
         step_result: &StepResult<ST, NotNan<f64>>,
     ) -> f64 {
-        // T = T * exp(gamma * (target_acc - acc) / target_acc)
+        // beta = beta * exp(-gamma * (target_acc - acc) / target_acc)
         let acc = step_result.acceptance_counter.acceptance_ratio();
         let target_acc = self.calculate_target_acc(current_iter, total_iter);
-        current_temp * ((self.gamma * (target_acc - acc) / target_acc).exp())
+        current_beta * ((-self.gamma * (target_acc - acc) / target_acc).exp())
     }
 }
 
@@ -169,7 +169,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        let mut current_temperature = tune_temperature(
+        let mut current_beta = tune_temperature(
             model,
             Some((initial_solution.clone(), initial_score)),
             self.update_frequency,
@@ -188,10 +188,10 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
 
         while iter < n_iter {
             let metropolis = MetropolisOptimizer::new(
-                usize::MAX,
+                self.patience,
                 self.n_trials,
-                usize::MAX,
-                current_temperature,
+                self.return_iter,
+                current_beta,
             );
             // make dummy callback
             let mut dummy_callback = |_: OptProgress<M::SolutionType, M::ScoreType>| {};
@@ -242,9 +242,9 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
             }
 
             // 7. Update algorithm-specific state
-            current_temperature =
+            current_beta =
                 self.scheduler
-                    .update_temperature(current_temperature, iter, n_iter, &step_result);
+                    .update_temperature(current_beta, iter, n_iter, &step_result);
 
             // 8. Invoke callback
             let progress = OptProgress {

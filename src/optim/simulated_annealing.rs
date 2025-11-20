@@ -11,18 +11,18 @@ use crate::{
 
 use super::{LocalSearchOptimizer, MetropolisOptimizer, generic::StepResult};
 
-/// Tune cooling rate based on initial and final temperatures and number of iterations
-/// initial temperature will be cooled to final temperature after n_iter iterations
-/// - `initial_temperature` : initial temperature
-/// - `final_temperature` : final temperature
+/// Tune cooling rate based on initial and final inverse temperatures and number of iterations
+/// initial beta will be cooled to final beta after n_iter iterations
+/// - `initial_beta` : initial inverse temperature
+/// - `final_beta` : final inverse temperature
 /// - `n_iter` : number of iterations
 /// - returns : cooling rate
-pub fn tune_cooling_rate(initial_temperature: f64, final_temperature: f64, n_iter: usize) -> f64 {
-    (final_temperature / initial_temperature).powf(1.0 / n_iter as f64)
+pub fn tune_cooling_rate(initial_beta: f64, final_beta: f64, n_iter: usize) -> f64 {
+    (final_beta / initial_beta).powf(1.0 / n_iter as f64)
 }
 
 // Calculate target based on target_prob
-// p = exp(-ds / T) => T = -ds / ln(p)
+// p = exp(-beta * ds ) => beta = -ln(p) / ds
 // Average across all energy differences
 fn calculate_temperature_from_acceptance_prob(
     energy_diffs: &[f64],
@@ -30,7 +30,7 @@ fn calculate_temperature_from_acceptance_prob(
 ) -> f64 {
     let average_energy_diff = energy_diffs.iter().sum::<f64>() / energy_diffs.len() as f64;
     let ln_prob = target_acceptance_prob.ln().clamp(-100.0, -0.01);
-    (-average_energy_diff / ln_prob).max(1.0)
+    -ln_prob / average_energy_diff.clamp(0.01, 100.0)
 }
 
 fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
@@ -60,6 +60,7 @@ fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
     energy_diffs
 }
 
+/// Tune inverse temperature beta based on initial random trials
 pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
     model: &M,
     initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
@@ -83,8 +84,8 @@ pub struct SimulatedAnnealingOptimizer {
     n_trials: usize,
     /// Returns to the best solution if there is no improvement after this number of iterations
     return_iter: usize,
-    /// Initial temperature
-    initial_temperature: f64,
+    /// Initial inverse temperature
+    initial_beta: f64,
     /// Cooling rate
     cooling_rate: f64,
     /// Number of steps after which temperature is updated
@@ -98,14 +99,14 @@ impl SimulatedAnnealingOptimizer {
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     /// - `return_iter` : returns to the best solution if there is no improvement after this number of iterations.
-    /// - `initial_temperature` : initial temperature
+    /// - `initial_beta` : initial inverse temperature
     /// - `cooling_rate` : cooling rate
-    /// - `update_frequency` : number of steps after which temperature is updated
+    /// - `update_frequency` : number of steps after which inverse temperature (beta) is updated
     pub fn new(
         patience: usize,
         n_trials: usize,
         return_iter: usize,
-        initial_temperature: f64,
+        initial_beta: f64,
         cooling_rate: f64,
         update_frequency: usize,
     ) -> Self {
@@ -113,7 +114,7 @@ impl SimulatedAnnealingOptimizer {
             patience,
             n_trials,
             return_iter,
-            initial_temperature,
+            initial_beta,
             cooling_rate,
             update_frequency,
         }
@@ -121,7 +122,7 @@ impl SimulatedAnnealingOptimizer {
 }
 
 impl SimulatedAnnealingOptimizer {
-    /// Tune temperature parameters based on initial random trials
+    /// Tune inverse temperature parameter beta based on initial random trials
     /// - `model` : the model to optimize
     /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
     /// - `n_warmup` : number of warmup iterations to run
@@ -133,22 +134,18 @@ impl SimulatedAnnealingOptimizer {
         n_warmup: usize,
         target_initial_prob: f64,
     ) -> Self {
-        let tuned_temperature =
-            tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
+        let tuned_beta = tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
 
         Self {
-            initial_temperature: tuned_temperature,
+            initial_beta: tuned_beta,
             ..self
         }
     }
 
-    /// Tune cooling rate based on self.initial_temperature, final temperature of 1e-2
+    /// Tune cooling rate based on self.initial_beta, final beta of 1e2
     pub fn tune_cooling_rate(self, n_iter: usize) -> Self {
-        let cooling_rate = tune_cooling_rate(
-            self.initial_temperature,
-            1e-2,
-            n_iter / self.update_frequency,
-        );
+        let cooling_rate =
+            tune_cooling_rate(self.initial_beta, 1e2, n_iter / self.update_frequency);
 
         Self {
             cooling_rate,
@@ -173,7 +170,7 @@ impl SimulatedAnnealingOptimizer {
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> StepResult<M::SolutionType, M::ScoreType> {
-        let mut current_temperature = self.initial_temperature;
+        let mut current_beta = self.initial_beta;
         let mut current_solution = initial_solution;
         let mut current_score = initial_score;
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
@@ -188,10 +185,10 @@ impl SimulatedAnnealingOptimizer {
 
         while iter < n_iter {
             let metropolis = MetropolisOptimizer::new(
-                usize::MAX,
+                self.patience,
                 self.n_trials,
-                usize::MAX,
-                current_temperature,
+                self.return_iter,
+                current_beta,
             );
             // make dummy callback
             let mut dummy_callback = |_: OptProgress<M::SolutionType, M::ScoreType>| {};
@@ -243,7 +240,7 @@ impl SimulatedAnnealingOptimizer {
             }
 
             // 7. Update algorithm-specific state
-            current_temperature *= self.cooling_rate;
+            current_beta *= self.cooling_rate;
 
             // 8. Invoke callback
             let progress = OptProgress {
