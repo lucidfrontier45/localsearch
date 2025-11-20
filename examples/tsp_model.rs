@@ -292,7 +292,7 @@ fn main() {
         (
             "PopulationAnnealingOptimizer",
             Box::new(
-                PopulationAnnealingOptimizer::new(patience, 10, return_iter, 1.0, 0.9, 100, 16)
+                PopulationAnnealingOptimizer::new(patience, 16, return_iter, 1.0, 0.9, 100, 16)
                     .tune_initial_temperature(&tsp_model, None, 200, 0.5)
                     .tune_cooling_rate(n_iter),
             ),
@@ -308,13 +308,13 @@ fn main() {
         ),
         (
             "EpsilonGreedyOptimizer",
-            Box::new(EpsilonGreedyOptimizer::new(patience, 128, return_iter, 0.9)),
+            Box::new(EpsilonGreedyOptimizer::new(patience, 16, return_iter, 0.9)),
         ),
         (
             "RelativeAnnealingOptimizer",
             Box::new(RelativeAnnealingOptimizer::new(
                 patience,
-                128,
+                16,
                 return_iter,
                 1e1,
             )),
@@ -327,6 +327,7 @@ fn main() {
                 return_iter,
                 1.0e3,
                 2.5,
+                1.0,
             )),
         ),
     ];

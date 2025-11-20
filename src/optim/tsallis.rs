@@ -9,11 +9,9 @@ use crate::{
 
 use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer};
 
-const XI: f64 = 1.0;
-
-fn tsallis_transition_prob(current: f64, trial: f64, offset: f64, w: f64, q: f64) -> f64 {
+fn tsallis_transition_prob(current: f64, trial: f64, offset: f64, w: f64, q: f64, xi: f64) -> f64 {
     let delta_e = trial - current;
-    let denominator = current * (1.0 + XI) - offset;
+    let denominator = current * (1.0 + xi) - offset;
     let d = delta_e / denominator;
     if delta_e <= 0.0 {
         1.0
@@ -29,6 +27,7 @@ fn tsallis_transition_prob_wrapper(
     offset: Rc<RefCell<f64>>,
     w: f64,
     q: f64,
+    xi: f64,
 ) -> f64 {
     tsallis_transition_prob(
         current.into_inner(),
@@ -36,6 +35,7 @@ fn tsallis_transition_prob_wrapper(
         *offset.borrow(),
         w,
         q,
+        xi,
     )
 }
 
@@ -51,6 +51,7 @@ pub struct TsallisRelativeAnnealingOptimizer {
     return_iter: usize,
     w: f64,
     q: f64,
+    xi: f64,
 }
 
 impl TsallisRelativeAnnealingOptimizer {
@@ -61,14 +62,25 @@ impl TsallisRelativeAnnealingOptimizer {
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
     /// - `w` : weight to be multiplied with the relative score difference.
-    /// - `q` : Tsallis parameter, assumed to be > 1.0.
-    pub fn new(patience: usize, n_trials: usize, return_iter: usize, w: f64, q: f64) -> Self {
+    ///   Recommended value is reciprocal of expected relative score difference.
+    /// - `q` : Tsallis parameter, assumed to be > 1.0. Recommended value is 2.5.
+    /// - `xi` : parameter ξ in the acceptance probability formula.
+    ///   Recommended value is 1.0 for integer objective and 0.1% of the objective value for continuous objective.
+    pub fn new(
+        patience: usize,
+        n_trials: usize,
+        return_iter: usize,
+        w: f64,
+        q: f64,
+        xi: f64,
+    ) -> Self {
         Self {
             patience,
             n_trials,
             return_iter,
             w,
             q,
+            xi,
         }
     }
 }
@@ -98,7 +110,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
 
         // create transition probability function
         let transition_prob = |current: NotNan<f64>, trial: NotNan<f64>| {
-            tsallis_transition_prob_wrapper(current, trial, offset.clone(), self.w, self.q)
+            tsallis_transition_prob_wrapper(current, trial, offset.clone(), self.w, self.q, self.xi)
         };
 
         // wrap callback to update offset
@@ -139,12 +151,12 @@ mod test {
         let offset = 0.0;
 
         // Improvement: should accept
-        let p = tsallis_transition_prob(1.0, 0.9, offset, w, q);
+        let p = tsallis_transition_prob(1.0, 0.9, offset, w, q, 1.0);
         assert!(p >= 1.0);
 
         // Worse: probability should decrease as d increases
-        let p1 = tsallis_transition_prob(1.0, 1.1, offset, w, q);
-        let p2 = tsallis_transition_prob(1.0, 1.2, offset, w, q);
+        let p1 = tsallis_transition_prob(1.0, 1.1, offset, w, q, 1.0);
+        let p2 = tsallis_transition_prob(1.0, 1.2, offset, w, q, 1.0);
         assert!(p1 > p2);
     }
 }
