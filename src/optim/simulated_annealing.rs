@@ -6,11 +6,10 @@ use rayon::prelude::*;
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
+    counter::AcceptanceCounter,
 };
 
 use super::{LocalSearchOptimizer, MetropolisOptimizer, generic::StepResult};
-
-use crate::counter::AcceptanceCounter;
 
 /// Tune cooling rate based on initial and final temperatures and number of iterations
 /// initial temperature will be cooled to final temperature after n_iter iterations

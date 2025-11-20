@@ -6,11 +6,10 @@ use rayon::prelude::*;
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
+    counter::AcceptanceCounter,
 };
 
 use super::{LocalSearchOptimizer, TransitionProbabilityFn};
-
-use crate::counter::AcceptanceCounter;
 
 /// Result of an optimization step, containing information about the best and last solutions,
 /// as well as the acceptance counter for the step.
@@ -93,8 +92,6 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
         let mut return_stagnation_counter = 0;
         let mut patience_stagnation_counter = 0;
 
-
-
         for it in 0..n_iter {
             // 1. Update time and iteration counters
             let duration = Instant::now().duration_since(start_time);
@@ -159,8 +156,12 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
             // 7. Update algorithm-specific state (none)
 
             // 8. Invoke callback
-            let progress =
-                OptProgress::new(it, acceptance_counter.acceptance_ratio(), best_solution.clone(), best_score);
+            let progress = OptProgress::new(
+                it,
+                acceptance_counter.acceptance_ratio(),
+                best_solution.clone(),
+                best_score,
+            );
             callback(progress);
         }
 

@@ -5,11 +5,10 @@ use rayon::prelude::*;
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
+    counter::AcceptanceCounter,
 };
 
 use super::LocalSearchOptimizer;
-
-use crate::counter::AcceptanceCounter;
 
 /// Trait that a tabu list must satisfies
 pub trait TabuList: Default {
@@ -183,8 +182,12 @@ where
             }
 
             // 8. Invoke callback
-            let progress =
-                OptProgress::new(it, acceptance_counter.acceptance_ratio(), best_solution.clone(), best_score);
+            let progress = OptProgress::new(
+                it,
+                acceptance_counter.acceptance_ratio(),
+                best_solution.clone(),
+                best_score,
+            );
             callback(progress);
         }
 
