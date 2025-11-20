@@ -12,6 +12,7 @@ mod random;
 mod relative_annealing;
 mod simulated_annealing;
 mod tabu_search;
+mod tsallis;
 
 pub use adaptive_annealing::{
     AdaptiveAnnealingOptimizer, AdaptiveScheduler, TargetAccScheduleMode,
@@ -27,3 +28,4 @@ pub use random::RandomSearchOptimizer;
 pub use relative_annealing::RelativeAnnealingOptimizer;
 pub use simulated_annealing::SimulatedAnnealingOptimizer;
 pub use tabu_search::{TabuList, TabuSearchOptimizer};
+pub use tsallis::TsallisRelativeAnnealingOptimizer;

@@ -14,6 +14,7 @@ use localsearch::{
         AdaptiveAnnealingOptimizer, EpsilonGreedyOptimizer, HillClimbingOptimizer,
         LocalSearchOptimizer, PopulationAnnealingOptimizer, RelativeAnnealingOptimizer,
         SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
+        TsallisRelativeAnnealingOptimizer,
     },
     utils::RingBuffer,
 };
@@ -244,7 +245,7 @@ fn main() {
 
     let tsp_model = TSPModel::from_coords(&coords);
 
-    let n_iter: usize = 50000;
+    let n_iter: usize = 100000;
     let return_iter = n_iter / 50;
     let time_limit = Duration::from_secs(60);
     let patience = n_iter / 2;
@@ -291,7 +292,7 @@ fn main() {
         (
             "PopulationAnnealingOptimizer",
             Box::new(
-                PopulationAnnealingOptimizer::new(patience, 10, return_iter, 1.0, 0.9, 100, 16)
+                PopulationAnnealingOptimizer::new(patience, 16, return_iter, 1.0, 0.9, 100, 16)
                     .tune_initial_temperature(&tsp_model, None, 200, 0.5)
                     .tune_cooling_rate(n_iter),
             ),
@@ -307,15 +308,26 @@ fn main() {
         ),
         (
             "EpsilonGreedyOptimizer",
-            Box::new(EpsilonGreedyOptimizer::new(patience, 128, return_iter, 0.3)),
+            Box::new(EpsilonGreedyOptimizer::new(patience, 16, return_iter, 0.9)),
         ),
         (
             "RelativeAnnealingOptimizer",
             Box::new(RelativeAnnealingOptimizer::new(
                 patience,
-                128,
+                16,
                 return_iter,
-                1e1,
+                1.0e2,
+            )),
+        ),
+        (
+            "TsallisRelativeAnnealingOptimizer",
+            Box::new(TsallisRelativeAnnealingOptimizer::new(
+                patience,
+                16,
+                return_iter,
+                1.0e2,
+                2.5,
+                1.0,
             )),
         ),
     ];
