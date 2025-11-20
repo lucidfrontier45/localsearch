@@ -251,7 +251,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
 
             // 8. Invoke callback
             let progress =
-                OptProgress::new(iter, accepted_counter, best_solution.clone(), best_score);
+                OptProgress::new(iter, accepted_counter as f64 / iter as f64, best_solution.clone(), best_score);
             callback(progress);
         }
 

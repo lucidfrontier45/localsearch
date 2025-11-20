@@ -170,7 +170,7 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
 
             // 8. Invoke callback
             let progress =
-                OptProgress::new(it, accepted_counter, best_solution.clone(), best_score);
+                OptProgress::new(it, accepted_counter as f64 / (it + 1) as f64, best_solution.clone(), best_score);
             callback(progress);
         }
 
