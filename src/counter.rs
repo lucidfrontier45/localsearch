@@ -7,6 +7,12 @@ pub struct AcceptanceCounter {
     last_result_is_accepted: bool,
 }
 
+impl Default for AcceptanceCounter {
+    fn default() -> Self {
+        Self::new(100)
+    }
+}
+
 impl AcceptanceCounter {
     /// Constructor of AcceptanceCounter
     /// - `window_size` : size of the sliding window
