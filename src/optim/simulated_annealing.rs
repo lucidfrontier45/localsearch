@@ -30,7 +30,7 @@ fn calculate_temperature_from_acceptance_prob(
 ) -> f64 {
     let average_energy_diff = energy_diffs.iter().sum::<f64>() / energy_diffs.len() as f64;
     let ln_prob = target_acceptance_prob.ln().clamp(-100.0, -0.01);
-    -ln_prob / average_energy_diff
+    -ln_prob / average_energy_diff.clamp(0.01, 100.0)
 }
 
 fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
