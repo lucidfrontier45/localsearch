@@ -9,6 +9,8 @@ use crate::{
 
 use super::LocalSearchOptimizer;
 
+use crate::counter::AcceptanceCounter;
+
 /// Trait that a tabu list must satisfies
 pub trait TabuList: Default {
     /// The type of item stored in the tabu list.
@@ -111,7 +113,7 @@ where
         let mut best_score = current_score;
         let mut return_stagnation_counter = 0;
         let mut patience_stagnation_counter = 0;
-        let mut accepted_counter = 0;
+        let mut acceptance_counter = AcceptanceCounter::new(100);
 
         for it in 0..n_iter {
             let duration = Instant::now().duration_since(start_time);
@@ -136,7 +138,11 @@ where
 
             let res = find_accepted_solution::<M, T>(samples, &tabu_list, best_score);
 
-            if let Some((solution, trans, score)) = res {
+            let accepted = res.is_some();
+            acceptance_counter.enqueue(accepted);
+
+            if accepted {
+                let (solution, trans, score) = res.unwrap();
                 // Accepted
                 // 2. Update best solution and score
                 if score < best_score {
@@ -150,7 +156,6 @@ where
                 }
 
                 // 3. Update accepted counter and transitions (no transitions here)
-                accepted_counter += 1;
 
                 // 4. Update current solution and score
                 current_score = score;
@@ -179,7 +184,7 @@ where
 
             // 8. Invoke callback
             let progress =
-                OptProgress::new(it, accepted_counter as f64 / (it + 1) as f64, best_solution.clone(), best_score);
+                OptProgress::new(it, acceptance_counter.acceptance_ratio(), best_solution.clone(), best_score);
             callback(progress);
         }
 

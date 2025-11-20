@@ -9,6 +9,9 @@ pub mod utils;
 mod callback;
 pub use callback::{OptCallbackFn, OptProgress};
 
+mod counter;
+pub use counter::AcceptanceCounter;
+
 mod model;
 pub use model::OptModel;
 

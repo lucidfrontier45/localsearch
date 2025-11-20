@@ -10,6 +10,8 @@ use crate::{
 
 use super::{LocalSearchOptimizer, MetropolisOptimizer, generic::StepResult};
 
+use crate::counter::AcceptanceCounter;
+
 /// Tune cooling rate based on initial and final temperatures and number of iterations
 /// initial temperature will be cooled to final temperature after n_iter iterations
 /// - `initial_temperature` : initial temperature
@@ -183,9 +185,7 @@ impl SimulatedAnnealingOptimizer {
         let mut patience_stagnation_counter = 0;
         let now = Instant::now();
         let mut remaining_time_limit = time_limit;
-        let mut accepted_counter = 0;
-        let mut accepted_transitions = Vec::with_capacity(n_iter);
-        let mut rejected_transitions = Vec::with_capacity(n_iter);
+        let mut acceptance_counter = AcceptanceCounter::default();
 
         while iter < n_iter {
             let metropolis = MetropolisOptimizer::new(
@@ -225,10 +225,7 @@ impl SimulatedAnnealingOptimizer {
             }
 
             // 3. Update accepted counter and transitions
-            let n_accepted = step_result.accepted_transitions.len();
-            accepted_counter += n_accepted;
-            accepted_transitions.extend(step_result.accepted_transitions);
-            rejected_transitions.extend(step_result.rejected_transitions);
+            acceptance_counter = step_result.acceptance_counter;
 
             // 4. Update current solution and score
             current_solution = step_result.last_solution;
@@ -252,7 +249,7 @@ impl SimulatedAnnealingOptimizer {
             // 8. Invoke callback
             let progress = OptProgress {
                 iter,
-                acceptance_ratio: accepted_counter as f64 / iter as f64,
+                acceptance_ratio: acceptance_counter.acceptance_ratio(),
                 solution: best_solution.clone(),
                 score: best_score,
             };
@@ -265,8 +262,7 @@ impl SimulatedAnnealingOptimizer {
             best_score,
             last_solution: current_solution,
             last_score: current_score,
-            accepted_transitions,
-            rejected_transitions,
+            acceptance_counter,
         }
     }
 }
