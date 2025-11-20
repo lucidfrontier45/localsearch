@@ -101,7 +101,7 @@ impl SimulatedAnnealingOptimizer {
     /// - `return_iter` : returns to the best solution if there is no improvement after this number of iterations.
     /// - `initial_beta` : initial inverse temperature
     /// - `cooling_rate` : cooling rate
-    /// - `update_frequency` : number of steps after which temperature is updated
+    /// - `update_frequency` : number of steps after which inverse temperature (beta) is updated
     pub fn new(
         patience: usize,
         n_trials: usize,
