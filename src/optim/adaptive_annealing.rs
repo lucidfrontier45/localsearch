@@ -224,7 +224,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
             }
 
             // 3. Update accepted counter and transitions
-            let acceptance_counter = step_result.acceptance_counter;
+            let acceptance_ratio = step_result.acceptance_counter.acceptance_ratio();
             // 4. Update current solution and score
             current_solution = step_result.last_solution.clone();
             current_score = step_result.last_score;
@@ -249,7 +249,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
             // 8. Invoke callback
             let progress = OptProgress {
                 iter,
-                acceptance_ratio: acceptance_counter.acceptance_ratio(),
+                acceptance_ratio,
                 solution: best_solution.clone(),
                 score: best_score,
             };

@@ -1,10 +1,11 @@
+use std::collections::VecDeque;
+
 /// Sliding window based acceptance counter
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct AcceptanceCounter {
     window_size: usize,
-    current_sample_count: usize,
-    accepted_count: usize,
-    last_result_is_accepted: bool,
+    buffer: std::collections::VecDeque<u8>,
+    n_accepted: usize,
 }
 
 impl Default for AcceptanceCounter {
@@ -19,39 +20,29 @@ impl AcceptanceCounter {
     pub fn new(window_size: usize) -> Self {
         Self {
             window_size,
-            current_sample_count: 0,
-            accepted_count: 0,
-            last_result_is_accepted: false,
+            buffer: VecDeque::with_capacity(window_size),
+            n_accepted: 0,
         }
     }
 
     /// Update the counter with a new result
     pub fn enqueue(&mut self, accepted: bool) {
-        // if current_sample_count < window_size, just add the new result
-        if self.current_sample_count < self.window_size {
-            self.current_sample_count += 1;
-            if accepted {
-                self.accepted_count += 1;
-            }
-            self.last_result_is_accepted = accepted;
-        } else {
-            // if the window is full, remove the oldest result and add the new result
-            if self.last_result_is_accepted {
-                self.accepted_count -= 1;
-            }
-            if accepted {
-                self.accepted_count += 1;
-            }
-            self.last_result_is_accepted = accepted;
+        if self.buffer.len() == self.window_size {
+            let old = self.buffer.pop_front().unwrap();
+            self.n_accepted -= old as usize;
         }
+        let value = accepted as u8;
+        self.buffer.push_back(value);
+        self.n_accepted += value as usize;
     }
 
     /// Get the acceptance ratio
     pub fn acceptance_ratio(&self) -> f64 {
-        if self.current_sample_count == 0 {
+        let total = self.buffer.len();
+        if total == 0 {
             0.0
         } else {
-            self.accepted_count as f64 / self.current_sample_count as f64
+            self.n_accepted as f64 / total as f64
         }
     }
 }
