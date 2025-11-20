@@ -257,7 +257,7 @@ fn main() {
     let mut callback = |op: OptProgress<SolutionType, ScoreType>| {
         // eprintln!("iter {}, score {}", op.iter, op.score);
         pb.set_message(format!(
-            "best score {:.4e}, acceptance ratio {:.2e}",
+            "best score {:.4e}, acceptance ratio {:.2}",
             op.score.into_inner(),
             op.acceptance_ratio
         ));
