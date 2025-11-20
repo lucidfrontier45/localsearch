@@ -256,12 +256,10 @@ fn main() {
     let pb = create_pbar(n_iter as u64);
     let mut callback = |op: OptProgress<SolutionType, ScoreType>| {
         // eprintln!("iter {}, score {}", op.iter, op.score);
-        let ratio = op.accepted_count as f64 / op.iter as f64;
         pb.set_message(format!(
-            "best score {:.4e}, count = {}, acceptance ratio {:.2e}",
+            "best score {:.4e}, acceptance ratio {:.2e}",
             op.score.into_inner(),
-            op.accepted_count,
-            ratio
+            op.acceptance_ratio
         ));
         pb.set_position(op.iter as u64);
     };

@@ -7,8 +7,8 @@ use std::{cell::RefCell, rc::Rc};
 pub struct OptProgress<S, SC> {
     /// current iteration step
     pub iter: usize,
-    /// number of accepted transitions
-    pub accepted_count: usize,
+    /// acceptance ratio
+    pub acceptance_ratio: f64,
     /// current best solution
     pub solution: Rc<RefCell<S>>,
     /// current best score
@@ -17,10 +17,10 @@ pub struct OptProgress<S, SC> {
 
 impl<S, SC: Ord> OptProgress<S, SC> {
     /// constuctor of OptProgress
-    pub fn new(iter: usize, accepted_count: usize, solution: Rc<RefCell<S>>, score: SC) -> Self {
+    pub fn new(iter: usize, acceptance_ratio: f64, solution: Rc<RefCell<S>>, score: SC) -> Self {
         Self {
             iter,
-            accepted_count,
+            acceptance_ratio,
             solution,
             score,
         }
@@ -45,12 +45,10 @@ impl<S, SC: Ord> OptProgress<S, SC> {
 ///     pb
 /// };
 /// let mut callback = |op: OptProgress<SolutionType, ScoreType>| {
-///     let ratio = op.accepted_count as f64 / op.iter as f64;
 ///     pb.set_message(format!(
-///         "best score {:.4e}, count = {}, acceptance ratio {:.2e}",
+///         "best score {:.4e}, acceptance ratio {:.2e}",
 ///         op.score.into_inner(),
-///         op.accepted_count,
-///         ratio
+///         op.acceptance_ratio
 ///     ));
 ///     pb.set_position(op.iter as u64);
 /// };

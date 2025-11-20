@@ -252,7 +252,7 @@ impl SimulatedAnnealingOptimizer {
             // 8. Invoke callback
             let progress = OptProgress {
                 iter,
-                accepted_count: accepted_counter,
+                acceptance_ratio: accepted_counter as f64 / iter as f64,
                 solution: best_solution.clone(),
                 score: best_score,
             };
