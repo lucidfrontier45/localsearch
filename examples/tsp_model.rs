@@ -316,7 +316,7 @@ fn main() {
                 patience,
                 16,
                 return_iter,
-                1e1,
+                1.0e2,
             )),
         ),
         (
@@ -325,7 +325,7 @@ fn main() {
                 patience,
                 16,
                 return_iter,
-                1.0e3,
+                1.0e2,
                 2.5,
                 1.0,
             )),
