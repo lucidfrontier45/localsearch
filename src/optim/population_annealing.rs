@@ -119,7 +119,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
     ) -> (M::SolutionType, M::ScoreType) {
         let start_time = Instant::now();
         let mut rng = rand::rng();
-        let mut accepted_counter = 0;
 
         // Initialize population with random solutions or copies of the initial solution
         let mut population: Vec<(M::SolutionType, M::ScoreType)> =
@@ -199,11 +198,11 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             }
 
             // 3. Update accepted counter
-            let n_accepted: usize = step_results
+            let acceptance_ratio = step_results
                 .iter()
-                .map(|r| r.accepted_transitions.len())
-                .sum();
-            accepted_counter += n_accepted / self.population_size;
+                .map(|r| r.acceptance_counter.acceptance_ratio())
+                .sum::<f64>()
+                / self.population_size as f64;
 
             // 4. Update current solution and score (population updated in algo specific)
 
@@ -251,7 +250,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
 
             // 8. Invoke callback
             let progress =
-                OptProgress::new(iter, accepted_counter as f64 / iter as f64, best_solution.clone(), best_score);
+                OptProgress::new(iter, acceptance_ratio, best_solution.clone(), best_score);
             callback(progress);
         }
 

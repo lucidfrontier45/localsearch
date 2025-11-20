@@ -10,12 +10,10 @@ use crate::{
 
 use super::{LocalSearchOptimizer, TransitionProbabilityFn};
 
+use crate::counter::AcceptanceCounter;
+
 /// Result of an optimization step, containing information about the best and last solutions,
-/// as well as the transitions that were accepted or rejected during the step.
-///
-/// The transition tuples represent `(from_score, to_score)` pairs, indicating the score before
-/// and after a proposed move. Accepted transitions are those that were applied; rejected transitions
-/// are those that were considered but not applied.
+/// as well as the acceptance counter for the step.
 pub struct StepResult<S, ST> {
     /// The best solution found during this step.
     pub best_solution: S,
@@ -25,10 +23,8 @@ pub struct StepResult<S, ST> {
     pub last_solution: S,
     /// The score of the last solution at the end of this step.
     pub last_score: ST,
-    /// List of accepted transitions as `(from_score, to_score)` pairs.
-    pub accepted_transitions: Vec<(ST, ST)>,
-    /// List of rejected transitions as `(from_score, to_score)` pairs.
-    pub rejected_transitions: Vec<(ST, ST)>,
+    /// Acceptance counter for the step.
+    pub acceptance_counter: AcceptanceCounter,
 }
 
 /// Optimizer that implements local search algorithm
@@ -92,13 +88,12 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
         let mut current_score = initial_score;
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
-        let mut accepted_counter = 0;
+        let mut acceptance_counter = AcceptanceCounter::new(100);
         // Separate stagnation counters: one for triggering a return to best, one for early stopping (patience)
         let mut return_stagnation_counter = 0;
         let mut patience_stagnation_counter = 0;
 
-        let mut accepted_transitions = Vec::with_capacity(n_iter);
-        let mut rejected_transitions = Vec::with_capacity(n_iter);
+
 
         for it in 0..n_iter {
             // 1. Update time and iteration counters
@@ -141,12 +136,7 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
                 p > r
             };
 
-            if accepted {
-                accepted_transitions.push((current_score, trial_score));
-                accepted_counter += 1;
-            } else {
-                rejected_transitions.push((current_score, trial_score));
-            }
+            acceptance_counter.enqueue(accepted);
 
             // 4. Update current solution and score
             if accepted {
@@ -170,7 +160,7 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
 
             // 8. Invoke callback
             let progress =
-                OptProgress::new(it, accepted_counter as f64 / (it + 1) as f64, best_solution.clone(), best_score);
+                OptProgress::new(it, acceptance_counter.acceptance_ratio(), best_solution.clone(), best_score);
             callback(progress);
         }
 
@@ -180,8 +170,7 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
             best_score,
             last_solution: current_solution,
             last_score: current_score,
-            accepted_transitions,
-            rejected_transitions,
+            acceptance_counter,
         }
     }
 }

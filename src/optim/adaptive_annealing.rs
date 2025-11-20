@@ -98,10 +98,7 @@ impl AdaptiveScheduler {
         step_result: &StepResult<ST, NotNan<f64>>,
     ) -> f64 {
         // T = T * exp(gamma * (target_acc - acc) / target_acc)
-        let n_accepted = step_result.accepted_transitions.len();
-        let n_rejected = step_result.rejected_transitions.len();
-        let n_total = n_accepted + n_rejected;
-        let acc = n_accepted as f64 / n_total as f64;
+        let acc = step_result.acceptance_counter.acceptance_ratio();
         let target_acc = self.calculate_target_acc(current_iter, total_iter);
         current_temp * ((self.gamma * (target_acc - acc) / target_acc).exp())
     }
@@ -188,7 +185,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
         let mut patience_stagnation_counter = 0;
         let now = Instant::now();
         let mut remaining_time_limit = time_limit;
-        let mut accepted_counter = 0;
 
         while iter < n_iter {
             let metropolis = MetropolisOptimizer::new(
@@ -228,8 +224,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
             }
 
             // 3. Update accepted counter and transitions
-            let n_accepted = step_result.accepted_transitions.len();
-            accepted_counter += n_accepted;
+            let acceptance_counter = step_result.acceptance_counter;
             // 4. Update current solution and score
             current_solution = step_result.last_solution.clone();
             current_score = step_result.last_score;
@@ -254,7 +249,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
             // 8. Invoke callback
             let progress = OptProgress {
                 iter,
-                acceptance_ratio: accepted_counter as f64 / iter as f64,
+                acceptance_ratio: acceptance_counter.acceptance_ratio(),
                 solution: best_solution.clone(),
                 score: best_score,
             };
