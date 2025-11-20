@@ -129,7 +129,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         // wrap current best score (offset) and beta (inverse temperature) in Rc<RefCell> to allow mutation in closure
         let offset = Rc::new(RefCell::new(initial_score.into_inner()));
         let beta = Rc::new(RefCell::new(self.beta));
-        let iteration_count = Rc::new(RefCell::new(0usize));
 
         // create transition probability function
         let transition_prob = |current: NotNan<f64>, trial: NotNan<f64>| {
@@ -145,9 +144,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
 
         // wrap callback to update offset and beta based on update_frequency
         let mut callback_with_updates = |progress: OptProgress<M::SolutionType, M::ScoreType>| {
-            // update iteration count
-            iteration_count.replace(progress.iter);
-
             // update offset
             offset.replace(progress.score.into_inner());
 
