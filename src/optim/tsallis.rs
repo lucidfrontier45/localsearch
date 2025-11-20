@@ -11,7 +11,7 @@ use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer};
 
 fn tsallis_transition_prob(current: f64, trial: f64, offset: f64, w: f64, q: f64, xi: f64) -> f64 {
     let delta_e = trial - current;
-    let denominator = current * (1.0 + xi) - offset;
+    let denominator = current - offset + xi;
     let d = delta_e / denominator;
     if delta_e <= 0.0 {
         1.0
