@@ -76,8 +76,6 @@ impl TsallisRelativeAnnealingOptimizer {
     /// - `xi` : parameter ξ in the acceptance probability formula.
     ///   Recommended value is 1.0 for integer objective and 0.1% of the objective value for continuous objective.
     /// - `update_frequency` : frequency at which certain parameters (like beta) are updated during optimization.
-    /// - `scheduler` : scheduler for beta
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         patience: usize,
         n_trials: usize,
