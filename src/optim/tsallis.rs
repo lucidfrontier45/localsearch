@@ -32,7 +32,7 @@ fn tsallis_transition_prob_wrapper(
     current: NotNan<f64>,
     trial: NotNan<f64>,
     offset: Rc<RefCell<f64>>,
-    beta: f64,
+    beta: Rc<RefCell<f64>>,
     q: f64,
     xi: f64,
 ) -> f64 {
@@ -40,7 +40,7 @@ fn tsallis_transition_prob_wrapper(
         current.into_inner(),
         trial.into_inner(),
         *offset.borrow(),
-        beta,
+        *beta.borrow(),
         q,
         xi,
     )
@@ -112,8 +112,9 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        // Rc<RefCell> of the current best score
+        // wrap current best score (offset) and beta (inverse temperature) in Rc<RefCell> to allow mutation in closure
         let offset = Rc::new(RefCell::new(initial_score.into_inner()));
+        let beta = Rc::new(RefCell::new(self.beta));
 
         // create transition probability function
         let transition_prob = |current: NotNan<f64>, trial: NotNan<f64>| {
@@ -121,7 +122,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 current,
                 trial,
                 offset.clone(),
-                self.beta,
+                beta.clone(),
                 self.q,
                 self.xi,
             )
