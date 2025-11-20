@@ -14,6 +14,7 @@ use localsearch::{
         AdaptiveAnnealingOptimizer, EpsilonGreedyOptimizer, HillClimbingOptimizer,
         LocalSearchOptimizer, PopulationAnnealingOptimizer, RelativeAnnealingOptimizer,
         SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
+        TsallisRelativeAnnealingOptimizer,
     },
     utils::RingBuffer,
 };
@@ -244,7 +245,7 @@ fn main() {
 
     let tsp_model = TSPModel::from_coords(&coords);
 
-    let n_iter: usize = 50000;
+    let n_iter: usize = 100000;
     let return_iter = n_iter / 50;
     let time_limit = Duration::from_secs(60);
     let patience = n_iter / 2;
@@ -307,7 +308,7 @@ fn main() {
         ),
         (
             "EpsilonGreedyOptimizer",
-            Box::new(EpsilonGreedyOptimizer::new(patience, 128, return_iter, 0.3)),
+            Box::new(EpsilonGreedyOptimizer::new(patience, 128, return_iter, 0.9)),
         ),
         (
             "RelativeAnnealingOptimizer",
@@ -316,6 +317,16 @@ fn main() {
                 128,
                 return_iter,
                 1e1,
+            )),
+        ),
+        (
+            "TsallisRelativeAnnealingOptimizer",
+            Box::new(TsallisRelativeAnnealingOptimizer::new(
+                patience,
+                16,
+                return_iter,
+                1.0e3,
+                2.5,
             )),
         ),
     ];
