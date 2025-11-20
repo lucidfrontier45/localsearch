@@ -9,14 +9,21 @@ use crate::{
 
 use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer};
 
-fn tsallis_transition_prob(current: f64, trial: f64, offset: f64, w: f64, q: f64, xi: f64) -> f64 {
+fn tsallis_transition_prob(
+    current: f64,
+    trial: f64,
+    offset: f64,
+    beta: f64,
+    q: f64,
+    xi: f64,
+) -> f64 {
     let delta_e = trial - current;
     let denominator = current - offset + xi;
     let d = delta_e / denominator;
     if delta_e <= 0.0 {
         1.0
     } else {
-        let arg = 1.0 - (1.0 - q) * w * d;
+        let arg = 1.0 - (1.0 - q) * beta * d;
         arg.powf(1.0 / (1.0 - q)).max(0.01)
     }
 }
@@ -25,7 +32,7 @@ fn tsallis_transition_prob_wrapper(
     current: NotNan<f64>,
     trial: NotNan<f64>,
     offset: Rc<RefCell<f64>>,
-    w: f64,
+    beta: f64,
     q: f64,
     xi: f64,
 ) -> f64 {
@@ -33,7 +40,7 @@ fn tsallis_transition_prob_wrapper(
         current.into_inner(),
         trial.into_inner(),
         *offset.borrow(),
-        w,
+        beta,
         q,
         xi,
     )
@@ -41,7 +48,7 @@ fn tsallis_transition_prob_wrapper(
 
 /// Optimizer that implements Tsallis relative annealing algorithm
 /// This is a generalization of relative annealing using Tsallis statistics.
-/// The acceptance probability for worse solutions is [1 - (1-q) * w * ΔE / (E - E_best + ξ)]^{1/(1-q)},
+/// The acceptance probability for worse solutions is [1 - (1-q) * beta * ΔE / (E - E_best + ξ)]^{1/(1-q)},
 /// where ΔE = trial - current, E = current, E_best = offset.
 /// Assumes q > 1.0.
 #[derive(Clone, Copy)]
@@ -49,7 +56,7 @@ pub struct TsallisRelativeAnnealingOptimizer {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
-    w: f64,
+    beta: f64,
     q: f64,
     xi: f64,
 }
@@ -61,7 +68,7 @@ impl TsallisRelativeAnnealingOptimizer {
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
-    /// - `w` : weight to be multiplied with the relative score difference.
+    /// - `beta` : weight to be multiplied with the relative score difference.
     ///   Recommended value is reciprocal of expected relative score difference.
     /// - `q` : Tsallis parameter, assumed to be > 1.0. Recommended value is 2.5.
     /// - `xi` : parameter ξ in the acceptance probability formula.
@@ -70,7 +77,7 @@ impl TsallisRelativeAnnealingOptimizer {
         patience: usize,
         n_trials: usize,
         return_iter: usize,
-        w: f64,
+        beta: f64,
         q: f64,
         xi: f64,
     ) -> Self {
@@ -78,7 +85,7 @@ impl TsallisRelativeAnnealingOptimizer {
             patience,
             n_trials,
             return_iter,
-            w,
+            beta,
             q,
             xi,
         }
@@ -110,7 +117,14 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
 
         // create transition probability function
         let transition_prob = |current: NotNan<f64>, trial: NotNan<f64>| {
-            tsallis_transition_prob_wrapper(current, trial, offset.clone(), self.w, self.q, self.xi)
+            tsallis_transition_prob_wrapper(
+                current,
+                trial,
+                offset.clone(),
+                self.beta,
+                self.q,
+                self.xi,
+            )
         };
 
         // wrap callback to update offset
@@ -146,17 +160,17 @@ mod test {
 
     #[test]
     fn test_tsallis_transition_prob() {
-        let w = 1e1;
+        let beta = 1e1;
         let q = 1.5;
         let offset = 0.0;
 
         // Improvement: should accept
-        let p = tsallis_transition_prob(1.0, 0.9, offset, w, q, 1.0);
+        let p = tsallis_transition_prob(1.0, 0.9, offset, beta, q, 1.0);
         assert!(p >= 1.0);
 
         // Worse: probability should decrease as d increases
-        let p1 = tsallis_transition_prob(1.0, 1.1, offset, w, q, 1.0);
-        let p2 = tsallis_transition_prob(1.0, 1.2, offset, w, q, 1.0);
+        let p1 = tsallis_transition_prob(1.0, 1.1, offset, beta, q, 1.0);
+        let p2 = tsallis_transition_prob(1.0, 1.2, offset, beta, q, 1.0);
         assert!(p1 > p2);
     }
 }
