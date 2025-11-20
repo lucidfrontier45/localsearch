@@ -7,10 +7,7 @@ use crate::{
     callback::{OptCallbackFn, OptProgress},
 };
 
-use super::{
-    LocalSearchOptimizer, MetropolisOptimizer, generic::StepResult,
-    simulated_annealing::tune_temperature,
-};
+use super::{LocalSearchOptimizer, MetropolisOptimizer, simulated_annealing::tune_temperature};
 
 #[derive(Clone, Copy, Debug, Default)]
 /// Target acceptance rate scheduling mode
@@ -22,6 +19,8 @@ pub enum TargetAccScheduleMode {
     /// Cosine schedule from initial_target_acc to final_target_acc
     #[default]
     Cosine,
+    /// Constant target acceptance rate
+    Constant,
 }
 
 /// Scheduler for adaptive annealing optimizer
@@ -87,18 +86,18 @@ impl AdaptiveScheduler {
                 final_target_acc
                     + 0.5 * (initial_target_acc - final_target_acc) * (1.0 + (PI * fraction).cos())
             }
+            TargetAccScheduleMode::Constant => initial_target_acc,
         }
     }
 
-    fn update_temperature<ST>(
+    pub(crate) fn update_temperature(
         &self,
         current_beta: f64,
         current_iter: usize,
         total_iter: usize,
-        step_result: &StepResult<ST, NotNan<f64>>,
+        acc: f64,
     ) -> f64 {
         // beta = beta * exp(-gamma * (target_acc - acc) / target_acc)
-        let acc = step_result.acceptance_counter.acceptance_ratio();
         let target_acc = self.calculate_target_acc(current_iter, total_iter);
         current_beta * ((-self.gamma * (target_acc - acc) / target_acc).exp())
     }
@@ -244,7 +243,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
             // 7. Update algorithm-specific state
             current_beta =
                 self.scheduler
-                    .update_temperature(current_beta, iter, n_iter, &step_result);
+                    .update_temperature(current_beta, iter, n_iter, acceptance_ratio);
 
             // 8. Invoke callback
             let progress = OptProgress {
