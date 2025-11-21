@@ -161,7 +161,6 @@ impl AdaptiveAnnealingOptimizer {
     /// - `model` : the model to optimize
     /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
     /// - `n_warmup` : number of warmup iterations to run
-    /// - `target_initial_prob` : target acceptance probability for uphill moves at the beginning
     pub fn tune_initial_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
         self,
         model: &M,
