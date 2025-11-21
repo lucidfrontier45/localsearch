@@ -279,13 +279,17 @@ fn main() {
         ),
         (
             "AdaptiveAnnealingOptimizer",
-            Box::new(AdaptiveAnnealingOptimizer::new(
-                patience,
-                16,
-                return_iter,
-                100,
-                Default::default(),
-            )),
+            Box::new(
+                AdaptiveAnnealingOptimizer::new(
+                    patience,
+                    16,
+                    return_iter,
+                    1.0,
+                    Default::default(),
+                    100,
+                )
+                .tune_initial_temperature(&tsp_model, None, 200),
+            ),
         ),
         (
             "PopulationAnnealingOptimizer",

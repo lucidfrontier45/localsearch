@@ -181,7 +181,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         let mut callback_with_update = |progress: OptProgress<M::SolutionType, M::ScoreType>| {
             if progress.iter % self.update_frequency == 0 && progress.iter > 0 {
                 let new_beta = *current_beta.borrow() * self.cooling_rate;
-                *current_beta.borrow_mut() = new_beta;
+                current_beta.replace(new_beta);
             }
             callback(progress);
         };
