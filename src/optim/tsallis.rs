@@ -38,11 +38,11 @@ pub struct TsallisRelativeAnnealingOptimizer {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
-    beta: f64,
+    initial_beta: f64,
+    scheduler: AdaptiveScheduler,
+    update_frequency: usize,
     q: f64,
     xi: f64,
-    update_frequency: usize,
-    scheduler: AdaptiveScheduler,
 }
 
 impl TsallisRelativeAnnealingOptimizer {
@@ -52,20 +52,20 @@ impl TsallisRelativeAnnealingOptimizer {
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
-    /// - `beta` : weight to be multiplied with the relative score difference.
+    /// - `initial_beta` : initial weight to be multiplied with the relative score difference.
     ///   Recommended value is reciprocal of expected relative score difference.
+    /// - `update_frequency` : frequency at which certain parameters (like beta) are updated during optimization.
     /// - `q` : Tsallis parameter, assumed to be > 1.0. Recommended value is 2.5.
     /// - `xi` : parameter ξ in the acceptance probability formula.
     ///   Recommended value is 1.0 for integer objective and 0.1% of the objective value for continuous objective.
-    /// - `update_frequency` : frequency at which certain parameters (like beta) are updated during optimization.
     pub fn new(
         patience: usize,
         n_trials: usize,
         return_iter: usize,
         beta: f64,
+        update_frequency: usize,
         q: f64,
         xi: f64,
-        update_frequency: usize,
     ) -> Self {
         let scheduler =
             AdaptiveScheduler::new(0.3, 0.3, super::TargetAccScheduleMode::Constant, 0.05);
@@ -73,10 +73,10 @@ impl TsallisRelativeAnnealingOptimizer {
             patience,
             n_trials,
             return_iter,
-            beta,
+            initial_beta: beta,
+            update_frequency,
             q,
             xi,
-            update_frequency,
             scheduler,
         }
     }
@@ -110,7 +110,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
     ) -> (M::SolutionType, M::ScoreType) {
         // wrap current best score (offset) and beta (inverse temperature) in Rc<RefCell> to allow mutation in closure
         let current_offset = Rc::new(RefCell::new(initial_score.into_inner()));
-        let current_beta = Rc::new(RefCell::new(self.beta));
+        let current_beta = Rc::new(RefCell::new(self.initial_beta));
 
         // create transition probability function
         let transition_prob = {
