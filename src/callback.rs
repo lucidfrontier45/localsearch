@@ -42,8 +42,6 @@ impl<S, SC: Ord> OptProgress<S, SC> {
 ///             .progress_chars("#>-")
 ///     );
 ///     pb.set_draw_target(ProgressDrawTarget::stderr_with_hz(10));
-///     pb
-/// };
 /// let mut callback = |op: OptProgress<SolutionType, ScoreType>| {
 ///     pb.set_message(format!(
 ///         "best score {:.4e}, acceptance ratio {:.2e}",
