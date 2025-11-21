@@ -4,6 +4,17 @@ use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer, generic::StepResult};
 
+pub fn metropolis_transition(beta: f64) -> impl Fn(NotNan<f64>, NotNan<f64>) -> f64 {
+    move |current: NotNan<f64>, trial: NotNan<f64>| {
+        let ds = trial - current;
+        if ds <= NotNan::new(0.0).unwrap() {
+            1.0
+        } else {
+            (-beta * ds.into_inner()).exp()
+        }
+    }
+}
+
 /// Optimizer that implements the Metropolis algorithm with constant beta
 #[derive(Clone, Copy)]
 pub struct MetropolisOptimizer {
@@ -45,12 +56,7 @@ impl MetropolisOptimizer {
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> StepResult<M::SolutionType, M::ScoreType> {
         let transition = |current: NotNan<f64>, trial: NotNan<f64>| {
-            let ds = trial - current;
-            if ds <= NotNan::new(0.0).unwrap() {
-                1.0
-            } else {
-                (-self.beta * ds.into_inner()).exp()
-            }
+            metropolis_transition(self.beta)(current, trial)
         };
         let generic_optimizer = GenericLocalSearchOptimizer::new(
             self.patience,
