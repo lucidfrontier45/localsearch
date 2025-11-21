@@ -10,15 +10,15 @@ use crate::{
 use super::{AdaptiveScheduler, GenericLocalSearchOptimizer, LocalSearchOptimizer};
 
 fn tsallis_transition_prob(
-    current: f64,
-    trial: f64,
+    current_score: f64,
+    trial_score: f64,
     offset: f64,
     beta: f64,
     q: f64,
     xi: f64,
 ) -> f64 {
-    let delta_e = trial - current;
-    let denominator = current - offset + xi;
+    let delta_e = trial_score - current_score;
+    let denominator = current_score - offset + xi;
     let d = delta_e / denominator;
     if delta_e <= 0.0 {
         1.0
@@ -26,24 +26,6 @@ fn tsallis_transition_prob(
         let arg = 1.0 - (1.0 - q) * beta * d;
         arg.powf(1.0 / (1.0 - q)).max(0.01)
     }
-}
-
-fn tsallis_transition_prob_wrapper(
-    current: NotNan<f64>,
-    trial: NotNan<f64>,
-    offset: Rc<RefCell<f64>>,
-    beta: Rc<RefCell<f64>>,
-    q: f64,
-    xi: f64,
-) -> f64 {
-    tsallis_transition_prob(
-        current.into_inner(),
-        trial.into_inner(),
-        *offset.borrow(),
-        *beta.borrow(),
-        q,
-        xi,
-    )
 }
 
 /// Optimizer that implements Tsallis relative annealing algorithm
@@ -127,35 +109,40 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
         // wrap current best score (offset) and beta (inverse temperature) in Rc<RefCell> to allow mutation in closure
-        let offset = Rc::new(RefCell::new(initial_score.into_inner()));
-        let beta = Rc::new(RefCell::new(self.beta));
+        let current_offset = Rc::new(RefCell::new(initial_score.into_inner()));
+        let current_beta = Rc::new(RefCell::new(self.beta));
 
         // create transition probability function
-        let transition_prob = |current: NotNan<f64>, trial: NotNan<f64>| {
-            tsallis_transition_prob_wrapper(
-                current,
-                trial,
-                offset.clone(),
-                beta.clone(),
-                self.q,
-                self.xi,
-            )
+        let transition_prob = {
+            let offset = current_offset.clone();
+            let beta = current_beta.clone();
+
+            move |current: NotNan<f64>, trial: NotNan<f64>| {
+                tsallis_transition_prob(
+                    current.into_inner(),
+                    trial.into_inner(),
+                    *offset.borrow(),
+                    *beta.borrow(),
+                    self.q,
+                    self.xi,
+                )
+            }
         };
 
         // wrap callback to update offset and beta based on update_frequency
         let mut callback_with_updates = |progress: OptProgress<M::SolutionType, M::ScoreType>| {
             // update offset
-            offset.replace(progress.score.into_inner());
+            current_offset.replace(progress.score.into_inner());
 
             // potentially update beta with scheduler
             if self.update_frequency > 0 && progress.iter % self.update_frequency == 0 {
                 let new_beta = self.scheduler.update_temperature(
-                    *beta.borrow(),
+                    *current_beta.borrow(),
                     progress.iter,
                     n_iter,
                     progress.acceptance_ratio,
                 );
-                beta.replace(new_beta);
+                current_beta.replace(new_beta);
             }
 
             // invoke original callback
