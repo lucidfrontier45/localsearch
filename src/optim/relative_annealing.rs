@@ -4,25 +4,25 @@ use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer};
 
-fn transition_prob<T: Into<f64>>(current: T, trial: T, w: f64) -> f64 {
+fn transition_prob<T: Into<f64>>(current: T, trial: T, beta: f64) -> f64 {
     let current = current.into();
     let trial = trial.into();
     let d = (trial - current) / current;
-    (-w * d).exp()
+    (-beta * d).exp()
 }
 
 /// Optimizer that implements relative annealing algorithm
 /// In this model, unlike simulated annealing, whether accept the trial solution or not is calculated based on relative score difference
 ///
 /// 1. d <- (trial_score - current_score) / current_score
-/// 2. p <- exp(-w * d)
+/// 2. p <- exp(-beta * d)
 /// 3. accept if p > rand(0, 1)
 #[derive(Clone, Copy)]
 pub struct RelativeAnnealingOptimizer {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
-    w: f64,
+    beta: f64,
 }
 
 impl RelativeAnnealingOptimizer {
@@ -32,13 +32,13 @@ impl RelativeAnnealingOptimizer {
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
-    /// - `w` : weight to be multiplied with the relative score difference.
-    pub fn new(patience: usize, n_trials: usize, return_iter: usize, w: f64) -> Self {
+    /// - `beta` : weight to be multiplied with the relative score difference.
+    pub fn new(patience: usize, n_trials: usize, return_iter: usize, beta: f64) -> Self {
         Self {
             patience,
             n_trials,
             return_iter,
-            w,
+            beta,
         }
     }
 }
@@ -65,7 +65,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeA
             self.patience,
             self.n_trials,
             self.return_iter,
-            |current, trial| transition_prob(current, trial, self.w),
+            |current, trial| transition_prob(current, trial, self.beta),
         );
 
         optimizer.optimize(

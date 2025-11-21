@@ -3,12 +3,12 @@ use std::{cell::RefCell, f64::consts::PI, rc::Rc};
 use ordered_float::NotNan;
 
 use crate::{
-    Duration, Instant, OptModel,
+    Duration, OptModel,
     callback::{OptCallbackFn, OptProgress},
 };
 
 use super::{
-    LocalSearchOptimizer, MetropolisOptimizer, generic::StepResult,
+    GenericLocalSearchOptimizer, LocalSearchOptimizer, metropolis::metropolis_transition,
     simulated_annealing::tune_temperature,
 };
 
@@ -22,6 +22,8 @@ pub enum TargetAccScheduleMode {
     /// Cosine schedule from initial_target_acc to final_target_acc
     #[default]
     Cosine,
+    /// Constant target acceptance rate
+    Constant,
 }
 
 /// Scheduler for adaptive annealing optimizer
@@ -87,23 +89,20 @@ impl AdaptiveScheduler {
                 final_target_acc
                     + 0.5 * (initial_target_acc - final_target_acc) * (1.0 + (PI * fraction).cos())
             }
+            TargetAccScheduleMode::Constant => initial_target_acc,
         }
     }
 
-    fn update_temperature<ST>(
+    pub(crate) fn update_temperature(
         &self,
-        current_temp: f64,
+        current_beta: f64,
         current_iter: usize,
         total_iter: usize,
-        step_result: &StepResult<ST, NotNan<f64>>,
+        acc: f64,
     ) -> f64 {
-        // T = T * exp(gamma * (target_acc - acc) / target_acc)
-        let n_accepted = step_result.accepted_transitions.len();
-        let n_rejected = step_result.rejected_transitions.len();
-        let n_total = n_accepted + n_rejected;
-        let acc = n_accepted as f64 / n_total as f64;
+        // beta = beta * exp(-gamma * (target_acc - acc) / target_acc)
         let target_acc = self.calculate_target_acc(current_iter, total_iter);
-        current_temp * ((self.gamma * (target_acc - acc) / target_acc).exp())
+        current_beta * ((-self.gamma * (target_acc - acc) / target_acc).exp())
     }
 }
 
@@ -117,10 +116,12 @@ pub struct AdaptiveAnnealingOptimizer {
     n_trials: usize,
     /// Returns to the best solution if there is no improvement after this number of iterations
     return_iter: usize,
-    /// Frequency (in iterations) at which adaptive parameters are updated
-    update_frequency: usize,
+    /// Initial inverse temperature
+    initial_beta: f64,
     /// Scheduler for target acceptance rate
     scheduler: AdaptiveScheduler,
+    /// Frequency (in iterations) at which adaptive parameters are updated
+    update_frequency: usize,
 }
 
 impl AdaptiveAnnealingOptimizer {
@@ -131,8 +132,9 @@ impl AdaptiveAnnealingOptimizer {
     /// * `patience` - The number of iterations without improvement before terminating the optimization.
     /// * `n_trials` - The number of candidate solutions to evaluate per iteration.
     /// * `return_iter` - The number of iterations without improvement before reverting to the best solution.
-    /// * `update_frequency` - The frequency (in iterations) at which adaptive parameters are updated.
+    /// * `initial_beta` - The initial inverse temperature for the annealing process.
     /// * `scheduler` - The adaptive scheduler for target acceptance rate.
+    /// * `update_frequency` - The frequency (in iterations) at which adaptive parameters are updated.
     ///
     /// # Returns
     ///
@@ -141,15 +143,40 @@ impl AdaptiveAnnealingOptimizer {
         patience: usize,
         n_trials: usize,
         return_iter: usize,
-        update_frequency: usize,
+        initial_beta: f64,
         scheduler: AdaptiveScheduler,
+        update_frequency: usize,
     ) -> Self {
         Self {
             patience,
             n_trials,
             return_iter,
-            update_frequency,
+            initial_beta,
             scheduler,
+            update_frequency,
+        }
+    }
+
+    /// Tune inverse temperature parameter beta based on initial random trials
+    /// - `model` : the model to optimize
+    /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
+    /// - `n_warmup` : number of warmup iterations to run
+    pub fn tune_initial_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
+        self,
+        model: &M,
+        initial_solution: Option<(M::SolutionType, M::ScoreType)>,
+        n_warmup: usize,
+    ) -> Self {
+        let tuned_beta = tune_temperature(
+            model,
+            initial_solution,
+            n_warmup,
+            self.scheduler.initial_target_acc,
+        );
+
+        Self {
+            initial_beta: tuned_beta,
+            ..self
         }
     }
 }
@@ -172,95 +199,39 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        let mut current_temperature = tune_temperature(
-            model,
-            Some((initial_solution.clone(), initial_score)),
-            self.update_frequency,
-            self.scheduler.initial_target_acc,
-        );
-        let mut current_solution = initial_solution;
-        let mut current_score = initial_score;
-        let best_solution = Rc::new(RefCell::new(current_solution.clone()));
-        let mut best_score = current_score;
-        let mut iter = 0;
-        // Separate counters: one to trigger return-to-best, one for early stopping (patience)
-        let mut return_stagnation_counter = 0;
-        let mut patience_stagnation_counter = 0;
-        let now = Instant::now();
-        let mut remaining_time_limit = time_limit;
-        let mut accepted_counter = 0;
-
-        while iter < n_iter {
-            let metropolis = MetropolisOptimizer::new(
-                usize::MAX,
-                self.n_trials,
-                usize::MAX,
-                current_temperature,
-            );
-            // make dummy callback
-            let mut dummy_callback = |_: OptProgress<M::SolutionType, M::ScoreType>| {};
-            let step_result = metropolis.step(
-                model,
-                current_solution.clone(),
-                current_score,
-                self.update_frequency,
-                remaining_time_limit,
-                &mut dummy_callback,
-            );
-
-            // 1. Update time and iteration counters
-            let elapsed = now.elapsed();
-            if elapsed >= time_limit {
-                break;
+        let current_beta = Rc::new(RefCell::new(self.initial_beta));
+        let transition = {
+            let current_beta = Rc::clone(&current_beta);
+            move |current: NotNan<f64>, trial: NotNan<f64>| {
+                let beta = *current_beta.borrow();
+                metropolis_transition(beta)(current, trial)
             }
-            remaining_time_limit = time_limit - elapsed;
-            iter += self.update_frequency;
-
-            // 2. Update best solution and score
-            if step_result.best_score < best_score {
-                best_solution.replace(step_result.best_solution.clone());
-                best_score = step_result.best_score;
-                return_stagnation_counter = 0;
-                patience_stagnation_counter = 0;
-            } else {
-                return_stagnation_counter += self.update_frequency;
-                patience_stagnation_counter += self.update_frequency;
+        };
+        let mut callback_with_update = |progress: OptProgress<M::SolutionType, M::ScoreType>| {
+            if progress.iter % self.update_frequency == 0 && progress.iter > 0 {
+                let new_beta = self.scheduler.update_temperature(
+                    *current_beta.borrow(),
+                    progress.iter,
+                    n_iter,
+                    progress.acceptance_ratio,
+                );
+                current_beta.replace(new_beta);
             }
-
-            // 3. Update accepted counter and transitions
-            let n_accepted = step_result.accepted_transitions.len();
-            accepted_counter += n_accepted;
-            // 4. Update current solution and score
-            current_solution = step_result.last_solution.clone();
-            current_score = step_result.last_score;
-
-            // 5. Check and handle return to best
-            if return_stagnation_counter >= self.return_iter {
-                current_solution = (*best_solution.borrow()).clone();
-                current_score = best_score;
-                return_stagnation_counter = 0;
-            }
-
-            // 6. Check patience
-            if patience_stagnation_counter >= self.patience {
-                break;
-            }
-
-            // 7. Update algorithm-specific state
-            current_temperature =
-                self.scheduler
-                    .update_temperature(current_temperature, iter, n_iter, &step_result);
-
-            // 8. Invoke callback
-            let progress = OptProgress {
-                iter,
-                accepted_count: accepted_counter,
-                solution: best_solution.clone(),
-                score: best_score,
-            };
             callback(progress);
-        }
-
-        ((*best_solution.borrow()).clone(), best_score)
+        };
+        let generic_optimizer = GenericLocalSearchOptimizer::new(
+            self.patience,
+            self.n_trials,
+            self.return_iter,
+            transition,
+        );
+        generic_optimizer.optimize(
+            model,
+            initial_solution,
+            initial_score,
+            n_iter,
+            time_limit,
+            &mut callback_with_update,
+        )
     }
 }

@@ -14,6 +14,7 @@ use localsearch::{
         AdaptiveAnnealingOptimizer, EpsilonGreedyOptimizer, HillClimbingOptimizer,
         LocalSearchOptimizer, PopulationAnnealingOptimizer, RelativeAnnealingOptimizer,
         SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
+        TsallisRelativeAnnealingOptimizer,
     },
     utils::RingBuffer,
 };
@@ -244,7 +245,7 @@ fn main() {
 
     let tsp_model = TSPModel::from_coords(&coords);
 
-    let n_iter: usize = 50000;
+    let n_iter: usize = 100000;
     let return_iter = n_iter / 50;
     let time_limit = Duration::from_secs(60);
     let patience = n_iter / 2;
@@ -255,12 +256,10 @@ fn main() {
     let pb = create_pbar(n_iter as u64);
     let mut callback = |op: OptProgress<SolutionType, ScoreType>| {
         // eprintln!("iter {}, score {}", op.iter, op.score);
-        let ratio = op.accepted_count as f64 / op.iter as f64;
         pb.set_message(format!(
-            "best score {:.4e}, count = {}, acceptance ratio {:.2e}",
+            "best score {:.4e}, acceptance ratio {:.2}",
             op.score.into_inner(),
-            op.accepted_count,
-            ratio
+            op.acceptance_ratio
         ));
         pb.set_position(op.iter as u64);
     };
@@ -280,18 +279,22 @@ fn main() {
         ),
         (
             "AdaptiveAnnealingOptimizer",
-            Box::new(AdaptiveAnnealingOptimizer::new(
-                patience,
-                16,
-                return_iter,
-                100,
-                Default::default(),
-            )),
+            Box::new(
+                AdaptiveAnnealingOptimizer::new(
+                    patience,
+                    16,
+                    return_iter,
+                    1.0,
+                    Default::default(),
+                    100,
+                )
+                .tune_initial_temperature(&tsp_model, None, 200),
+            ),
         ),
         (
             "PopulationAnnealingOptimizer",
             Box::new(
-                PopulationAnnealingOptimizer::new(patience, 10, return_iter, 1.0, 0.9, 100, 16)
+                PopulationAnnealingOptimizer::new(patience, 16, return_iter, 1.0, 0.9, 100, 16)
                     .tune_initial_temperature(&tsp_model, None, 200, 0.5)
                     .tune_cooling_rate(n_iter),
             ),
@@ -307,15 +310,27 @@ fn main() {
         ),
         (
             "EpsilonGreedyOptimizer",
-            Box::new(EpsilonGreedyOptimizer::new(patience, 128, return_iter, 0.3)),
+            Box::new(EpsilonGreedyOptimizer::new(patience, 16, return_iter, 0.9)),
         ),
         (
             "RelativeAnnealingOptimizer",
             Box::new(RelativeAnnealingOptimizer::new(
                 patience,
-                128,
+                16,
                 return_iter,
-                1e1,
+                1.0e2,
+            )),
+        ),
+        (
+            "TsallisRelativeAnnealingOptimizer",
+            Box::new(TsallisRelativeAnnealingOptimizer::new(
+                patience,
+                16,
+                return_iter,
+                1.0e2,
+                100,
+                2.5,
+                1.0,
             )),
         ),
     ];
