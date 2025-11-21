@@ -14,12 +14,13 @@ All of the algorithms are parallelized with Rayon.
 7. Adaptive Annealing, a variant of Simulated Annealing with adaptive target acceptance rate scheduling.
 8. Metropolis, a Markov chain Monte Carlo method that accepts better solutions always and worse ones with probability exp(-ΔE / T), using a constant temperature for exploration.
 9. Population Annealing, which runs multiple simulated annealing processes in parallel and periodically updates the population by discarding bad candidates and copying good ones.
+10. Tsallis Relative Annealing, avariant of Relative Annealing which uses Tsallis q-distribution to avoid quenching behaviour of the vanilla Relative Annealing. It also uses adaptive weight scheduling in the same way as the Adaptive Annealing.
 
 # How to use
 
 ```toml
 [dependencies]
-localsearch = "0.20.0"
+localsearch = "0.21.0"
 ```
 
 You need to implement your own model that implements `OptModel` trait. Actual optimization is handled by each algorithm functions. Here is a simple example to optimize a quadratic function with Hill Climbing algorithm.
