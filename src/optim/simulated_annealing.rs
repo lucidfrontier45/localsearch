@@ -23,7 +23,7 @@ pub fn tune_cooling_rate(initial_beta: f64, final_beta: f64, n_iter: usize) -> f
 // Calculate target based on target_prob
 // p = exp(-beta * ds ) => beta = -ln(p) / ds
 // Average across all energy differences
-fn calculate_temperature_from_acceptance_prob(
+pub(crate) fn calculate_temperature_from_acceptance_prob(
     energy_diffs: &[f64],
     target_acceptance_prob: f64,
 ) -> f64 {
@@ -32,7 +32,7 @@ fn calculate_temperature_from_acceptance_prob(
     -ln_prob / average_energy_diff.clamp(0.01, 100.0)
 }
 
-fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
+pub(crate) fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
     model: &M,
     initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
     n_warmup: usize,

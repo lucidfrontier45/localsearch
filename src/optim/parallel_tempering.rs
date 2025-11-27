@@ -11,6 +11,7 @@ use crate::{
     optim::metropolis::MetropolisOptimizer,
 };
 
+use super::simulated_annealing::{calculate_temperature_from_acceptance_prob, gather_energy_diffs};
 use super::{LocalSearchOptimizer, generic::StepResult};
 
 /// Parallel Tempering (Replica Exchange) optimizer
@@ -66,13 +67,50 @@ impl ParallelTemperingOptimizer {
             betas.push(beta_min);
         } else {
             let ratio = (beta_max / beta_min).powf(1.0 / (n_replicas as f64 - 1.0));
+
             let mut b = beta_min;
+
             for _ in 0..n_replicas {
                 betas.push(b);
+
                 b *= ratio;
             }
         }
+
         Self::new(patience, n_trials, return_iter, betas, update_frequency)
+    }
+
+    /// Tune betas based on initial solution and target acceptance probabilities
+    ///
+    /// - `model`: the optimization model
+    /// - `initial_solution`: the initial solution and score to use for tuning. If None, a random solution will be generated.
+    /// - `n_warmup`: number of warmup iterations to gather energy differences
+    /// - `target_max_prob`: target acceptance probability for the highest beta (coldest replica)
+    /// - `target_min_prob`: target acceptance probability for the lowest beta (hottest replica)
+    pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
+        self,
+        model: &M,
+        initial_solution: Option<(M::SolutionType, M::ScoreType)>,
+        n_warmup: usize,
+        target_max_prob: f64,
+        target_min_prob: f64,
+    ) -> Self {
+        let energy_diffs = gather_energy_diffs(model, initial_solution, n_warmup);
+        if energy_diffs.is_empty() {
+            return self;
+        }
+        let beta_max = calculate_temperature_from_acceptance_prob(&energy_diffs, target_max_prob);
+        let beta_min = calculate_temperature_from_acceptance_prob(&energy_diffs, target_min_prob);
+        let n_replicas = self.betas.len();
+        Self::with_geometric_betas(
+            self.patience,
+            self.n_trials,
+            self.return_iter,
+            n_replicas,
+            beta_min,
+            beta_max,
+            self.update_frequency,
+        )
     }
 }
 
@@ -153,8 +191,10 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
                 return_stagnation_counter = 0;
                 patience_stagnation_counter = 0;
             } else {
-                return_stagnation_counter = return_stagnation_counter.saturating_add(self.update_frequency);
-                patience_stagnation_counter = patience_stagnation_counter.saturating_add(self.update_frequency);
+                return_stagnation_counter =
+                    return_stagnation_counter.saturating_add(self.update_frequency);
+                patience_stagnation_counter =
+                    patience_stagnation_counter.saturating_add(self.update_frequency);
             }
 
             // 3. Update accepted counter (enqueue boolean if replica had any acceptance) and compute acceptance ratio
@@ -203,7 +243,8 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
             }
 
             // 8. Invoke callback
-            let progress = OptProgress::new(iter, acceptance_ratio, best_solution.clone(), best_score);
+            let progress =
+                OptProgress::new(iter, acceptance_ratio, best_solution.clone(), best_score);
             callback(progress);
         }
 
