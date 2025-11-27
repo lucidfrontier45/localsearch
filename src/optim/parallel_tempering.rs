@@ -11,7 +11,7 @@ use crate::{
     optim::metropolis::MetropolisOptimizer,
 };
 
-use super::simulated_annealing::{calculate_temperature_from_acceptance_prob, gather_energy_diffs};
+use super::metropolis::{calculate_temperature_from_acceptance_prob, gather_energy_diffs};
 use super::{LocalSearchOptimizer, generic::StepResult};
 
 /// Parallel Tempering (Replica Exchange) optimizer

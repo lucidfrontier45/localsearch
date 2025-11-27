@@ -1,4 +1,5 @@
 use ordered_float::NotNan;
+use rayon::prelude::*;
 
 use crate::{Duration, OptModel, callback::OptCallbackFn};
 
@@ -12,6 +13,60 @@ pub fn metropolis_transition(beta: f64) -> impl Fn(NotNan<f64>, NotNan<f64>) -> 
         } else {
             (-beta * ds.into_inner()).exp()
         }
+    }
+}
+
+// Calculate target based on target_prob
+// p = exp(-beta * ds ) => beta = -ln(p) / ds
+// Average across all energy differences
+pub(crate) fn calculate_temperature_from_acceptance_prob(
+    energy_diffs: &[f64],
+    target_acceptance_prob: f64,
+) -> f64 {
+    let average_energy_diff = energy_diffs.iter().sum::<f64>() / energy_diffs.len() as f64;
+    let ln_prob = target_acceptance_prob.ln().clamp(-100.0, -0.01);
+    -ln_prob / average_energy_diff.clamp(0.01, 100.0)
+}
+
+pub(crate) fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
+    model: &M,
+    initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
+    n_warmup: usize,
+) -> Vec<f64> {
+    let mut rng = rand::rng();
+    let (current_solution, current_score) =
+        initial_solution_and_score.unwrap_or(model.generate_random_solution(&mut rng).unwrap());
+
+    let energy_diffs: Vec<f64> = (0..n_warmup)
+        .into_par_iter()
+        .filter_map(|_| {
+            let mut rng = rand::rng();
+            let (_, _, trial_score) =
+                model.generate_trial_solution(current_solution.clone(), current_score, &mut rng);
+            let ds = trial_score - current_score;
+            if ds > NotNan::new(0.0).unwrap() {
+                Some(ds.into_inner())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    energy_diffs
+}
+
+/// Tune inverse temperature beta based on initial random trials
+pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
+    model: &M,
+    initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
+    n_warmup: usize,
+    target_prob: f64,
+) -> f64 {
+    let energy_diffs = gather_energy_diffs(model, initial_solution_and_score, n_warmup);
+    if energy_diffs.is_empty() {
+        1.0
+    } else {
+        calculate_temperature_from_acceptance_prob(&energy_diffs, target_prob)
     }
 }
 

@@ -10,8 +10,8 @@ use crate::{
 };
 
 use super::{
-    LocalSearchOptimizer, metropolis,
-    simulated_annealing::{tune_cooling_rate, tune_temperature},
+    LocalSearchOptimizer, metropolis, metropolis::tune_temperature,
+    simulated_annealing::tune_cooling_rate,
 };
 
 /// Optimizer that implements the population annealing algorithm
