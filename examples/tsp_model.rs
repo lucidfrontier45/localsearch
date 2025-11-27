@@ -12,8 +12,8 @@ use localsearch::{
     OptModel, OptProgress,
     optim::{
         AdaptiveAnnealingOptimizer, EpsilonGreedyOptimizer, HillClimbingOptimizer,
-        LocalSearchOptimizer, PopulationAnnealingOptimizer, RelativeAnnealingOptimizer,
-        SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
+        LocalSearchOptimizer, ParallelTemperingOptimizer, PopulationAnnealingOptimizer,
+        RelativeAnnealingOptimizer, SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
         TsallisRelativeAnnealingOptimizer,
     },
     utils::RingBuffer,
@@ -298,6 +298,18 @@ fn main() {
                     .tune_initial_temperature(&tsp_model, None, 200, 0.5)
                     .tune_cooling_rate(n_iter),
             ),
+        ),
+        (
+            "ParallelTemperingOptimizer",
+            Box::new(ParallelTemperingOptimizer::with_geometric_betas(
+                patience,
+                16,
+                return_iter,
+                8,    // replicas
+                1e-3, // beta_min
+                1e2,  // beta_max
+                10,   // update_frequency
+            )),
         ),
         (
             "TabuSearchOptimizer",
