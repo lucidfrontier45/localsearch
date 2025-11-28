@@ -8,8 +8,8 @@ use crate::{
 };
 
 use super::{
-    GenericLocalSearchOptimizer, LocalSearchOptimizer, metropolis::metropolis_transition,
-    simulated_annealing::tune_temperature,
+    GenericLocalSearchOptimizer, LocalSearchOptimizer,
+    metropolis::{metropolis_transition, tune_temperature},
 };
 
 #[derive(Clone, Copy, Debug, Default)]
