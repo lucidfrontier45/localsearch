@@ -7,7 +7,6 @@ use rayon::prelude::*;
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
-    counter::AcceptanceCounter,
     optim::metropolis::MetropolisOptimizer,
 };
 
@@ -146,11 +145,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
         let mut return_stagnation_counter: usize = 0;
         let mut patience_stagnation_counter: usize = 0;
 
-        // acceptance counters per replica
-        let mut acc_counters: Vec<AcceptanceCounter> = (0..n_replicas)
-            .map(|_| AcceptanceCounter::new(100))
-            .collect();
-
         while iter < n_iter {
             let elapsed = Instant::now().duration_since(start_time);
             if elapsed > time_limit {
@@ -202,17 +196,11 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
                     patience_stagnation_counter.saturating_add(self.update_frequency);
             }
 
-            // 3. Update accepted counter (enqueue boolean if replica had any acceptance) and compute acceptance ratio
+            // 3. Compute acceptance ratio
             let acceptance_ratio = {
                 let mut sum = 0.0;
-                for (i, r) in step_results.iter().enumerate() {
-                    let ar = r.acceptance_counter.acceptance_ratio();
-                    if ar > 0.0 {
-                        acc_counters[i].enqueue(true);
-                    } else {
-                        acc_counters[i].enqueue(false);
-                    }
-                    sum += ar;
+                for r in step_results.iter() {
+                    sum += r.acceptance_counter.acceptance_ratio();
                 }
                 sum / n_replicas as f64
             };
