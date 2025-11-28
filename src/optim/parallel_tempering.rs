@@ -158,25 +158,30 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
             }
 
             // Run Metropolis on each replica in parallel
-            let betas = self.betas.clone();
             let n_trials = self.n_trials;
             let update_freq = self.update_frequency;
             let time_remaining = time_limit.saturating_sub(elapsed);
 
             // Keep a clone of current replicas for parallel processing
-            let current_replicas = replicas.clone();
-            let step_results: Vec<StepResult<M::SolutionType, M::ScoreType>> = current_replicas
-                .into_par_iter()
+            let step_results: Vec<StepResult<M::SolutionType, M::ScoreType>> = replicas
+                .par_iter()
                 .enumerate()
                 .map(|(idx, (sol, score))| {
                     let m = MetropolisOptimizer::new(
                         self.patience,
                         n_trials,
                         self.return_iter,
-                        betas[idx],
+                        self.betas[idx],
                     );
                     let mut cb = &mut |_p: OptProgress<M::SolutionType, M::ScoreType>| {};
-                    m.step(model, sol, score, update_freq, time_remaining, &mut cb)
+                    m.step(
+                        model,
+                        sol.clone(),
+                        *score,
+                        update_freq,
+                        time_remaining,
+                        &mut cb,
+                    )
                 })
                 .collect();
 
@@ -248,6 +253,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
             callback(progress);
         }
 
-        ((*best_solution.borrow()).clone(), best_score)
+        (best_solution.borrow().clone(), best_score)
     }
 }
