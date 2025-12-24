@@ -61,9 +61,13 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for GreatDelu
         let initial_level = initial_score.into_inner() * self.level_factor;
         let water_level = Rc::new(RefCell::new(initial_level));
 
-        let transition_fn = |_current: NotNan<f64>, trial: NotNan<f64>| -> f64 {
-            let wl = *water_level.borrow();
-            if trial.into_inner() < wl { 1.0 } else { 0.0 }
+        let transition_fn = {
+            // Clone the Rc so the closure owns its water_level reference, similar to SimulatedAnnealingOptimizer
+            let water_level = Rc::clone(&water_level);
+            move |_current: NotNan<f64>, trial: NotNan<f64>| -> f64 {
+                let wl = *water_level.borrow();
+                if trial.into_inner() < wl { 1.0 } else { 0.0 }
+            }
         };
 
         let optimizer = GenericLocalSearchOptimizer::new(
