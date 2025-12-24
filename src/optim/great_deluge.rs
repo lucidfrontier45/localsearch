@@ -62,11 +62,11 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for GreatDelu
         let water_level = Rc::new(RefCell::new(initial_level));
 
         let transition_fn = |_current: NotNan<f64>, trial: NotNan<f64>| -> f64 {
-            let wl = *water_level.borrow();
-            if trial.into_inner() <= wl { 1.0 } else { 0.0 }
+            let wl = water_level.take();
+            if trial.into_inner() < wl { 1.0 } else { 0.0 }
         };
 
-        let generic = GenericLocalSearchOptimizer::new(
+        let optimizer = GenericLocalSearchOptimizer::new(
             self.patience,
             self.n_trials,
             self.return_iter,
@@ -79,21 +79,19 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for GreatDelu
                 let progress_ratio = (progress.iter as f64) / (n_iter as f64);
                 let best_f = progress.score.into_inner();
                 let new_level = initial_level - (initial_level - best_f) * progress_ratio;
-                *water_level.borrow_mut() = new_level;
+                water_level.replace(new_level);
 
                 // Call the original callback
                 callback(progress);
             };
 
-        let step_result = generic.step(
+        optimizer.optimize(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             &mut wrapped_callback,
-        );
-
-        (step_result.best_solution, step_result.best_score)
+        )
     }
 }
