@@ -2,7 +2,10 @@ use std::{cell::RefCell, rc::Rc};
 
 use ordered_float::NotNan;
 
-use crate::{Duration, OptModel, callback::OptCallbackFn};
+use crate::{
+    Duration, OptModel,
+    callback::{OptCallbackFn, OptProgress},
+};
 
 use super::{GenericLocalSearchOptimizer, base::LocalSearchOptimizer};
 
@@ -77,17 +80,16 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for GreatDelu
             transition_fn,
         );
 
-        let mut wrapped_callback =
-            |progress: crate::callback::OptProgress<M::SolutionType, M::ScoreType>| {
-                // Update water level using the current best score from progress
-                let progress_ratio = (progress.iter as f64) / (n_iter as f64);
-                let best_f = progress.score.into_inner();
-                let new_level = initial_level - (initial_level - best_f) * progress_ratio;
-                water_level.replace(new_level);
+        let mut wrapped_callback = |progress: OptProgress<M::SolutionType, M::ScoreType>| {
+            // Update water level using the current best score from progress
+            let progress_ratio = (progress.iter as f64) / (n_iter as f64);
+            let best_f = progress.score.into_inner();
+            let new_level = initial_level - (initial_level - best_f) * progress_ratio;
+            water_level.replace(new_level);
 
-                // Call the original callback
-                callback(progress);
-            };
+            // Call the original callback
+            callback(progress);
+        };
 
         optimizer.optimize(
             model,
