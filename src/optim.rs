@@ -4,6 +4,7 @@ mod adaptive_annealing;
 mod base;
 mod epsilon_greedy;
 mod generic;
+mod great_deluge;
 mod hill_climbing;
 mod logistic_annealing;
 mod metropolis;
@@ -21,6 +22,7 @@ pub use adaptive_annealing::{
 pub use base::{LocalSearchOptimizer, TransitionProbabilityFn};
 pub use epsilon_greedy::EpsilonGreedyOptimizer;
 pub use generic::GenericLocalSearchOptimizer;
+pub use great_deluge::GreatDelugeOptimizer;
 pub use hill_climbing::HillClimbingOptimizer;
 pub use logistic_annealing::LogisticAnnealingOptimizer;
 pub use metropolis::MetropolisOptimizer;

@@ -11,10 +11,10 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     OptModel, OptProgress,
     optim::{
-        AdaptiveAnnealingOptimizer, EpsilonGreedyOptimizer, HillClimbingOptimizer,
-        LocalSearchOptimizer, ParallelTemperingOptimizer, PopulationAnnealingOptimizer,
-        RelativeAnnealingOptimizer, SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
-        TsallisRelativeAnnealingOptimizer,
+        AdaptiveAnnealingOptimizer, EpsilonGreedyOptimizer, GreatDelugeOptimizer,
+        HillClimbingOptimizer, LocalSearchOptimizer, ParallelTemperingOptimizer,
+        PopulationAnnealingOptimizer, RelativeAnnealingOptimizer, SimulatedAnnealingOptimizer,
+        TabuList, TabuSearchOptimizer, TsallisRelativeAnnealingOptimizer,
     },
     utils::RingBuffer,
 };
@@ -265,6 +265,10 @@ fn main() {
     };
 
     let optimizers: Vec<(&str, Box<dyn LocalSearchOptimizer<TSPModel>>)> = vec![
+        (
+            "GreatDelugeOptimizer",
+            Box::new(GreatDelugeOptimizer::new(patience, 16, return_iter, 1.05)),
+        ),
         (
             "HillClimbingOptimizer",
             Box::new(HillClimbingOptimizer::new(patience, 16)),
