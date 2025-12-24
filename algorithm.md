@@ -69,6 +69,17 @@ Each section names the optimizer, describes the core idea, the acceptance/transi
     - When a transition is accepted its transition descriptor is appended to the tabu list to prevent recent moves being repeated.
     - If no acceptable candidate is found among samples, the iteration rejects and increases stagnation counters.
 
+## Great Deluge
+  - `GreatDelugeOptimizer` (`src/optim/great_deluge.rs`) — Implements the Great Deluge Algorithm (GDA), a threshold-driven local search.
+  - Acceptance rule: a trial is accepted if its score is less than or equal to the current "water level"; otherwise it is rejected.
+  - Water level update: the water level is initialized as `initial_score * level_factor` and linearly moves toward the best-found score over iterations (decreasing with progress).
+  - Parameters:
+    - `patience`: iterations without improvement before stopping
+    - `n_trials`: number of candidate trials per iteration
+    - `return_iter`: iterations without improvement before reverting to the best solution
+    - `level_factor`: multiplier to set the initial water level above the initial score
+  - Key file: `src/optim/great_deluge.rs`
+
 Notes and common patterns
 
 - Many optimizers are thin wrappers around `GenericLocalSearchOptimizer` with different `score_func` (transition probability) or with `Metropolis`-style transitions that depend on a `beta` parameter.
