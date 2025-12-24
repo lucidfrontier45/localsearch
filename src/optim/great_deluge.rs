@@ -62,7 +62,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for GreatDelu
         let water_level = Rc::new(RefCell::new(initial_level));
 
         let transition_fn = |_current: NotNan<f64>, trial: NotNan<f64>| -> f64 {
-            let wl = water_level.take();
+            let wl = *water_level.borrow();
             if trial.into_inner() < wl { 1.0 } else { 0.0 }
         };
 
