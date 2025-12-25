@@ -1,4 +1,4 @@
-//! Optimization ALgorithm
+//! Optimization Algorithm
 
 mod adaptive_annealing;
 mod base;

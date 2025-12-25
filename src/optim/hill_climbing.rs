@@ -22,7 +22,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
     /// Start optimization
     ///
     /// - `model` : the model to optimize
-    /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
+    /// - `initial_solution` : the initial solution to start optimization
     /// - `initial_score` : the initial score of the initial solution
     /// - `n_iter`: maximum iterations
     /// - `time_limit`: maximum iteration time
