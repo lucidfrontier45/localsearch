@@ -11,7 +11,7 @@ Before committing or pushing changes, ensure all of these pass:
 - [ ] `cargo doc --no-deps` - Documentation builds without warnings
 - [ ] Public items have documentation (required by `#![forbid(missing_docs)]`)
 - [ ] No `unwrap()`/`expect()` in library code
-- [ ] Error handling follows `anyhow::Result` pattern
+- [ ] Error handling follows `Result<T, LocalsearchError>` pattern
 - [ ] Parallel safety: types implement `Sync + Send` where appropriate
 
 ## Code Quality Requirements

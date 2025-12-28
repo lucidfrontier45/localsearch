@@ -6,10 +6,9 @@ use std::{
     time::Duration,
 };
 
-use anyhow::Result as AnyResult;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
-    OptModel, OptProgress,
+    LocalsearchError, OptModel, OptProgress,
     optim::{
         AdaptiveAnnealingOptimizer, EpsilonGreedyOptimizer, GreatDelugeOptimizer,
         HillClimbingOptimizer, LocalSearchOptimizer, ParallelTemperingOptimizer,
@@ -104,7 +103,7 @@ impl OptModel for TSPModel {
     fn generate_random_solution<R: rand::Rng>(
         &self,
         rng: &mut R,
-    ) -> AnyResult<(Self::SolutionType, Self::ScoreType)> {
+    ) -> Result<(Self::SolutionType, Self::ScoreType), LocalsearchError> {
         let mut cities = self
             .distance_matrix
             .keys()

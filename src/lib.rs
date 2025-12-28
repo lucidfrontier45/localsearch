@@ -12,6 +12,9 @@ pub use callback::{OptCallbackFn, OptProgress};
 mod counter;
 pub use counter::AcceptanceCounter;
 
+mod error;
+pub use error::LocalsearchError;
+
 mod model;
 pub use model::OptModel;
 
