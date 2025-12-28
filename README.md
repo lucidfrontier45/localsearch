@@ -1,42 +1,60 @@
 # localsearch
-Rust library for local search optimization
 
-# Implemented Algorithms
+[![Crates.io](https://img.shields.io/crates/v/localsearch.svg)](https://crates.io/crates/localsearch)
+[![Documentation](https://docs.rs/localsearch/badge.svg)](https://docs.rs/localsearch)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.92%2B-orange.svg)](https://www.rust-lang.org)
 
-All of the algorithms are parallelized with Rayon.
+A high-performance Rust library for local search optimization algorithms (metaheuristics). Built with parallel execution using Rayon and a flexible trait-based design for implementing custom optimization problems.
 
-1. Hill Climbing.
-2. Tabu Search. To use this optimizer you also need to implement your problem specific tabu list.
-3. Simulated Annealing
-4. Epsilon Greedy Search, a variant of Hill Climbing which accepts the trial solution with a constant probability even if the score of the trial solution is worse than the previous one.
-5. Relative Annealing, a variant of Simulated Annealing which uses relative score diff to calculate transition probability.
-6. Logistic Annealing, a variant of Relative Annealing which uses logistic function instead of simple exponential.
-7. Adaptive Annealing, a variant of Simulated Annealing with adaptive target acceptance rate scheduling.
-8. Metropolis, a Markov chain Monte Carlo method that accepts better solutions always and worse ones with probability exp(-ΔE / T), using a constant temperature for exploration.
-9. Population Annealing, which runs multiple simulated annealing processes in parallel and periodically updates the population by discarding bad candidates and copying good ones.
-10. Tsallis Relative Annealing, avariant of Relative Annealing which uses Tsallis q-distribution to avoid quenching behaviour of the vanilla Relative Annealing. It also uses adaptive weight scheduling in the same way as the Adaptive Annealing.
-11. Parallel Tempering, a method that runs multiple Metropolis chains at different temperatures and allows exchanges between them to enhance exploration.
-12. Great Deluge, a threshold-based method that accepts trial solutions below a decreasing "water level" and adapts the level toward the best-found solution.
+## Features
 
-# How to use
+This library implements 13+ local search optimization algorithms, all parallelized with Rayon:
+
+### Local Search Algorithms
+- **Random Search** - Baseline random sampling method
+- **Hill Climbing** - Deterministic greedy ascent
+- **Epsilon-Greedy** - Probabilistic acceptance of worse solutions
+- **Metropolis** - MCMC method with fixed temperature
+- **Tabu Search** - Memory-based search with forbidden move lists
+- **Great Deluge** - Threshold-based acceptance with decreasing water levels
+
+### Simulated Annealing Variants
+- **Simulated Annealing** - Classic temperature-based acceptance with cooling schedules
+- **Adaptive Annealing** - Dynamic temperature adaptation to target acceptance rates
+- **Logistic Annealing** - Relative score differences with logistic acceptance curves
+- **Relative Annealing** - Exponential acceptance based on relative score changes
+- **Tsallis Relative Annealing** - Generalized acceptance using Tsallis statistics
+
+### Population-Based Methods
+- **Population Annealing** - Parallel simulated annealing with population resampling
+- **Parallel Tempering** - Multiple chains at different temperatures with replica exchange
+
+
+## Installation
+
+Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-localsearch = "0.21.0"
+localsearch = "0.23.0"
 ```
 
-You need to implement your own model that implements `OptModel` trait. Actual optimization is handled by each algorithm functions. Here is a simple example to optimize a quadratic function with Hill Climbing algorithm.
+Requires Rust 1.92 or later.
+
+## Quick Start
+
+Implement the `OptModel` trait for your problem and choose an optimizer. Here's a quadratic function minimization example:
 
 ```rust
 use std::time::Duration;
 
-use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
-    LocalsearchError, OptModel, OptProgress,
-    optim::{HillClimbingOptimizer, LocalSearchOptimizer},
+    LocalsearchError, OptModel,
+    optim::HillClimbingOptimizer,
 };
 use ordered_float::NotNan;
-use rand::{self, distr::Uniform, prelude::Distribution};
+use rand::distr::Uniform;
 
 type SolutionType = Vec<f64>;
 type ScoreType = NotNan<f64>;
@@ -67,6 +85,7 @@ impl OptModel for QuadraticModel {
     type SolutionType = SolutionType;
     type TransitionType = ();
     type ScoreType = ScoreType;
+
     fn generate_random_solution<R: rand::Rng>(
         &self,
         rng: &mut R,
@@ -91,44 +110,54 @@ impl OptModel for QuadraticModel {
     }
 }
 
-fn create_pbar(n_iter: u64) -> ProgressBar {
-    let pb = ProgressBar::new(n_iter);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template(
-                "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} (eta={eta}) {msg} ",
-            ).unwrap()
-            .progress_chars("#>-")
-    );
-    pb.set_draw_target(ProgressDrawTarget::stderr_with_hz(10));
-    pb
-}
-
-fn main() {
-    let model = QuadraticModel::new(3, vec![2.0, 0.0, -3.5], (-10.0, 10.0));
-
-    println!("running Hill Climbing optimizer");
-    let n_iter = 10000;
-    let time_limit = Duration::from_secs_f32(1.0);
-    let patience = 1000;
-    let n_trials = 50;
-    let opt = HillClimbingOptimizer::new(patience, n_trials);
-    let pb = create_pbar(n_iter as u64);
-    let mut callback = |op: OptProgress<SolutionType, ScoreType>| {
-        pb.set_message(format!("best score {:e}", op.score.into_inner()));
-        pb.set_position(op.iter as u64);
-    };
-
-    let res = opt.run_with_callback(&model, None, n_iter, time_limit, &mut callback);
-    pb.finish();
-    dbg!(res.unwrap());
-}
+// Usage
+let model = QuadraticModel::new(3, vec![2.0, 0.0, -3.5], (-10.0, 10.0));
+let opt = HillClimbingOptimizer::new(1000, 50);
+let (solution, score) = opt
+    .run(&model, None, 10000, Duration::from_secs(10))
+    .unwrap();
 ```
 
-In addition you can also add `preprocess_solution` and `postprocess_solution` to your model.
-`preprocess_solution` is called before start of optimization iteration.
-If initial solution is not supplied, `generate_initial_solution` is called and the generated solution is then passed to `preprocess_solution`.
-`postprocess_solution` is called after the optimization iteration.
+## Advanced Examples
 
+### Traveling Salesman Problem
 
-Further details can be found at API document, example and test codes.
+The `examples/tsp_model.rs` demonstrates solving TSP using multiple algorithms with custom tabu lists and progress callbacks. It reads city coordinates from a file and compares performance against optimal routes.
+
+Key features shown:
+- Custom `TabuList` implementation for move prohibition
+- Parallel optimizer comparison (Hill Climbing, Simulated Annealing, Tabu Search, etc.)
+- Progress bars with acceptance ratio monitoring
+- Optimal route validation
+
+### Additional Capabilities
+
+You can also add `preprocess_solution` and `postprocess_solution` to your model for setup and result formatting. See the examples for complete implementations.
+
+## API Documentation
+
+- [API Reference](https://docs.rs/localsearch) - Complete generated documentation
+- [API Design](API.md) - Detailed trait and method documentation
+- [Algorithm Reference](algorithm.md) - In-depth algorithm descriptions and parameters
+
+## Contributing
+
+Contributions are welcome! Please follow these guidelines:
+
+- Follow the [repository conventions](AGENTS.md) for code style and documentation
+- Ensure all public items have documentation (enforced by `#![forbid(missing_docs)]`)
+- Run pre-commit checks: `cargo fmt`, `cargo clippy`, `cargo test`
+- Add tests for new functionality
+
+Report issues and feature requests at: [GitHub Issues](https://github.com/lucidfrontier45/localsearch/issues)
+
+## Performance & Compatibility
+
+- **Parallel Execution**: All algorithms leverage Rayon for CPU-parallel candidate evaluation
+- **Thread Safety**: All types implement `Sync + Send` for concurrent use
+- **WASM Support**: Conditional compilation available for web targets
+- **Rust Version**: Requires Rust 1.92+
+
+## License
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
