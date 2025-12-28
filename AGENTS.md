@@ -114,6 +114,9 @@ use crate::{Duration, OptModel};
 - **Constants**: Define at module level with clear documentation
 - **Type aliases**: Use when they improve readability (e.g., `type ScoreType = NotNan<f64>`)
 
+### Implementation Rules
+- State variable updates in optimizers must follow the unified order defined in `state_update_order.md`.
+
 ## Pre-push Local Checklist
 
 - [ ] `cargo fmt` - Code is properly formatted
