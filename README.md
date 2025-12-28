@@ -30,7 +30,6 @@ You need to implement your own model that implements `OptModel` trait. Actual op
 ```rust
 use std::time::Duration;
 
-use anyhow::Result as AnyResult;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     LocalsearchError, OptModel, OptProgress,
