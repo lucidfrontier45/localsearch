@@ -12,9 +12,10 @@ A Rust library for local search optimization algorithms implementing various met
   - `ordered-float` (5.0.0): Ordered floating-point types for scores
   - `rayon` (1.10.0): Parallel computation framework
   - `auto_impl` (1.2.0): Automatic trait implementations for smart pointers
-  - `anyhow` (1.0.86): Error handling
+  - `thiserror` (2.0.17): Error handling with dedicated error types
 - **Dev Dependencies**:
   - `approx` (0.5.1): Approximate floating-point comparisons in tests
+  - `anyhow` (1.0.100): Error handling in examples
   - `indicatif` (0.18.3): Progress bars for examples
 - **WASM Support**: Conditional compilation for web targets using `web-time`
 

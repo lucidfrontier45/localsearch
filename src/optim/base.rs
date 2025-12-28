@@ -1,4 +1,4 @@
-use anyhow::Result as AnyResult;
+use crate::LocalsearchError;
 use auto_impl::auto_impl;
 
 use crate::{Duration, OptModel, callback::OptCallbackFn};
@@ -24,7 +24,7 @@ pub trait LocalSearchOptimizer<M: OptModel> {
         initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
         n_iter: usize,
         time_limit: Duration,
-    ) -> AnyResult<(M::SolutionType, M::ScoreType)> {
+    ) -> Result<(M::SolutionType, M::ScoreType), LocalsearchError> {
         self.run_with_callback(
             model,
             initial_solution_and_score,
@@ -42,7 +42,7 @@ pub trait LocalSearchOptimizer<M: OptModel> {
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-    ) -> AnyResult<(M::SolutionType, M::ScoreType)> {
+    ) -> Result<(M::SolutionType, M::ScoreType), LocalsearchError> {
         let (initial_solution, initial_score) = match initial_solution_and_score {
             Some((solution, score)) => (solution, score),
             None => {

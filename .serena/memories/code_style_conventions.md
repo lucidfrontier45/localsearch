@@ -27,9 +27,9 @@ Group and order imports as:
 
 2. **External crate imports** (alphabetical within group):
    ```rust
-   use anyhow::Result as AnyResult;
    use ordered_float::NotNan;
    use rand::prelude::*;
+   use thiserror::Error;
    ```
 
 3. **Local crate imports** (prefer absolute paths):
@@ -39,8 +39,8 @@ Group and order imports as:
    ```
 
 ## Error Handling
-- **Public APIs**: Use `anyhow::Result<T>` for fallible operations
-- **Internal code**: Use `anyhow::Result<T>` for convenience in tests and tooling
+- **Public APIs**: Use `Result<T, LocalsearchError>` for fallible operations (defined with thiserror)
+- **Internal code**: Use `Result<T, LocalsearchError>` for consistency; avoid `unwrap()` and `expect()`
 - **Library code**: Avoid `unwrap()` and `expect()` - return proper errors instead
 - **Panic documentation**: Document any function that may panic
 - **Error propagation**: Use `?` operator for clean error propagation

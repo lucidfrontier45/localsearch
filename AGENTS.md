@@ -70,7 +70,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 // 2. External crate imports (alphabetical within group)
-use anyhow::Result as AnyResult;
+use thiserror::Error;
 use ordered_float::NotNan;
 use rand::prelude::*;
 
@@ -80,8 +80,8 @@ use crate::{Duration, OptModel};
 ```
 
 ### Error Handling
-- **Public APIs**: Use `anyhow::Result<T>` for fallible operations
-- **Internal code**: Use `anyhow::Result<T>` for convenience in tests and tooling
+- **Public APIs**: Use `Result<T, LocalsearchError>` for fallible operations (defined with thiserror)
+- **Internal code**: Use `Result<T, LocalsearchError>` for consistency; avoid `unwrap()` and `expect()`
 - **Library code**: Avoid `unwrap()` and `expect()` - return proper errors instead
 - **Panic documentation**: Document any function that may panic with `#[must_use]` or panic docs
 - **Error propagation**: Use `?` operator for clean error propagation
@@ -123,7 +123,7 @@ use crate::{Duration, OptModel};
 - [ ] `cargo doc --no-deps` - Documentation builds without warnings
 - [ ] Public items have documentation (required by `#![forbid(missing_docs)]`)
 - [ ] No `unwrap()`/`expect()` in library code
-- [ ] Error handling follows `anyhow::Result` pattern
+- [ ] Error handling follows `Result<T, LocalsearchError>` pattern
 - [ ] Parallel safety: types implement `Sync + Send` where appropriate
 
 ## Agent Behavior and Interactions
@@ -262,7 +262,7 @@ If adding AI assistant configuration, consider:
 ## Public API Stability
 
 ### Breaking Changes
-- **Result types**: Consult repo owner before changing public `Result<T, E>` types to `anyhow::Result<T>`
+- **Result types**: Public APIs use `Result<T, LocalsearchError>` with dedicated error types
 - **Trait methods**: Avoid changing trait method signatures without major version bump
 - **Associated types**: Changes to associated types are breaking changes
 - **Type parameters**: Adding/removing generic parameters is a breaking change
@@ -279,10 +279,11 @@ If adding AI assistant configuration, consider:
 - **ordered-float**: Ordered floating-point types for scores
 - **rayon**: Parallel computation framework
 - **auto_impl**: Automatic trait implementations for smart pointers
-- **anyhow**: Error handling
+- **thiserror**: Error handling with dedicated error types
 
 ### Development Dependencies
 - **approx**: Approximate floating-point comparisons in tests
+- **anyhow**: Error handling in examples
 - **indicatif**: Progress bars for examples
 
 ### Platform Support

@@ -1,4 +1,4 @@
-use anyhow::Result as AnyResult;
+use crate::LocalsearchError;
 use ordered_float::NotNan;
 use rand::{distr::Uniform, prelude::Distribution};
 
@@ -38,7 +38,7 @@ impl OptModel for QuadraticModel {
     fn generate_random_solution<R: rand::Rng>(
         &self,
         rng: &mut R,
-    ) -> AnyResult<(Self::SolutionType, Self::ScoreType)> {
+    ) -> Result<(Self::SolutionType, Self::ScoreType), LocalsearchError> {
         let solution = self.dist.sample_iter(rng).take(self.k).collect::<Vec<_>>();
         let score = self.evaluate_solution(&solution);
         Ok((solution, score))

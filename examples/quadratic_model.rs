@@ -1,9 +1,8 @@
 use std::time::Duration;
 
-use anyhow::Result as AnyResult;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
-    OptModel, OptProgress,
+    LocalsearchError, OptModel, OptProgress,
     optim::{HillClimbingOptimizer, LocalSearchOptimizer},
 };
 use ordered_float::NotNan;
@@ -41,7 +40,7 @@ impl OptModel for QuadraticModel {
     fn generate_random_solution<R: rand::Rng>(
         &self,
         rng: &mut R,
-    ) -> AnyResult<(Self::SolutionType, Self::ScoreType)> {
+    ) -> Result<(Self::SolutionType, Self::ScoreType), LocalsearchError> {
         let solution = self.dist.sample_iter(rng).take(self.k).collect::<Vec<_>>();
         let score = self.evaluate_solution(&solution);
         Ok((solution, score))

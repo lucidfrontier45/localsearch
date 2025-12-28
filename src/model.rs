@@ -1,4 +1,4 @@
-use anyhow::Result as AnyResult;
+use crate::LocalsearchError;
 
 use auto_impl::auto_impl;
 
@@ -16,7 +16,7 @@ pub trait OptModel: Sync + Send {
     fn generate_random_solution<R: rand::Rng>(
         &self,
         rng: &mut R,
-    ) -> AnyResult<(Self::SolutionType, Self::ScoreType)>;
+    ) -> Result<(Self::SolutionType, Self::ScoreType), LocalsearchError>;
 
     /// Generate a new trial solution from current solution
     fn generate_trial_solution<R: rand::Rng>(
@@ -31,7 +31,7 @@ pub trait OptModel: Sync + Send {
         &self,
         current_solution: Self::SolutionType,
         current_score: Self::ScoreType,
-    ) -> AnyResult<(Self::SolutionType, Self::ScoreType)> {
+    ) -> Result<(Self::SolutionType, Self::ScoreType), LocalsearchError> {
         Ok((current_solution, current_score))
     }
 
