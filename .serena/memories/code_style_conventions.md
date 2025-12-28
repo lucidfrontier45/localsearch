@@ -18,25 +18,33 @@
 - **Intra-doc links**: Use `[`link`]()` syntax when referencing other items
 
 ## Import Organization
-Group and order imports as:
-1. **Standard library imports** (alphabetical):
-   ```rust
-   use std::collections::HashMap;
-   use std::sync::Arc;
-   ```
+Imports are grouped into 4 different categories:
+1. std
+2. external crates
+3. this crate
+4. super
 
-2. **External crate imports** (alphabetical within group):
-   ```rust
-   use ordered_float::NotNan;
-   use rand::prelude::*;
-   use thiserror::Error;
-   ```
+The 4 categories are sorted in that order. Different categories must be separated by 1 newline.
 
-3. **Local crate imports** (prefer absolute paths):
-   ```rust
-   use crate::optim::{HillClimbingOptimizer, LocalSearchOptimizer};
-   use crate::{Duration, OptModel};
-   ```
+Imports of the same prefix must be merged. Within each category, sort imports alphabetically.
+
+Use `cargo fmt` for final adjustment to ensure consistent formatting.
+
+```rust
+// 1. std
+use std::{collections::HashMap, sync::Arc};
+
+// 2. external crates
+use ordered_float::NotNan;
+use rand::{distr::Uniform, prelude::*};
+use thiserror::Error;
+
+// 3. this crate
+use crate::{optim::{HillClimbingOptimizer, LocalSearchOptimizer}, Duration, OptModel};
+
+// 4. super
+use super::{SomeTrait, SomeType};
+```
 
 ## Error Handling
 - **Public APIs**: Use `Result<T, LocalsearchError>` for fallible operations (defined with thiserror)

@@ -10,8 +10,11 @@ use crate::{
     optim::metropolis::MetropolisOptimizer,
 };
 
-use super::metropolis::{calculate_temperature_from_acceptance_prob, gather_energy_diffs};
-use super::{LocalSearchOptimizer, generic::StepResult};
+use super::{
+    LocalSearchOptimizer,
+    generic::StepResult,
+    metropolis::{calculate_temperature_from_acceptance_prob, gather_energy_diffs},
+};
 
 /// Parallel Tempering (Replica Exchange) optimizer
 /// Runs multiple Metropolis replicas at different inverse temperatures (betas).

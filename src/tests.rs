@@ -1,8 +1,7 @@
-use crate::LocalsearchError;
 use ordered_float::NotNan;
 use rand::{distr::Uniform, prelude::Distribution};
 
-use crate::OptModel;
+use crate::{LocalsearchError, OptModel};
 
 type SolutionType = Vec<f64>;
 type TransitionType = (usize, f64, f64);

@@ -63,20 +63,32 @@ This file documents repository conventions and guidance for automated agents and
 - **Links**: Use intra-doc links with `[`link`]()` syntax when referencing other items
 
 ### Import Organization
+Imports are grouped into 4 different categories:
+1. std
+2. external crates
+3. this crate
+4. super
+
+The 4 categories are sorted in that order. Different categories must be separated by 1 newline.
+
+Imports of the same prefix must be merged. Within each category, sort imports alphabetically.
+
+Use `cargo fmt` for final adjustment to ensure consistent formatting.
+
 ```rust
-// Group and order imports as:
-// 1. Standard library imports
-use std::collections::HashMap;
-use std::sync::Arc;
+// 1. std
+use std::{collections::HashMap, sync::Arc};
 
-// 2. External crate imports (alphabetical within group)
-use thiserror::Error;
+// 2. external crates
 use ordered_float::NotNan;
-use rand::prelude::*;
+use rand::{distr::Uniform, prelude::*};
+use thiserror::Error;
 
-// 3. Local crate imports (prefer absolute paths)
-use crate::optim::{HillClimbingOptimizer, LocalSearchOptimizer};
-use crate::{Duration, OptModel};
+// 3. this crate
+use crate::{optim::{HillClimbingOptimizer, LocalSearchOptimizer}, Duration, OptModel};
+
+// 4. super
+use super::{SomeTrait, SomeType};
 ```
 
 ### Error Handling

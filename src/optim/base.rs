@@ -1,7 +1,6 @@
-use crate::LocalsearchError;
 use auto_impl::auto_impl;
 
-use crate::{Duration, OptModel, callback::OptCallbackFn};
+use crate::{Duration, LocalsearchError, OptModel, callback::OptCallbackFn};
 
 /// Optimizer that implements local search algorithm
 #[auto_impl(&, Box, Rc, Arc)]

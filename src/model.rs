@@ -1,6 +1,6 @@
-use crate::LocalsearchError;
-
 use auto_impl::auto_impl;
+
+use crate::LocalsearchError;
 
 /// OptModel is a trait that defines requirements to be used with optimization algorithm
 #[auto_impl(&, Box, Rc, Arc)]
