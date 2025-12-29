@@ -1,4 +1,4 @@
-# localsearch
+![LocalSearch Logo](logo_wide.png)
 
 [![Crates.io](https://img.shields.io/crates/v/localsearch.svg)](https://crates.io/crates/localsearch)
 [![Documentation](https://docs.rs/localsearch/badge.svg)](https://docs.rs/localsearch)
