@@ -18,7 +18,7 @@ use localsearch::{
     utils::RingBuffer,
 };
 use ordered_float::NotNan;
-use rand::seq::SliceRandom;
+use rand::{RngExt as _, seq::SliceRandom};
 
 fn min_sorted(c1: usize, c2: usize) -> (usize, usize) {
     if c1 < c2 { (c1, c2) } else { (c2, c1) }

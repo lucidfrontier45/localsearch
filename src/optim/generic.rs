@@ -1,6 +1,6 @@
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
-use rand::Rng;
+use rand::RngExt as _;
 use rayon::prelude::*;
 
 use super::{LocalSearchOptimizer, TransitionProbabilityFn};

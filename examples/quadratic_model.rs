@@ -6,7 +6,7 @@ use localsearch::{
     optim::{HillClimbingOptimizer, LocalSearchOptimizer},
 };
 use ordered_float::NotNan;
-use rand::{self, distr::Uniform, prelude::Distribution};
+use rand::{self, RngExt as _, distr::Uniform, prelude::Distribution};
 
 type SolutionType = Vec<f64>;
 type ScoreType = NotNan<f64>;

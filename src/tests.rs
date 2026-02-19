@@ -1,5 +1,5 @@
 use ordered_float::NotNan;
-use rand::{distr::Uniform, prelude::Distribution};
+use rand::{RngExt as _, distr::Uniform, prelude::Distribution};
 
 use crate::{LocalsearchError, OptModel};
 

@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use ordered_float::NotNan;
-use rand::Rng as _;
+use rand::RngExt as _;
 use rayon::prelude::*;
 
 use super::{
