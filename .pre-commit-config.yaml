@@ -1,0 +1,10 @@
+repos:
+  - repo: local
+    hooks:
+      - id: cargo-fmt-nightly
+        name: cargo fmt (nightly)
+        entry: cargo +nightly fmt
+        language: system
+        types: [rust]
+        pass_filenames: false
+        always_run: true
