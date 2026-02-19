@@ -4,14 +4,13 @@ use ordered_float::NotNan;
 use rand::{Rng as _, distr::weighted::WeightedIndex, prelude::Distribution};
 use rayon::prelude::*;
 
-use crate::{
-    Duration, Instant, OptModel,
-    callback::{OptCallbackFn, OptProgress},
-};
-
 use super::{
     LocalSearchOptimizer, metropolis, metropolis::tune_temperature,
     simulated_annealing::tune_cooling_rate,
+};
+use crate::{
+    Duration, Instant, OptModel,
+    callback::{OptCallbackFn, OptProgress},
 };
 
 /// Optimizer that implements the population annealing algorithm

@@ -2,12 +2,11 @@ use std::{cell::RefCell, rc::Rc};
 
 use ordered_float::NotNan;
 
+use super::{GenericLocalSearchOptimizer, base::LocalSearchOptimizer};
 use crate::{
     Duration, OptModel,
     callback::{OptCallbackFn, OptProgress},
 };
-
-use super::{GenericLocalSearchOptimizer, base::LocalSearchOptimizer};
 
 /// Optimizer that implements the Great Deluge Algorithm (GDA).
 /// Unlike probabilistic methods like simulated annealing, GDA uses a deterministic

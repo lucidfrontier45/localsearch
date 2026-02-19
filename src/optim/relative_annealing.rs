@@ -1,8 +1,7 @@
 use ordered_float::NotNan;
 
-use crate::{Duration, OptModel, callback::OptCallbackFn};
-
 use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer};
+use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 fn transition_prob<T: Into<f64>>(current: T, trial: T, beta: f64) -> f64 {
     let current = current.into();

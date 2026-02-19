@@ -2,9 +2,8 @@ use std::time::Duration;
 
 use approx::assert_abs_diff_eq;
 
-use crate::optim::{HillClimbingOptimizer, LocalSearchOptimizer};
-
 use super::QuadraticModel;
+use crate::optim::{HillClimbingOptimizer, LocalSearchOptimizer};
 
 #[test]
 fn test() {

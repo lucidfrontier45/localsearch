@@ -2,12 +2,11 @@ use std::{cell::RefCell, rc::Rc};
 
 use ordered_float::NotNan;
 
+use super::{AdaptiveScheduler, GenericLocalSearchOptimizer, LocalSearchOptimizer};
 use crate::{
     Duration, OptModel,
     callback::{OptCallbackFn, OptProgress},
 };
-
-use super::{AdaptiveScheduler, GenericLocalSearchOptimizer, LocalSearchOptimizer};
 
 fn tsallis_transition_prob(
     current_score: f64,

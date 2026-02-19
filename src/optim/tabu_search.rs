@@ -2,13 +2,12 @@ use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 use rayon::prelude::*;
 
+use super::LocalSearchOptimizer;
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
     counter::AcceptanceCounter,
 };
-
-use super::LocalSearchOptimizer;
 
 /// Trait that a tabu list must satisfies
 pub trait TabuList: Default {

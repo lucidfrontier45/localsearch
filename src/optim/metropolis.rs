@@ -1,9 +1,8 @@
 use ordered_float::NotNan;
 use rayon::prelude::*;
 
-use crate::{Duration, OptModel, callback::OptCallbackFn};
-
 use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer, generic::StepResult};
+use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 pub fn metropolis_transition(beta: f64) -> impl Fn(NotNan<f64>, NotNan<f64>) -> f64 {
     move |current: NotNan<f64>, trial: NotNan<f64>| {

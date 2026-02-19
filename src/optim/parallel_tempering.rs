@@ -4,16 +4,15 @@ use ordered_float::NotNan;
 use rand::Rng as _;
 use rayon::prelude::*;
 
-use crate::{
-    Duration, Instant, OptModel,
-    callback::{OptCallbackFn, OptProgress},
-    optim::metropolis::MetropolisOptimizer,
-};
-
 use super::{
     LocalSearchOptimizer,
     generic::StepResult,
     metropolis::{calculate_temperature_from_acceptance_prob, gather_energy_diffs},
+};
+use crate::{
+    Duration, Instant, OptModel,
+    callback::{OptCallbackFn, OptProgress},
+    optim::metropolis::MetropolisOptimizer,
 };
 
 /// Parallel Tempering (Replica Exchange) optimizer

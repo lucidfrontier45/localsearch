@@ -1,6 +1,8 @@
-use crate::optim::{LocalSearchOptimizer, ParallelTemperingOptimizer};
-use crate::tests::QuadraticModel;
-use crate::{Duration, OptModel};
+use crate::{
+    Duration, OptModel,
+    optim::{LocalSearchOptimizer, ParallelTemperingOptimizer},
+    tests::QuadraticModel,
+};
 
 #[test]
 fn test_parallel_tempering_basic() {

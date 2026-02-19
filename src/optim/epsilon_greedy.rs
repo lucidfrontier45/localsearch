@@ -1,6 +1,5 @@
-use crate::{Duration, OptModel, callback::OptCallbackFn};
-
 use super::{GenericLocalSearchOptimizer, base::LocalSearchOptimizer};
+use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 fn transition_prob<T: PartialOrd>(current: T, trial: T, epsilon: f64) -> f64 {
     if trial < current {

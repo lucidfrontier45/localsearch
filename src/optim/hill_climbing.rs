@@ -1,6 +1,5 @@
-use crate::{Duration, OptModel, callback::OptCallbackFn};
-
 use super::{EpsilonGreedyOptimizer, LocalSearchOptimizer};
+use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 /// Optimizer that implements simple hill climbing algorithm
 #[derive(Clone, Copy)]

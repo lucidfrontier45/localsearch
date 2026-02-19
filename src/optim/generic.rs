@@ -3,13 +3,12 @@ use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 use rand::Rng;
 use rayon::prelude::*;
 
+use super::{LocalSearchOptimizer, TransitionProbabilityFn};
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
     counter::AcceptanceCounter,
 };
-
-use super::{LocalSearchOptimizer, TransitionProbabilityFn};
 
 /// Result of an optimization step, containing information about the best and last solutions,
 /// as well as the acceptance counter for the step.

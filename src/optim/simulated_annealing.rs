@@ -2,14 +2,13 @@ use std::{cell::RefCell, rc::Rc};
 
 use ordered_float::NotNan;
 
-use crate::{
-    Duration, OptModel,
-    callback::{OptCallbackFn, OptProgress},
-};
-
 use super::{
     GenericLocalSearchOptimizer, LocalSearchOptimizer,
     metropolis::{metropolis_transition, tune_temperature},
+};
+use crate::{
+    Duration, OptModel,
+    callback::{OptCallbackFn, OptProgress},
 };
 
 /// Tune cooling rate based on initial and final inverse temperatures and number of iterations

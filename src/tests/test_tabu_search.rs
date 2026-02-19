@@ -2,12 +2,11 @@ use std::time::Duration;
 
 use approx::assert_abs_diff_eq;
 
+use super::{QuadraticModel, TransitionType};
 use crate::{
     optim::{LocalSearchOptimizer, TabuList, TabuSearchOptimizer},
     utils::RingBuffer,
 };
-
-use super::{QuadraticModel, TransitionType};
 
 #[derive(Debug)]
 struct MyTabuList {

@@ -2,14 +2,13 @@ use std::{cell::RefCell, f64::consts::PI, rc::Rc};
 
 use ordered_float::NotNan;
 
-use crate::{
-    Duration, OptModel,
-    callback::{OptCallbackFn, OptProgress},
-};
-
 use super::{
     GenericLocalSearchOptimizer, LocalSearchOptimizer,
     metropolis::{metropolis_transition, tune_temperature},
+};
+use crate::{
+    Duration, OptModel,
+    callback::{OptCallbackFn, OptProgress},
 };
 
 #[derive(Clone, Copy, Debug, Default)]

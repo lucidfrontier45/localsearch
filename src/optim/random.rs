@@ -1,6 +1,5 @@
-use crate::{Duration, OptModel, callback::OptCallbackFn};
-
 use super::{EpsilonGreedyOptimizer, LocalSearchOptimizer};
+use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 /// Optimizer that implements random search algorithm
 #[derive(Clone, Copy)]
