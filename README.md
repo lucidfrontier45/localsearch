@@ -151,6 +151,53 @@ Contributions are welcome! Please follow these guidelines:
 
 Report issues and feature requests at: [GitHub Issues](https://github.com/lucidfrontier45/localsearch/issues)
 
+## Development
+
+### Setup
+
+Clone and build:
+
+```bash
+git clone https://github.com/lucidfrontier45/localsearch.git
+cd localsearch
+cargo check
+pre-commit install
+```
+
+### Development Workflow
+
+After making changes, verify code correctness in this order:
+
+1. `cargo check -q` — Ensure code compiles without errors
+2. `cargo test -q` — Execute all tests and ensure correctness
+3. `cargo clippy -q --fix --allow-dirty` — Automatically fix lint issues
+4. `cargo clippy -q -- -D warnings` — Ensure no lint warnings remain
+
+**Tip**: Run `cargo fmt` before committing to ensure consistent formatting. For manual formatting, use nightly fmt: `cargo +nightly fmt`.
+
+### Code Standards
+
+- **Module Layout**: Use `src/x.rs` and `src/x/` for submodules. Never use `mod.rs`.
+- **Testing**: Place integration tests in `src/` (not a top-level `tests/` folder)
+- **Documentation**: All public items must have documentation (enforced by `#![forbid(missing_docs)]`)
+- **Safety**: Avoid `.unwrap()` without a safety comment
+
+See [AGENTS.md](AGENTS.md) for full conventions.
+
+### Running Examples
+
+```bash
+# TSP example (requires city coordinates file)
+# Usage: cargo run --example tsp_model -- <cities_file> [optimal_route_file]
+cargo run --example tsp_model -- cities.txt
+
+# Compare against optimal route (optional)
+cargo run --example tsp_model -- cities.txt optimal_route.txt
+
+# Run all examples
+cargo run --examples
+```
+
 ## Performance & Compatibility
 
 - **Parallel Execution**: All algorithms leverage Rayon for CPU-parallel candidate evaluation
