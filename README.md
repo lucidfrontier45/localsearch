@@ -37,7 +37,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-localsearch = "0.23.0"
+localsearch = "0.24.0"
 ```
 
 Requires Rust 1.92 or later.
