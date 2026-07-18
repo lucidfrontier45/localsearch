@@ -31,3 +31,9 @@ fn test_parallel_tempering_basic() {
 
     assert!(best_score.into_inner().is_finite());
 }
+
+#[test]
+#[should_panic(expected = "betas must contain at least one replica")]
+fn test_parallel_tempering_empty_betas() {
+    ParallelTemperingOptimizer::new(50, 10, 10, vec![], 5);
+}
