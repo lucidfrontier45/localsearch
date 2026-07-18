@@ -27,6 +27,9 @@ impl AcceptanceCounter {
 
     /// Update the counter with a new result
     pub fn enqueue(&mut self, accepted: bool) {
+        if self.window_size == 0 {
+            return;
+        }
         if self.buffer.len() == self.window_size {
             let old = self.buffer.pop_front().unwrap();
             self.n_accepted -= old as usize;
@@ -44,5 +47,35 @@ impl AcceptanceCounter {
         } else {
             self.n_accepted as f64 / total as f64
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AcceptanceCounter;
+
+    #[test]
+    fn window_zero_enqueue_is_noop_and_does_not_panic() {
+        let mut c = AcceptanceCounter::new(0);
+
+        c.enqueue(true);
+        c.enqueue(false);
+
+        assert_eq!(c.acceptance_ratio(), 0.0);
+    }
+
+    #[test]
+    fn sliding_window_behavior_unchanged() {
+        let mut c = AcceptanceCounter::new(2);
+
+        c.enqueue(true);
+        c.enqueue(true);
+        assert_eq!(c.acceptance_ratio(), 1.0);
+
+        c.enqueue(false);
+        assert_eq!(c.acceptance_ratio(), 0.5);
+
+        c.enqueue(false);
+        assert_eq!(c.acceptance_ratio(), 0.0);
     }
 }
