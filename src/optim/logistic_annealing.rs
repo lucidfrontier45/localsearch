@@ -6,14 +6,14 @@ use crate::{Duration, OptModel, callback::OptCallbackFn};
 fn transition_prob<T: Into<f64>>(current: T, trial: T, w: f64) -> f64 {
     let current = current.into();
     let trial = trial.into();
-    let d = (trial - current) / current;
+    let d = (trial - current) / current.abs();
     2.0 / (1.0 + (w * d).exp())
 }
 
 /// Optimizer that implements logistic annealing algorithm
 /// In this model, unlike simulated annealing, whether accept the trial solution or not is calculated based on relative score difference
 ///
-/// 1. d <- (trial_score - current_score) / current_score
+/// 1. d <- (trial_score - current_score) / current_score.abs()
 /// 2. p <- 2.0 / (1.0 + exp(w * d))
 /// 3. accept if p > rand(0, 1)
 #[derive(Clone, Copy)]
@@ -92,5 +92,13 @@ mod test {
         let p1 = transition_prob(1.0, 1.1, w);
         let p2 = transition_prob(1.0, 1.2, w);
         assert!(p1 > p2);
+
+        // negative / sign-flipped current must NOT invert acceptance direction:
+        // trial < current  ->  p >= 1 (accept improvement), regardless of sign of current.
+        assert!(transition_prob(-1.0, -1.1, w) >= 1.0);
+        assert!(transition_prob(-1.0, -0.9, w) < 1.0);
+        // crossing zero: worsening move (trial > current) rejected more strongly with larger gap
+        assert!(transition_prob(-1.0, -0.9, w) > transition_prob(-1.0, -0.8, w));
+        assert!(transition_prob(-1.0, 0.5, w) < 1.0);
     }
 }
