@@ -6,7 +6,10 @@ use crate::{Duration, OptModel, callback::OptCallbackFn};
 fn transition_prob<T: Into<f64>>(current: T, trial: T, beta: f64) -> f64 {
     let current = current.into();
     let trial = trial.into();
-    let d = (trial - current) / current.abs();
+    // Clamp denominator to `f64::EPSILON` to avoid division-by-zero when
+    // `current_score == 0`. Relative-comparison semantics preserved for any
+    // `|current_score| >= f64::EPSILON`.
+    let d = (trial - current) / current.abs().max(f64::EPSILON);
     (-beta * d).exp()
 }
 
@@ -19,8 +22,8 @@ fn transition_prob<T: Into<f64>>(current: T, trial: T, beta: f64) -> f64 {
 ///
 /// Using `|current_score|` keeps the sign of `d` aligned with `(trial - current)`,
 /// so the acceptance direction is correct for any sign of `current_score`.
-/// `current_score == 0` yields `inf`/`NaN` per IEEE-754 (no panic); the `p > rand`
-/// comparison then accepts improvements and rejects worsenings as expected.
+/// `current_score == 0` is clamped to `f64::EPSILON`, keeping the result finite
+/// and the acceptance direction intact (improvement accepted, worsening rejected).
 #[derive(Clone, Copy)]
 pub struct RelativeAnnealingOptimizer {
     patience: usize,
@@ -106,5 +109,15 @@ mod test {
         // the larger the gap.
         assert!(transition_prob(-1.0, -0.9, w) > transition_prob(-1.0, -0.8, w));
         assert!(transition_prob(-1.0, 0.5, w) < 1.0);
+
+        // `current_score == 0`: relative comparison degenerates; clamp must keep
+        // the result finite and the direction correct.
+        assert!(transition_prob(0.0, 0.0, w).is_finite());
+        // improvement (trial < current=0): p should be >= 1 (accepted).
+        assert!(transition_prob(0.0, -1.0, w) >= 1.0);
+        // worsening (trial > current=0): p should be < 1 (rejected, finite).
+        let p_worse = transition_prob(0.0, 1.0, w);
+        assert!(p_worse.is_finite());
+        assert!(p_worse < 1.0);
     }
 }
