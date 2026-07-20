@@ -141,8 +141,8 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         let mut current_beta = self.initial_beta;
         let mut iter = 0;
         // Separate counters for return-to-best and patience
-        let mut return_stagnation_counter = 0;
-        let mut patience_stagnation_counter = 0;
+        let mut return_stagnation_counter: usize = 0;
+        let mut patience_stagnation_counter: usize = 0;
 
         // Main optimization loop
         while iter < n_iter {
@@ -157,6 +157,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 self.return_iter,
                 current_beta,
             );
+            let update_freq = self.update_frequency.get();
 
             // Process each member of the population
             let step_results = population
@@ -170,7 +171,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                         model,
                         solution.clone(),
                         *score,
-                        self.update_frequency.get(),
+update_freq,
                         time_limit.saturating_sub(duration),
                         temp_callback,
                     )
@@ -178,7 +179,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 .collect::<Vec<_>>();
 
             // 1. Update time and iteration counters
-            iter += self.update_frequency.get();
+iter = iter.saturating_add(update_freq);
 
             // 2. Update best solution and score
             let best_step_result = step_results.iter().min_by_key(|r| r.best_score).unwrap();
@@ -188,8 +189,8 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 return_stagnation_counter = 0;
                 patience_stagnation_counter = 0;
             } else {
-                return_stagnation_counter += self.update_frequency.get();
-                patience_stagnation_counter += self.update_frequency.get();
+return_stagnation_counter = return_stagnation_counter.saturating_add(update_freq);
+patience_stagnation_counter = patience_stagnation_counter.saturating_add(update_freq);
             }
 
             // 3. Update accepted counter
