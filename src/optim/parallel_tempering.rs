@@ -193,7 +193,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
                 .collect();
 
             // 1. Update time and iteration counters
-            iter = iter.saturating_add(self.update_frequency.get());
+            iter = iter.saturating_add(update_freq);
 
             // 2. Update best solution and score based on step_results
             let best_step_result = step_results.iter().min_by_key(|r| r.best_score).unwrap();
@@ -204,9 +204,9 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
                 patience_stagnation_counter = 0;
             } else {
                 return_stagnation_counter =
-                    return_stagnation_counter.saturating_add(self.update_frequency.get());
+                    return_stagnation_counter.saturating_add(update_freq);
                 patience_stagnation_counter =
-                    patience_stagnation_counter.saturating_add(self.update_frequency.get());
+                    patience_stagnation_counter.saturating_add(update_freq);
             }
 
             // 3. Compute acceptance ratio

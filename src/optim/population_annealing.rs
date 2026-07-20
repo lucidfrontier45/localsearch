@@ -171,7 +171,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                         model,
                         solution.clone(),
                         *score,
-update_freq,
+                        update_freq,
                         time_limit.saturating_sub(duration),
                         temp_callback,
                     )
@@ -179,7 +179,7 @@ update_freq,
                 .collect::<Vec<_>>();
 
             // 1. Update time and iteration counters
-iter = iter.saturating_add(update_freq);
+            iter = iter.saturating_add(update_freq);
 
             // 2. Update best solution and score
             let best_step_result = step_results.iter().min_by_key(|r| r.best_score).unwrap();
@@ -189,8 +189,9 @@ iter = iter.saturating_add(update_freq);
                 return_stagnation_counter = 0;
                 patience_stagnation_counter = 0;
             } else {
-return_stagnation_counter = return_stagnation_counter.saturating_add(update_freq);
-patience_stagnation_counter = patience_stagnation_counter.saturating_add(update_freq);
+                return_stagnation_counter = return_stagnation_counter.saturating_add(update_freq);
+                patience_stagnation_counter =
+                    patience_stagnation_counter.saturating_add(update_freq);
             }
 
             // 3. Update accepted counter
