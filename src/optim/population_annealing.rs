@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, num::NonZero, rc::Rc};
 
 use ordered_float::NotNan;
 use rand::{RngExt as _, distr::weighted::WeightedIndex, prelude::Distribution};
@@ -27,8 +27,8 @@ pub struct PopulationAnnealingOptimizer {
     initial_beta: f64,
     /// Cooling rate
     cooling_rate: f64,
-    /// Number of steps to run each simulated annealing before updating the population
-    update_frequency: usize,
+    /// Non-zero number of steps to run each simulated annealing before updating the population
+    update_frequency: NonZero<usize>,
     /// Number of simulated annealing processes to run in parallel
     population_size: usize,
 }
@@ -42,7 +42,7 @@ impl PopulationAnnealingOptimizer {
     /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
     /// - `initial_beta` : initial inverse temperature
     /// - `cooling_rate` : cooling rate
-    /// - `update_frequency` : number of steps to run each simulated annealing before updating the population
+    /// - `update_frequency` : non-zero number of steps to run each simulated annealing before updating the population
     /// - `population_size` : number of simulated annealing processes to run in parallel
     pub fn new(
         patience: usize,
@@ -50,7 +50,7 @@ impl PopulationAnnealingOptimizer {
         return_iter: usize,
         initial_beta: f64,
         cooling_rate: f64,
-        update_frequency: usize,
+        update_frequency: NonZero<usize>,
         population_size: usize,
     ) -> Self {
         Self {
@@ -83,7 +83,7 @@ impl PopulationAnnealingOptimizer {
     /// Tune cooling rate to reach high inverse temperature (beta ~ 1e2) at the end of optimization
     pub fn tune_cooling_rate(self, n_iter: usize) -> Self {
         let cooling_rate =
-            tune_cooling_rate(self.initial_beta, 1e2, n_iter / self.update_frequency);
+            tune_cooling_rate(self.initial_beta, 1e2, n_iter / self.update_frequency.get());
 
         Self {
             cooling_rate,
@@ -141,8 +141,8 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         let mut current_beta = self.initial_beta;
         let mut iter = 0;
         // Separate counters for return-to-best and patience
-        let mut return_stagnation_counter = 0;
-        let mut patience_stagnation_counter = 0;
+        let mut return_stagnation_counter: usize = 0;
+        let mut patience_stagnation_counter: usize = 0;
 
         // Main optimization loop
         while iter < n_iter {
@@ -157,6 +157,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 self.return_iter,
                 current_beta,
             );
+            let update_freq = self.update_frequency.get();
 
             // Process each member of the population
             let step_results = population
@@ -170,7 +171,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                         model,
                         solution.clone(),
                         *score,
-                        self.update_frequency,
+                        update_freq,
                         time_limit.saturating_sub(duration),
                         temp_callback,
                     )
@@ -178,7 +179,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 .collect::<Vec<_>>();
 
             // 1. Update time and iteration counters
-            iter += self.update_frequency;
+            iter = iter.saturating_add(update_freq);
 
             // 2. Update best solution and score
             let best_step_result = step_results.iter().min_by_key(|r| r.best_score).unwrap();
@@ -188,8 +189,9 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 return_stagnation_counter = 0;
                 patience_stagnation_counter = 0;
             } else {
-                return_stagnation_counter += self.update_frequency;
-                patience_stagnation_counter += self.update_frequency;
+                return_stagnation_counter = return_stagnation_counter.saturating_add(update_freq);
+                patience_stagnation_counter =
+                    patience_stagnation_counter.saturating_add(update_freq);
             }
 
             // 3. Update accepted counter

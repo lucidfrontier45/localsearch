@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{num::NonZero, time::Duration};
 
 use approx::assert_abs_diff_eq;
 
@@ -8,7 +8,14 @@ use crate::optim::{AdaptiveAnnealingOptimizer, LocalSearchOptimizer};
 #[test]
 fn test() {
     let model = QuadraticModel::new(3, vec![2.0, 0.0, -3.5], (-10.0, 10.0));
-    let opt = AdaptiveAnnealingOptimizer::new(10000, 10, 500, 1e-2, Default::default(), 100);
+    let opt = AdaptiveAnnealingOptimizer::new(
+        10000,
+        10,
+        500,
+        1e-2,
+        Default::default(),
+        NonZero::new(100).expect("update_frequency must be >= 1"),
+    );
     let (final_solution, final_score) = opt
         .run(&model, None, 10000, Duration::from_secs(10))
         .unwrap();

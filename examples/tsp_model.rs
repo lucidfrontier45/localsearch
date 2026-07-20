@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     fs::File,
     io::{self, BufRead},
+    num::NonZero,
     path::Path,
     time::Duration,
 };
@@ -275,9 +276,16 @@ fn main() {
         (
             "SimulatedAnnealingOptimizer",
             Box::new(
-                SimulatedAnnealingOptimizer::new(patience, 16, return_iter, 1.0, 0.9, 100)
-                    .tune_initial_temperature(&tsp_model, None, 200, 0.5)
-                    .tune_cooling_rate(n_iter),
+                SimulatedAnnealingOptimizer::new(
+                    patience,
+                    16,
+                    return_iter,
+                    1.0,
+                    0.9,
+                    NonZero::new(100).expect("update_frequency must be >= 1"),
+                )
+                .tune_initial_temperature(&tsp_model, None, 200, 0.5)
+                .tune_cooling_rate(n_iter),
             ),
         ),
         (
@@ -289,7 +297,7 @@ fn main() {
                     return_iter,
                     1.0,
                     Default::default(),
-                    100,
+                    NonZero::new(100).expect("update_frequency must be >= 1"),
                 )
                 .tune_initial_temperature(&tsp_model, None, 200),
             ),
@@ -297,9 +305,17 @@ fn main() {
         (
             "PopulationAnnealingOptimizer",
             Box::new(
-                PopulationAnnealingOptimizer::new(patience, 16, return_iter, 1.0, 0.9, 100, 16)
-                    .tune_initial_temperature(&tsp_model, None, 200, 0.5)
-                    .tune_cooling_rate(n_iter),
+                PopulationAnnealingOptimizer::new(
+                    patience,
+                    16,
+                    return_iter,
+                    1.0,
+                    0.9,
+                    NonZero::new(100).expect("update_frequency must be >= 1"),
+                    16,
+                )
+                .tune_initial_temperature(&tsp_model, None, 200, 0.5)
+                .tune_cooling_rate(n_iter),
             ),
         ),
         (
@@ -308,10 +324,10 @@ fn main() {
                 patience,
                 16,
                 return_iter,
-                8,    // replicas
-                1e-3, // beta_min
-                1e2,  // beta_max
-                10,   // update_frequency
+                8,                                                        // replicas
+                1e-3,                                                     // beta_min
+                1e2,                                                      // beta_max
+                NonZero::new(10).expect("update_frequency must be >= 1"), // update_frequency
             )),
         ),
         (
@@ -343,7 +359,7 @@ fn main() {
                 16,
                 return_iter,
                 1.0e2,
-                100,
+                NonZero::new(100).expect("update_frequency must be >= 1"),
                 2.5,
                 1.0,
             )),
