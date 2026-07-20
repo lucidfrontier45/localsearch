@@ -1,4 +1,4 @@
-use std::{cell::RefCell, f64::consts::PI, rc::Rc};
+use std::{cell::RefCell, f64::consts::PI, num::NonZero, rc::Rc};
 
 use ordered_float::NotNan;
 
@@ -119,8 +119,8 @@ pub struct AdaptiveAnnealingOptimizer {
     initial_beta: f64,
     /// Scheduler for target acceptance rate
     scheduler: AdaptiveScheduler,
-    /// Frequency (in iterations) at which adaptive parameters are updated
-    update_frequency: usize,
+    /// Non-zero frequency (in iterations) at which adaptive parameters are updated
+    update_frequency: NonZero<usize>,
 }
 
 impl AdaptiveAnnealingOptimizer {
@@ -133,7 +133,7 @@ impl AdaptiveAnnealingOptimizer {
     /// * `return_iter` - The number of iterations without improvement before reverting to the best solution.
     /// * `initial_beta` - The initial inverse temperature for the annealing process.
     /// * `scheduler` - The adaptive scheduler for target acceptance rate.
-    /// * `update_frequency` - The frequency (in iterations) at which adaptive parameters are updated.
+    /// * `update_frequency` - The non-zero frequency (in iterations) at which adaptive parameters are updated.
     ///
     /// # Returns
     ///
@@ -144,7 +144,7 @@ impl AdaptiveAnnealingOptimizer {
         return_iter: usize,
         initial_beta: f64,
         scheduler: AdaptiveScheduler,
-        update_frequency: usize,
+        update_frequency: NonZero<usize>,
     ) -> Self {
         Self {
             patience,
@@ -207,7 +207,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
             }
         };
         let mut callback_with_update = |progress: OptProgress<M::SolutionType, M::ScoreType>| {
-            if progress.iter % self.update_frequency == 0 && progress.iter > 0 {
+            if progress.iter % self.update_frequency.get() == 0 && progress.iter > 0 {
                 let new_beta = self.scheduler.update_temperature(
                     *current_beta.borrow(),
                     progress.iter,

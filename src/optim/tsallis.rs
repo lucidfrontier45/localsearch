@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, num::NonZero, rc::Rc};
 
 use ordered_float::NotNan;
 
@@ -39,7 +39,7 @@ pub struct TsallisRelativeAnnealingOptimizer {
     return_iter: usize,
     initial_beta: f64,
     scheduler: AdaptiveScheduler,
-    update_frequency: usize,
+    update_frequency: NonZero<usize>,
     q: f64,
     xi: f64,
 }
@@ -53,7 +53,7 @@ impl TsallisRelativeAnnealingOptimizer {
     /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
     /// - `initial_beta` : initial weight to be multiplied with the relative score difference.
     ///   Recommended value is reciprocal of expected relative score difference.
-    /// - `update_frequency` : frequency at which certain parameters (like beta) are updated during optimization.
+    /// - `update_frequency` : non-zero frequency at which certain parameters (like beta) are updated during optimization.
     /// - `q` : Tsallis parameter, assumed to be > 1.0. Recommended value is 2.5.
     /// - `xi` : parameter ξ in the acceptance probability formula.
     ///   Recommended value is 1.0 for integer objective and 0.1% of the objective value for continuous objective.
@@ -62,7 +62,7 @@ impl TsallisRelativeAnnealingOptimizer {
         n_trials: usize,
         return_iter: usize,
         beta: f64,
-        update_frequency: usize,
+        update_frequency: NonZero<usize>,
         q: f64,
         xi: f64,
     ) -> Self {
@@ -134,7 +134,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             current_offset.replace(progress.score.into_inner());
 
             // potentially update beta with scheduler
-            if self.update_frequency > 0 && progress.iter % self.update_frequency == 0 {
+            if progress.iter % self.update_frequency.get() == 0 {
                 let new_beta = self.scheduler.update_temperature(
                     *current_beta.borrow(),
                     progress.iter,

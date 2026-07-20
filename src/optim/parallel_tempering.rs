@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, num::NonZero, rc::Rc};
 
 use ordered_float::NotNan;
 use rand::RngExt as _;
@@ -26,8 +26,8 @@ pub struct ParallelTemperingOptimizer {
     return_iter: usize,
     /// Vector of inverse temperatures (beta) for replicas
     betas: Vec<f64>,
-    /// Number of Metropolis steps to run per replica between exchange attempts
-    update_frequency: usize,
+    /// Non-zero number of Metropolis steps to run per replica between exchange attempts
+    update_frequency: NonZero<usize>,
 }
 
 impl ParallelTemperingOptimizer {
@@ -37,7 +37,7 @@ impl ParallelTemperingOptimizer {
         n_trials: usize,
         return_iter: usize,
         betas: Vec<f64>,
-        update_frequency: usize,
+        update_frequency: NonZero<usize>,
     ) -> Self {
         if betas.is_empty() {
             panic!("betas must contain at least one replica");
@@ -61,7 +61,7 @@ impl ParallelTemperingOptimizer {
         n_replicas: usize,
         beta_min: f64,
         beta_max: f64,
-        update_frequency: usize,
+        update_frequency: NonZero<usize>,
     ) -> Self {
         let mut betas = Vec::with_capacity(n_replicas);
         if n_replicas == 0 {
@@ -166,7 +166,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
 
             // Run Metropolis on each replica in parallel
             let n_trials = self.n_trials;
-            let update_freq = self.update_frequency;
+            let update_freq = self.update_frequency.get();
             let time_remaining = time_limit.saturating_sub(elapsed);
 
             // Keep a clone of current replicas for parallel processing
@@ -193,7 +193,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
                 .collect();
 
             // 1. Update time and iteration counters
-            iter = iter.saturating_add(self.update_frequency);
+            iter = iter.saturating_add(self.update_frequency.get());
 
             // 2. Update best solution and score based on step_results
             let best_step_result = step_results.iter().min_by_key(|r| r.best_score).unwrap();
@@ -204,9 +204,9 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
                 patience_stagnation_counter = 0;
             } else {
                 return_stagnation_counter =
-                    return_stagnation_counter.saturating_add(self.update_frequency);
+                    return_stagnation_counter.saturating_add(self.update_frequency.get());
                 patience_stagnation_counter =
-                    patience_stagnation_counter.saturating_add(self.update_frequency);
+                    patience_stagnation_counter.saturating_add(self.update_frequency.get());
             }
 
             // 3. Compute acceptance ratio

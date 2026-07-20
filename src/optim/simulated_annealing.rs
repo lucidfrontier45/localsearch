@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, num::NonZero, rc::Rc};
 
 use ordered_float::NotNan;
 
@@ -34,8 +34,8 @@ pub struct SimulatedAnnealingOptimizer {
     initial_beta: f64,
     /// Cooling rate
     cooling_rate: f64,
-    /// Number of steps after which temperature is updated
-    update_frequency: usize,
+    /// Non-zero number of steps after which temperature is updated
+    update_frequency: NonZero<usize>,
 }
 
 impl SimulatedAnnealingOptimizer {
@@ -47,14 +47,14 @@ impl SimulatedAnnealingOptimizer {
     /// - `return_iter` : returns to the best solution if there is no improvement after this number of iterations.
     /// - `initial_beta` : initial inverse temperature
     /// - `cooling_rate` : cooling rate
-    /// - `update_frequency` : number of steps after which inverse temperature (beta) is updated
+    /// - `update_frequency` : non-zero number of steps after which inverse temperature (beta) is updated
     pub fn new(
         patience: usize,
         n_trials: usize,
         return_iter: usize,
         initial_beta: f64,
         cooling_rate: f64,
-        update_frequency: usize,
+        update_frequency: NonZero<usize>,
     ) -> Self {
         Self {
             patience,
@@ -89,7 +89,7 @@ impl SimulatedAnnealingOptimizer {
     /// Tune cooling rate based on self.initial_beta, final beta of 1e2
     pub fn tune_cooling_rate(self, n_iter: usize) -> Self {
         let cooling_rate =
-            tune_cooling_rate(self.initial_beta, 1e2, n_iter / self.update_frequency);
+            tune_cooling_rate(self.initial_beta, 1e2, n_iter / self.update_frequency.get());
 
         Self {
             cooling_rate,
@@ -124,7 +124,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
             }
         };
         let mut callback_with_update = |progress: OptProgress<M::SolutionType, M::ScoreType>| {
-            if progress.iter % self.update_frequency == 0 && progress.iter > 0 {
+            if progress.iter % self.update_frequency.get() == 0 && progress.iter > 0 {
                 let new_beta = *current_beta.borrow() * self.cooling_rate;
                 current_beta.replace(new_beta);
             }

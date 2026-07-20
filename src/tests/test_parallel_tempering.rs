@@ -1,3 +1,5 @@
+use std::num::NonZero;
+
 use crate::{
     Duration, OptModel,
     optim::{LocalSearchOptimizer, ParallelTemperingOptimizer},
@@ -11,13 +13,13 @@ fn test_parallel_tempering_basic() {
     let (init_sol, init_score) = model.generate_random_solution(&mut rng).unwrap();
 
     let pt = ParallelTemperingOptimizer::with_geometric_betas(
-        50,   // patience
-        10,   // n_trials
-        10,   // return_iter
-        6,    // n_replicas
-        1e-2, // beta_min
-        1e2,  // beta_max
-        5,    // update_frequency
+        50,                                                      // patience
+        10,                                                      // n_trials
+        10,                                                      // return_iter
+        6,                                                       // n_replicas
+        1e-2,                                                    // beta_min
+        1e2,                                                     // beta_max
+        NonZero::new(5).expect("update_frequency must be >= 1"), // update_frequency
     );
 
     let (_best_solution, best_score) = pt
@@ -35,5 +37,11 @@ fn test_parallel_tempering_basic() {
 #[test]
 #[should_panic(expected = "betas must contain at least one replica")]
 fn test_parallel_tempering_empty_betas() {
-    ParallelTemperingOptimizer::new(50, 10, 10, vec![], 5);
+    ParallelTemperingOptimizer::new(
+        50,
+        10,
+        10,
+        vec![],
+        NonZero::new(5).expect("update_frequency must be >= 1"),
+    );
 }
