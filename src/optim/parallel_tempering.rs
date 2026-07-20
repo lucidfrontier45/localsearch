@@ -39,6 +39,9 @@ impl ParallelTemperingOptimizer {
         betas: Vec<f64>,
         update_frequency: usize,
     ) -> Self {
+        if betas.is_empty() {
+            panic!("betas must contain at least one replica");
+        }
         Self {
             patience,
             n_trials,
