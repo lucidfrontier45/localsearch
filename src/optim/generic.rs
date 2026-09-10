@@ -5,14 +5,17 @@ use rayon::prelude::*;
 
 use super::{LocalSearchOptimizer, TransitionProbabilityFn};
 use crate::{
-    Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
     counter::AcceptanceCounter,
+    Duration, Instant, OptModel,
 };
 
 /// Result of an optimization step, containing information about the best and last solutions,
 /// as well as the acceptance counter for the step.
-pub struct StepResult<S, ST> {
+///
+/// The `O` parameter carries algorithm-specific step output (e.g. [`crate::optim::AlnsStatistics`]
+/// for ALNS segment runs). It defaults to `()` so the `StepResult<S, ST>` spelling keeps compiling.
+pub struct StepResult<S, ST, O = ()> {
     /// The best solution found during this step.
     pub best_solution: S,
     /// The score of the best solution found during this step.
@@ -23,6 +26,8 @@ pub struct StepResult<S, ST> {
     pub last_score: ST,
     /// Acceptance counter for the step.
     pub acceptance_counter: AcceptanceCounter,
+    /// Algorithm-specific step output.
+    pub output: O,
 }
 
 /// Optimizer that implements local search algorithm
@@ -71,7 +76,7 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
     /// - `n_iter`: maximum iterations
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
-    pub fn step<M: OptModel<ScoreType = ST>>(
+    pub fn step<M: OptModel<ScoreType = ST>, O: Default>(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
@@ -79,7 +84,7 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-    ) -> StepResult<M::SolutionType, M::ScoreType> {
+    ) -> StepResult<M::SolutionType, M::ScoreType, O> {
         let start_time = Instant::now();
         let mut rng = rand::rng();
         let mut current_solution = initial_solution;
@@ -171,6 +176,7 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
             last_solution: current_solution,
             last_score: current_score,
             acceptance_counter,
+            output: O::default(),
         }
     }
 }
@@ -198,7 +204,7 @@ where
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        let step_result = self.step(
+        let step_result = self.step::<M, ()>(
             model,
             initial_solution,
             initial_score,

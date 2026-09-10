@@ -14,6 +14,12 @@ Each section names the optimizer, describes the core idea, the acceptance/transi
     - Tracks `best_solution`, `return_iter` (periodically revert to best), and `patience` (early stop when stagnating).
     - Reports acceptance ratio via `AcceptanceCounter` and calls the provided callback with `OptProgress` each iteration.
   - Key file: `src/optim/generic.rs` (step loop and acceptance logic).
+  - `StepResult<S, ST, O = ()>` (`src/optim/generic.rs`) — Result of `step()`: `best_solution`/`best_score`, `last_solution`/`last_score`, `acceptance_counter`, plus algorithm-specific `output: O` (defaults to `()`, so the `StepResult<S, ST>` spelling keeps compiling). `MetropolisOptimizer::step()` passes `O` through; other optimizers use `O = ()`.
+
+## ALNS (segment-level demo)
+  - `AlnsOptimizer<ST, FT>` (`src/optim/alns.rs`) — Runs one inner generic `step()` per segment, then adapts operator weights from segment feedback (new global best / improved current / accepted / rejected) with exponential smoothing `w = (1 - r) * w + r * (score / uses)`.
+  - Operator selection and destroy/repair stay model-side: models implement `AlnsOperatorModel` (weights install, thread-safe use/improvement counters drained per segment). LNS neighborhood logic lives in `generate_trial_solution`, unchanged.
+  - Per-operator feedback is reported as `StepResult<..., AlnsStatistics>` output. `TransitionType` keeps move-level semantics for Tabu and is never used for ALNS statistics.
 
 ## Metropolis
   - `MetropolisOptimizer` (`src/optim/metropolis.rs`) — Standard Metropolis algorithm with fixed inverse temperature `beta`.

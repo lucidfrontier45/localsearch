@@ -70,6 +70,7 @@ flowchart TD
 - Keep `ScoreType` lightweight and `Copy` where possible to avoid unnecessary cloning.
 - `SolutionType` is `Clone` because trial generation frequently requires passing ownership; implementers can wrap large structures in `Arc`/`Rc` if cloning cost is high.
 - Use `TransitionType` to capture reversible moves (useful for Tabu lists, undoing moves, or efficient incremental scoring).
+- Use `StepResult::output` (the `O` parameter, default `()`) to carry algorithm-specific step results such as `AlnsStatistics`; never overload `TransitionType` with algorithm statistics — it must keep move-level semantics for Tabu.
 - Implement `preprocess_solution` to prepare inputs for the optimizer (e.g., build lookup tables) and `postprocess_solution` to convert internal representations back to user-facing solutions.
 - Make callbacks lightweight and non-blocking; they run inside optimization loops and can impact performance.
 

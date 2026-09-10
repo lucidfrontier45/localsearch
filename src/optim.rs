@@ -1,6 +1,7 @@
 //! Optimization Algorithm
 
 mod adaptive_annealing;
+mod alns;
 mod base;
 mod epsilon_greedy;
 mod generic;
@@ -19,9 +20,10 @@ mod tsallis;
 pub use adaptive_annealing::{
     AdaptiveAnnealingOptimizer, AdaptiveScheduler, TargetAccScheduleMode,
 };
+pub use alns::{AlnsOperatorModel, AlnsOptimizer, AlnsStatistics};
 pub use base::{LocalSearchOptimizer, TransitionProbabilityFn};
 pub use epsilon_greedy::EpsilonGreedyOptimizer;
-pub use generic::GenericLocalSearchOptimizer;
+pub use generic::{GenericLocalSearchOptimizer, StepResult};
 pub use great_deluge::GreatDelugeOptimizer;
 pub use hill_climbing::HillClimbingOptimizer;
 pub use logistic_annealing::LogisticAnnealingOptimizer;

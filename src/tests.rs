@@ -1,5 +1,5 @@
 use ordered_float::NotNan;
-use rand::{RngExt as _, distr::Uniform, prelude::Distribution};
+use rand::{distr::Uniform, prelude::Distribution, RngExt as _};
 
 use crate::{LocalsearchError, OptModel};
 
@@ -59,6 +59,7 @@ impl OptModel for QuadraticModel {
 }
 
 mod test_adaptive_annealing;
+mod test_alns;
 mod test_epsilon_greedy;
 mod test_great_deluge;
 mod test_hill_climbing;

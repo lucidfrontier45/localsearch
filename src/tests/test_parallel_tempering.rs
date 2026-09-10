@@ -1,9 +1,9 @@
 use std::num::NonZero;
 
 use crate::{
-    Duration, OptModel,
     optim::{LocalSearchOptimizer, ParallelTemperingOptimizer},
     tests::QuadraticModel,
+    Duration, OptModel,
 };
 
 #[test]

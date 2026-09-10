@@ -1,8 +1,8 @@
 use ordered_float::NotNan;
 use rayon::prelude::*;
 
-use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer, generic::StepResult};
-use crate::{Duration, OptModel, callback::OptCallbackFn};
+use super::{generic::StepResult, GenericLocalSearchOptimizer, LocalSearchOptimizer};
+use crate::{callback::OptCallbackFn, Duration, OptModel};
 
 pub fn metropolis_transition(beta: f64) -> impl Fn(NotNan<f64>, NotNan<f64>) -> f64 {
     move |current: NotNan<f64>, trial: NotNan<f64>| {
@@ -100,7 +100,7 @@ impl MetropolisOptimizer {
     }
 
     /// Perform one optimization step
-    pub fn step<M: OptModel<ScoreType = NotNan<f64>>>(
+    pub fn step<M: OptModel<ScoreType = NotNan<f64>>, O: Default>(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
@@ -108,7 +108,7 @@ impl MetropolisOptimizer {
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-    ) -> StepResult<M::SolutionType, M::ScoreType> {
+    ) -> StepResult<M::SolutionType, M::ScoreType, O> {
         let transition = |current: NotNan<f64>, trial: NotNan<f64>| {
             metropolis_transition(self.beta)(current, trial)
         };
@@ -147,7 +147,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Metropoli
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<<M as OptModel>::SolutionType, <M as OptModel>::ScoreType>,
     ) -> (<M as OptModel>::SolutionType, <M as OptModel>::ScoreType) {
-        let step_result = self.step(
+        let step_result = self.step::<M, ()>(
             model,
             initial_solution,
             initial_score,

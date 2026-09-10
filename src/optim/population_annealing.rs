@@ -1,16 +1,16 @@
 use std::{cell::RefCell, num::NonZero, rc::Rc};
 
 use ordered_float::NotNan;
-use rand::{RngExt as _, distr::weighted::WeightedIndex, prelude::Distribution};
+use rand::{distr::weighted::WeightedIndex, prelude::Distribution, RngExt as _};
 use rayon::prelude::*;
 
 use super::{
-    LocalSearchOptimizer, metropolis, metropolis::tune_temperature,
-    simulated_annealing::tune_cooling_rate,
+    metropolis, metropolis::tune_temperature, simulated_annealing::tune_cooling_rate,
+    LocalSearchOptimizer,
 };
 use crate::{
-    Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
+    Duration, Instant, OptModel,
 };
 
 /// Optimizer that implements the population annealing algorithm
@@ -167,7 +167,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                     let temp_callback =
                         &mut |_progress: OptProgress<M::SolutionType, M::ScoreType>| {};
 
-                    metropolis.step(
+                    metropolis.step::<M, ()>(
                         model,
                         solution.clone(),
                         *score,
