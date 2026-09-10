@@ -1,16 +1,17 @@
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
     fs::File,
     io::{self, BufRead},
     num::NonZero,
     path::Path,
+    rc::Rc,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Mutex,
     },
     time::{Duration, Instant},
 };
-
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     optim::{
@@ -25,6 +26,7 @@ use localsearch::{
 };
 use ordered_float::NotNan;
 use rand::{seq::SliceRandom, RngExt as _};
+use rand::seq::IteratorRandom;
 
 fn min_sorted(c1: usize, c2: usize) -> (usize, usize) {
     if c1 < c2 {
@@ -217,7 +219,11 @@ impl TabuList for DequeTabuList {
 const OPERATOR_NAMES: [&str; 3] = ["segment_reverse", "random_ruin_repair", "worst_ruin_repair"];
 const N_OPERATORS: usize = OPERATOR_NAMES.len();
 const MIN_REMOVAL: usize = 2;
-const MAX_REMOVAL: usize = 12;
+const MAX_REMOVAL: usize = 16;
+// Insertion slots are sampled from the `K_BEST_REPAIR`-cheapest positions; lower
+// behaves like the original greedy repair, higher explores farther from the
+// current basin at the cost of slower local refinement.
+const K_BEST_REPAIR: usize = 4;
 
 #[derive(Debug)]
 struct AlnsTspModel {
@@ -314,17 +320,22 @@ impl AlnsTspModel {
     ) {
         removed.shuffle(rng);
         for city in removed {
-            let (best_pos, _) = tour
-                .windows(2)
-                .enumerate()
-                .map(|(i, w)| {
-                    let delta = self.tsp.get_distance(&min_sorted(w[0], city), false)
-                        + self.tsp.get_distance(&min_sorted(city, w[1]), false)
-                        - self.tsp.get_distance(&min_sorted(w[0], w[1]), false);
-                    (i + 1, delta)
-                })
-                .min_by(|(_, d1), (_, d2)| d1.total_cmp(d2))
-                .unwrap();
+            // Score every slot, keep the K_BEST_REPAIR cheapest, sample uniformly
+            // among them. Trades strict greediness for occasional exploration,
+            // which helps the ruin-repair operator escape the current basin.
+            let k = K_BEST_REPAIR.min(tour.len());
+            let mut top: Vec<(usize, f64)> = Vec::with_capacity(k + 1);
+            for (i, w) in tour.windows(2).enumerate() {
+                let delta = self.tsp.get_distance(&min_sorted(w[0], city), false)
+                    + self.tsp.get_distance(&min_sorted(city, w[1]), false)
+                    - self.tsp.get_distance(&min_sorted(w[0], w[1]), false);
+                top.push((i + 1, delta));
+            }
+            let idx = k.saturating_sub(1).min(top.len().saturating_sub(1));
+            top.select_nth_unstable_by(idx, |(_, a), (_, b)| a.total_cmp(b));
+            top.truncate(k.min(top.len()));
+            let best_pos = top.into_iter().map(|(pos, _)| pos).choose(rng);
+            let best_pos = best_pos.unwrap_or(1).min(tour.len());
             tour.insert(best_pos, city);
         }
     }
@@ -422,18 +433,32 @@ fn run_alns(
             .generate_random_solution(&mut rand::rng())
             .unwrap(),
     };
-
-    let segment_len = (n_iter / 20).max(1);
-    let return_iter = (n_iter / 50).max(1);
-    let temperature = 0.02 * initial_solution.1.into_inner();
-
+    // Tuning for 50k-step budget: short segments give more frequent weight
+    // adaptation, more trials per iter explore the neighborhood thoroughly,
+    // and a geometric cooling schedule cools from broad exploration to
+    // fine-tuning near the global optimum.
+    let n_trials: usize = 64;
+    let segment_len = (n_iter / 100).max(10);    // 500 segments iterations, 100 feedback cycles
+    let return_iter = segment_len;                // one reversion per segment
+    let initial_score = initial_solution.1.into_inner();
+    let t0 = 0.5 * initial_score;                // hot: escape ruin-repair basins
+    let t_end = 0.002 * initial_score;           // cold: refine with 2-opt
+    let cooling_per_iter = (t_end / t0).powf(1.0 / n_iter as f64);
+    let temperature = Rc::new(RefCell::new(t0));
     let mut optimizer = AlnsOptimizer::new(
         segment_len,
-        16,
+        n_trials,
         return_iter,
-        move |current: ScoreType, trial: ScoreType| {
-            let delta = (trial - current).into_inner();
-            (-delta / temperature).exp()
+        {
+            let temperature = Rc::clone(&temperature);
+            move |current: ScoreType, trial: ScoreType| {
+                let delta = (trial - current).into_inner();
+                if delta <= 0.0 {
+                    1.0
+                } else {
+                    (-delta / *temperature.borrow()).exp()
+                }
+            }
         },
         N_OPERATORS,
         0.3,
@@ -445,6 +470,7 @@ fn run_alns(
     let mut current = initial_solution;
     let mut total_uses = vec![0usize; N_OPERATORS];
     let mut done_iter = 0usize;
+    let mut last_segment_iter = 0usize;
 
     while done_iter < n_iter {
         let remaining = time_limit.saturating_sub(start_time.elapsed());
@@ -453,9 +479,16 @@ fn run_alns(
         }
 
         let mut callback = |op: OptProgress<SolutionType, ScoreType>| {
+            // Cool temperature for this absolute iter so worsening moves become
+            // less acceptable as the run progresses.
+            let abs_iter = done_iter + op.iter;
+            temperature.replace(t0 * cooling_per_iter.powi(abs_iter as i32));
+            last_segment_iter = op.iter;
+
             pb.set_message(format!(
-                "best score {:.4e}, acceptance ratio {:.2}",
+                "best score {:.4e}, T={:.2e}, acc {:.2}",
                 op.score.into_inner(),
+                *temperature.borrow(),
                 op.acceptance_ratio
             ));
             pb.set_position((done_iter + op.iter) as u64);
@@ -470,7 +503,9 @@ fn run_alns(
             remaining,
             &mut callback,
         );
-        done_iter += segment_len;
+        // Inner loop ran at most `segment_len` iterations; `op.iter` is 0-based,
+        // so `last_segment_iter + 1` is the exact count for cooling bookkeeping.
+        done_iter += last_segment_iter + 1;
 
         if result.best_score < best.1 {
             best = (result.best_solution, result.best_score);
@@ -483,8 +518,9 @@ fn run_alns(
 
         pb.set_position(done_iter as u64);
         pb.set_message(format!(
-            "best score {:.4e}, weights ({})",
+            "best score {:.4e}, T={:.2e}, weights ({})",
             best.1.into_inner(),
+            *temperature.borrow(),
             optimizer
                 .weights()
                 .iter()
@@ -494,6 +530,7 @@ fn run_alns(
         ));
     }
     pb.finish_and_clear();
+
 
     println!(
         "operator uses: {}",
@@ -607,7 +644,7 @@ fn main() {
 
     let tsp_model = TSPModel::from_coords(&coords);
 
-    let n_iter: usize = 100000;
+    let n_iter: usize = 50000;
     let return_iter = n_iter / 50;
     let time_limit = Duration::from_secs(60);
     let patience = n_iter / 2;
