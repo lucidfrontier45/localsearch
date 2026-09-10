@@ -531,9 +531,68 @@ fn create_pbar(n_iter: u64) -> ProgressBar {
     pb
 }
 
+const ALL_OPTIMIZER_NAMES: [&str; 11] = [
+    "AdaptiveAnnealingOptimizer",
+    "AlnsOptimizer",
+    "EpsilonGreedyOptimizer",
+    "GreatDelugeOptimizer",
+    "HillClimbingOptimizer",
+    "ParallelTemperingOptimizer",
+    "PopulationAnnealingOptimizer",
+    "RelativeAnnealingOptimizer",
+    "SimulatedAnnealingOptimizer",
+    "TabuSearchOptimizer",
+    "TsallisRelativeAnnealingOptimizer",
+];
+
+fn print_usage() {
+    println!(
+        "usage: tsp_model [--optimizer <name>] <coord_file> [optimal_route_file]\n\n\
+         optimizers:\n  {}",
+        ALL_OPTIMIZER_NAMES.join("\n  ")
+    );
+}
+
 fn main() {
-    let args = std::env::args().collect::<Vec<_>>();
-    let input_file = args.get(1).unwrap();
+    let mut positional = Vec::<String>::new();
+    let mut optimizer_name: Option<String> = None;
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        let value = if let Some(name) = arg.strip_prefix("--optimizer=") {
+            Some(name.to_string())
+        } else if arg == "--optimizer" {
+            Some(args.next().unwrap_or_else(|| {
+                eprintln!("error: --optimizer requires a value");
+                std::process::exit(2);
+            }))
+        } else if arg == "-h" || arg == "--help" {
+            print_usage();
+            return;
+        } else {
+            positional.push(arg);
+            None
+        };
+        if let Some(name) = value {
+            if optimizer_name.is_some() {
+                eprintln!("error: --optimizer specified more than once");
+                std::process::exit(2);
+            }
+            optimizer_name = Some(name);
+        }
+    }
+
+    if let Some(name) = &optimizer_name {
+        if !ALL_OPTIMIZER_NAMES.contains(&name.as_str()) {
+            eprintln!("error: unknown optimizer '{name}'");
+            eprintln!("available optimizers: {}", ALL_OPTIMIZER_NAMES.join(", "));
+            std::process::exit(2);
+        }
+    }
+
+    let input_file = positional.first().unwrap_or_else(|| {
+        print_usage();
+        std::process::exit(2);
+    });
     let coords = read_lines(input_file)
         .unwrap()
         .map(|line| {
@@ -669,7 +728,13 @@ fn main() {
         ),
     ];
 
+    let selected = optimizer_name.as_deref();
+    let run_alns_flag = selected.is_none_or(|name| name == "AlnsOptimizer");
+
     for (name, optimizer) in optimizers {
+        if selected.is_some_and(|selected| selected != name) {
+            continue;
+        }
         println!("run {}", name);
         pb.reset();
         let (final_solution, final_score) = optimizer
@@ -689,19 +754,21 @@ fn main() {
         );
     }
 
-    println!("run AlnsOptimizer");
-    let (final_solution, final_score) =
-        run_alns(&tsp_model, initial_solution.clone(), n_iter, time_limit);
-    println!(
-        "final score = {}, num of cities {}",
-        final_score,
-        final_solution.len()
-    );
+    if run_alns_flag {
+        println!("run AlnsOptimizer");
+        let (final_solution, final_score) =
+            run_alns(&tsp_model, initial_solution.clone(), n_iter, time_limit);
+        println!(
+            "final score = {}, num of cities {}",
+            final_score,
+            final_solution.len()
+        );
+    }
 
-    if args.len() < 3 {
+    if positional.len() < 2 {
         return;
     }
-    let opt_route_file = args.get(2).unwrap();
+    let opt_route_file = positional.get(1).unwrap();
     let opt_solution = read_lines(opt_route_file)
         .unwrap()
         .map(|line| {
