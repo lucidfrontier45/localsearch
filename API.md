@@ -13,7 +13,7 @@ flowchart TD
     HasInitial -- "No (not provided)" --> Pre
     Pre --> Optim["Optimizer: optimize(...)"]
     Optim --> Update["handler.update(ctx) each iteration"]
-    Update --> LoopStart["generate n_trials candidates in parallel; keep best"]
+    Update --> LoopStart["generator.generate_trial(...) x n_trials; keep best"]
     LoopStart --> Eval["p = handler.evaluate(current, trial)"]
     Eval --> Decide{"accept? (p > rand(0, 1))"}
     Decide -- "Accept" --> Apply["apply trial -> new current"]
@@ -28,7 +28,7 @@ flowchart TD
 - Notes on the flow:
   - `generate_random_solution` is used when a caller does not provide an initial solution (helpers such as `LocalSearchOptimizer::run` call it). Implementations should produce a valid solution and its score.
   - `preprocess_solution` is executed before handing the solution to the optimizer (use for repairs, caching, or building auxiliary data structures).
-  - Inside the optimizer, `generate_trial_solution` is called repeatedly to propose neighbors; it returns the candidate solution, a `TransitionType` describing the change (useful for Tabu or undo operations), and the candidate score. Loop-based optimizers generate `n_trials` candidates per iteration in parallel (rayon) and keep the best-scoring one.
+  - Inside the optimizer, trial candidates come from a `TrialGenerator`. By default the loop drives `OptModel::generate_trial_solution` through `DefaultTrialGenerator`; the `n_trials` candidates per iteration are evaluated and the best-scoring one is kept. ALNS (and other adaptive schemes) plug in via `LocalSearchLoop::step_with_generator` or `GenericLocalSearchOptimizer::with_trial_generator` to drive trial generation through destroy/repair operators instead.
   - Acceptance is decided by a `TransitionHandler`: `handler.update` is invoked once per iteration before trials are generated (cooling schedules, water levels, etc.), then `handler.evaluate(current_score, trial_score)` returns the acceptance probability; the trial is accepted when `p > rand(0, 1)`. Improving transitions return `1.0` from the handler itself.
   - After optimization completes, `postprocess_solution` is called to finalize or decode the result for the user.
 
@@ -85,12 +85,30 @@ The acceptance/scheduling logic of each algorithm lives in a `TransitionHandler`
 
 - `LocalSearchLoop<ST>` (`src/optim/search_loop.rs`) — the trial-and-accept loop shared by every local-search optimizer. Constructed with `LocalSearchLoop::new(patience, n_trials, return_iter)`:
   - `patience` — give up (early stop) if the score has not improved for this many iterations.
-  - `n_trials` — number of trial candidates generated (in parallel) per iteration; the best is kept.
+  - `n_trials` — number of trial candidates generated per iteration; the best is kept.
   - `return_iter` — return to the best solution after this many non-improving iterations.
-- `LocalSearchLoop::step(model, initial_solution, initial_score, n_iter, time_limit, callback, handler) -> (StepResult<...>, H)` — runs up to `n_iter` iterations with the supplied handler and returns the `StepResult` plus the (possibly mutated) handler so per-run state survives the call. `LocalSearchLoop` itself stores no handler.
+- `LocalSearchLoop::step(model, initial_solution, initial_score, n_iter, time_limit, callback, handler) -> (StepResult<...>, H)` — runs up to `n_iter` iterations with the supplied handler and returns the `StepResult` plus the (possibly mutated) handler so per-run state survives the call. Trial generation goes through `DefaultTrialGenerator` (a thin wrapper over `OptModel::generate_trial_solution`). `LocalSearchLoop` itself stores no handler.
 - `StepResult<S, ST>` fields: `best_solution`, `best_score`, `last_solution`, `last_score`, `acceptance_counter: AcceptanceCounter`.
-- `GenericLocalSearchOptimizer<ST, H>` (`src/optim/generic.rs`) — owns a handler *blueprint*; each `optimize` call clones it, so the stored handler stays untouched across runs and can be reused. Implements `LocalSearchOptimizer<M>` for any `M: OptModel` / `H: TransitionHandler<M::ScoreType> + Clone`. Use it to drive an arbitrary handler through the standard optimizer interface; use `LocalSearchLoop` directly when you need the handler's post-run state.
+- `GenericLocalSearchOptimizer<ST, H, G = DefaultTrialGenerator>` (`src/optim/generic.rs`) — owns a handler *blueprint* and an optional trial generator; each `optimize` call clones both, so the stored values stay untouched across runs and can be reused. Implements `LocalSearchOptimizer<M>` for any `M: OptModel` / `H: TransitionHandler<M::ScoreType> + Clone` / `G: TrialGenerator<M> + Clone`. Use it to drive an arbitrary handler through the standard optimizer interface; use `LocalSearchLoop` directly when you need the handler's or generator's post-run state.
 - `AcceptanceCounter` (`src/counter.rs`, re-exported at crate root) — sliding-window acceptance counter (`new(window_size)`, `enqueue(accepted)`, `acceptance_ratio()`); window size 100 by default.
+
+## Trial generators and ALNS
+
+The trial-generation side of the search loop is pluggable through the `TrialGenerator` trait (`src/optim/search_loop.rs`). A generator produces one trial per `generate_trial` call and receives a `TrialOutcome` feedback once the loop knows what happened to that trial.
+
+- `TrialOutcome` (`src/optim/search_loop.rs`) — classifies the trial as `NewBest`, `Improved`, `Accepted`, or `Rejected`. Adaptive generators (ALNS) use this to credit operator weights.
+- `TrialGenerator<M: OptModel>` (`src/optim/search_loop.rs`) — `generate_trial(...)` and `feedback(outcome)`; object-safe so generators can be stored behind trait objects.
+- `DefaultTrialGenerator` (`src/optim/search_loop.rs`) — the default generator; just calls `OptModel::generate_trial_solution` and ignores feedback.
+- `LocalSearchLoop::step_with_generator(model, initial_solution, initial_score, n_iter, time_limit, callback, handler, generator) -> (StepResult<...>, H, G)` — same loop as `step`, but trial generation is driven by the supplied `generator`. The generator is returned alongside the result so its adapted state (e.g. ALNS weights) can be inspected.
+
+ALNS is built on top of this trait:
+
+- `DestroyOperator<M, P>` / `RepairOperator<M, P>` (`src/optim/alns.rs`) — traits the user implements to define destroy and repair operators. Operators must be `Send + Sync` and provide a `dyn_clone` method so the trait stays object-safe (a blanket `Clone` impl on `Box<dyn DestroyOperator<_, _>>` / `Box<dyn RepairOperator<_, _>>` delegates to `dyn_clone`).
+- `Rewards` (`src/optim/alns.rs`) — per-outcome reward table (`new_best`, `improved`, `accepted`, `rejected`); defaults follow Ropke & Pisinger (33 / 9 / 13 / 0).
+- `AlnsTrialGenerator<M, P>` (`src/optim/alns.rs`) — holds destroy and repair operator pools with independent roulette-wheel weights, segment-based weight updates, and a reaction-factor blending rule. Built with `AlnsTrialGenerator::new(destroy, repair)`; builder methods: `with_segment_size`, `with_reaction_factor`, `with_destroy_rewards`, `with_repair_rewards`, `with_rewards`. Inspected via `destroy_weights` / `repair_weights` / `destroy_usage` / `repair_usage` / `destroy_scores` / `repair_scores` / `trials_in_segment`.
+- `GenericLocalSearchOptimizer::with_trial_generator(generator)` — swaps in an ALNS generator (or any other `TrialGenerator`) for the default one; returns a new optimizer with the new generator type.
+
+See `src/tests/test_alns.rs` for a complete example.
 
 ## Concrete optimizers
 
@@ -123,9 +141,10 @@ Each optimizer instantiates its `TransitionHandler` in the constructor and store
 - `src/model.rs` (OptModel definition)
 - `src/optim/base.rs` (LocalSearchOptimizer + run/run_with_callback)
 - `src/optim/transition.rs` (TransitionHandler + UpdateCtx)
-- `src/optim/search_loop.rs` (LocalSearchLoop + StepResult)
+- `src/optim/search_loop.rs` (LocalSearchLoop, StepResult, TrialGenerator, TrialOutcome, DefaultTrialGenerator)
 - `src/optim/generic.rs` (GenericLocalSearchOptimizer)
 - `src/optim/handlers.rs` (per-algorithm handlers and tuning helpers)
+- `src/optim/alns.rs` (AlnsTrialGenerator, DestroyOperator, RepairOperator, Rewards)
 - `src/callback.rs` (OptProgress and OptCallbackFn)
 - `src/counter.rs` (AcceptanceCounter)
 - `src/time_wrapper.rs` (Duration / Instant re-exports)
