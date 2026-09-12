@@ -32,17 +32,18 @@
 
 use std::marker::PhantomData;
 
-use rand::RngExt as _;
+use rand::{RngExt as _, rngs::StdRng};
 
 use super::search_loop::{TrialGenerator, TrialOutcome};
 use crate::OptModel;
 
 /// Per-outcome reward table for ALNS operator credit.
 ///
-/// Defaults follow the widely used Ropke & Pisinger scheme: a new global
-/// best is worth the most, an improvement over the current solution is
-/// rewarded less, accepting a non-improving solution gets a small reward,
-/// and a rejected trial contributes nothing.
+/// Defaults follow the classic Ropke & Pisinger scheme (33/9/13/0): a new
+/// global best is worth the most, an improvement over the current solution
+/// comes next, and an accepted non-improving trial still earns a reward —
+/// note the classic scheme rates an accepted move above a merely improving
+/// one — while a rejected trial contributes nothing.
 #[derive(Debug, Clone, Copy)]
 pub struct Rewards {
     /// Reward for a trial that produced a new global best.
@@ -81,7 +82,8 @@ impl Rewards {
 
 impl Default for Rewards {
     fn default() -> Self {
-        // Classic Ropke & Pisinger weights.
+        // Classic Ropke & Pisinger values (33/9/13/0). Note `accepted`
+        // intentionally exceeds `improved` in this scheme.
         Self {
             new_best: 33.0,
             improved: 9.0,
@@ -119,9 +121,11 @@ impl OperatorStats {
 /// were removed, a set of moves to undo, or anything the matching
 /// [`RepairOperator`] knows how to interpret.
 ///
-/// Implementors create their own RNG internally via [`rand::rng()`] (or any
-/// other source) so that the trait stays object-safe and operators can be
-/// stored as `Box<dyn DestroyOperator<_, _>>`.
+/// `solution` is borrowed so the loop can share it across rayon worker
+/// threads; clone what you need. `rng` is a per-trial fork supplied by the
+/// loop — use it for all randomness instead of creating your own, so runs
+/// stay reproducible. The concrete [`StdRng`] type keeps the trait
+/// object-safe so operators can be stored as `Box<dyn DestroyOperator<_, _>>`.
 ///
 /// Object-safety is preserved by providing a [`Self::dyn_clone`] method
 /// instead of adding [`Clone`] as a supertrait (which would force
@@ -130,7 +134,7 @@ impl OperatorStats {
 /// concrete type — see the example in `src/tests/test_alns.rs`.
 pub trait DestroyOperator<M: OptModel, P>: Send + Sync {
     /// Apply the destroy step and produce a partial state.
-    fn destroy(&self, model: &M, solution: M::SolutionType) -> P;
+    fn destroy(&self, model: &M, solution: &M::SolutionType, rng: &mut StdRng) -> P;
     /// Clone the operator into a `Box<dyn DestroyOperator>`. Implementors
     /// typically write `Box::new(self.clone())`.
     fn dyn_clone(&self) -> Box<dyn DestroyOperator<M, P>>;
@@ -139,12 +143,14 @@ pub trait DestroyOperator<M: OptModel, P>: Send + Sync {
 /// Plug-in repair operator for ALNS.
 ///
 /// A repair operator consumes the partial state produced by a destroy
-/// operator and returns a complete `(solution, score)` pair.
+/// operator and returns a complete `(solution, score)` pair. Like
+/// [`DestroyOperator`], it receives the loop's per-trial [`StdRng`] fork —
+/// use it for all randomness.
 ///
 /// See [`DestroyOperator`] for the dyn-clone contract.
 pub trait RepairOperator<M: OptModel, P>: Send + Sync {
     /// Apply the repair step and return a complete solution with its score.
-    fn repair(&self, model: &M, partial: P) -> (M::SolutionType, M::ScoreType);
+    fn repair(&self, model: &M, partial: P, rng: &mut StdRng) -> (M::SolutionType, M::ScoreType);
     /// Clone the operator into a `Box<dyn RepairOperator>`.
     fn dyn_clone(&self) -> Box<dyn RepairOperator<M, P>>;
 }
@@ -166,24 +172,20 @@ impl<M: OptModel, P> Clone for Box<dyn RepairOperator<M, P>> {
 /// Holds destroy and repair operator pools together with their adaptive
 /// weights. Each call to [`TrialGenerator::generate_trial`] picks one
 /// destroy and one repair operator via independent roulette-wheel draws,
-/// applies them in sequence, and stores the indices so that
-/// [`TrialGenerator::feedback`] can credit the right operators.
+/// applies them in sequence, and returns the chosen indices as the trial
+/// token so that [`TrialGenerator::feedback`] can credit the right
+/// operators.
 ///
-/// `n_trials == 1` is the common usage for ALNS. When the search loop uses
-/// a larger `n_trials`, feedback is applied to the operator pair produced
-/// by the most recent `generate_trial` call (LIFO order) — typically only
-/// the best candidate in the iteration matters.
+/// Generation takes `&self`, so the search loop can run `n_trials`
+/// candidates in parallel on rayon worker threads. Only the winning
+/// candidate is evaluated per iteration, so only the operator pair that
+/// produced the winner is credited (winner-takes-all); the remaining
+/// candidates are discarded without reward.
 pub struct AlnsTrialGenerator<M: OptModel, P> {
     destroy_operators: Vec<Box<dyn DestroyOperator<M, P>>>,
     destroy_stats: Vec<OperatorStats>,
     repair_operators: Vec<Box<dyn RepairOperator<M, P>>>,
     repair_stats: Vec<OperatorStats>,
-    /// Stack of destroy-operator indices pending feedback. One entry per
-    /// `generate_trial` call, popped in LIFO order by `feedback`.
-    selected_destroy: Vec<usize>,
-    /// Stack of repair-operator indices, parallel to
-    /// [`Self::selected_destroy`].
-    selected_repair: Vec<usize>,
     /// Number of trials per segment — weights are recomputed whenever this
     /// threshold is reached.
     segment_size: usize,
@@ -228,8 +230,6 @@ impl<M: OptModel, P> AlnsTrialGenerator<M, P> {
             destroy_stats: (0..n_d).map(|_| OperatorStats::new(1.0)).collect(),
             repair_operators,
             repair_stats: (0..n_r).map(|_| OperatorStats::new(1.0)).collect(),
-            selected_destroy: Vec::new(),
-            selected_repair: Vec::new(),
             segment_size: 100,
             trials_in_segment: 0,
             reaction_factor: 0.8,
@@ -342,6 +342,25 @@ impl<M: OptModel, P> AlnsTrialGenerator<M, P> {
     fn select_repair<R: rand::Rng>(&self, rng: &mut R) -> usize {
         select_by_weight(&self.repair_stats, rng)
     }
+
+    /// Credit one operator pair and advance the segment bookkeeping,
+    /// updating weights at segment boundaries.
+    fn credit(&mut self, d_idx: usize, r_idx: usize, outcome: TrialOutcome) {
+        let d_reward = self.destroy_rewards.reward_for(outcome);
+        let r_reward = self.repair_rewards.reward_for(outcome);
+
+        self.destroy_stats[d_idx].accumulated_score += d_reward;
+        self.destroy_stats[d_idx].usage_count += 1;
+        self.repair_stats[r_idx].accumulated_score += r_reward;
+        self.repair_stats[r_idx].usage_count += 1;
+
+        self.trials_in_segment += 1;
+        if self.trials_in_segment >= self.segment_size {
+            apply_weight_update(&mut self.destroy_stats, self.reaction_factor);
+            apply_weight_update(&mut self.repair_stats, self.reaction_factor);
+            self.trials_in_segment = 0;
+        }
+    }
 }
 
 /// Roulette-wheel selection over an operator pool's weights.
@@ -360,14 +379,15 @@ fn select_by_weight<R: rand::Rng>(stats: &[OperatorStats], rng: &mut R) -> usize
 }
 
 /// Recompute weights for one operator pool using the reaction-factor
-/// blending rule from Ropke & Pisinger (2006).
+/// blending rule from Ropke & Pisinger (2006). Operators unused during the
+/// segment keep their previous weight.
 fn apply_weight_update(stats: &mut [OperatorStats], reaction_factor: f64) {
     for s in stats.iter_mut() {
-        let segment_avg = if s.usage_count > 0 {
-            s.accumulated_score / s.usage_count as f64
-        } else {
-            0.0
-        };
+        if s.usage_count == 0 {
+            s.accumulated_score = 0.0;
+            continue;
+        }
+        let segment_avg = s.accumulated_score / s.usage_count as f64;
         s.weight = reaction_factor.mul_add(segment_avg, (1.0 - reaction_factor) * s.weight);
         // Avoid zero/negative weights so roulette-wheel sampling stays
         // well-defined even when every operator did poorly.
@@ -386,8 +406,6 @@ impl<M: OptModel, P> Clone for AlnsTrialGenerator<M, P> {
             destroy_stats: self.destroy_stats.clone(),
             repair_operators: self.repair_operators.clone(),
             repair_stats: self.repair_stats.clone(),
-            selected_destroy: self.selected_destroy.clone(),
-            selected_repair: self.selected_repair.clone(),
             segment_size: self.segment_size,
             trials_in_segment: self.trials_in_segment,
             reaction_factor: self.reaction_factor,
@@ -399,48 +417,26 @@ impl<M: OptModel, P> Clone for AlnsTrialGenerator<M, P> {
 }
 
 impl<M: OptModel, P> TrialGenerator<M> for AlnsTrialGenerator<M, P> {
-    fn generate_trial<R: rand::Rng>(
-        &mut self,
+    /// `(destroy_index, repair_index)` of the operators that produced the
+    /// trial.
+    type Token = (usize, usize);
+
+    fn generate_trial(
+        &self,
         model: &M,
-        current_solution: M::SolutionType,
+        current_solution: &M::SolutionType,
         _current_score: M::ScoreType,
-        rng: &mut R,
-    ) -> (M::SolutionType, M::ScoreType) {
+        rng: &mut StdRng,
+    ) -> (M::SolutionType, M::ScoreType, Self::Token) {
         let d_idx = self.select_destroy(rng);
         let r_idx = self.select_repair(rng);
-        self.selected_destroy.push(d_idx);
-        self.selected_repair.push(r_idx);
-
-        let partial = self.destroy_operators[d_idx].destroy(model, current_solution);
-        self.repair_operators[r_idx].repair(model, partial)
+        let partial = self.destroy_operators[d_idx].destroy(model, current_solution, rng);
+        let (solution, score) = self.repair_operators[r_idx].repair(model, partial, rng);
+        (solution, score, (d_idx, r_idx))
     }
 
-    fn feedback(&mut self, outcome: TrialOutcome) {
-        // Credit the most recently picked operators and update weights at
-        // segment boundaries.
-        let d_idx = self
-            .selected_destroy
-            .pop()
-            .expect("feedback called more times than generate_trial");
-        let r_idx = self
-            .selected_repair
-            .pop()
-            .expect("feedback called more times than generate_trial");
-
-        let d_reward = self.destroy_rewards.reward_for(outcome);
-        let r_reward = self.repair_rewards.reward_for(outcome);
-
-        self.destroy_stats[d_idx].accumulated_score += d_reward;
-        self.destroy_stats[d_idx].usage_count += 1;
-        self.repair_stats[r_idx].accumulated_score += r_reward;
-        self.repair_stats[r_idx].usage_count += 1;
-
-        self.trials_in_segment += 1;
-        if self.trials_in_segment >= self.segment_size {
-            apply_weight_update(&mut self.destroy_stats, self.reaction_factor);
-            apply_weight_update(&mut self.repair_stats, self.reaction_factor);
-            self.trials_in_segment = 0;
-        }
+    fn feedback(&mut self, token: Self::Token, outcome: TrialOutcome) {
+        self.credit(token.0, token.1, outcome);
     }
 }
 
@@ -507,5 +503,93 @@ mod tests {
         apply_weight_update(&mut stats, 1.0);
         // Would be -100.0 without the floor — but the clamp keeps it positive.
         assert!(stats[0].weight > 0.0);
+    }
+
+    #[test]
+    fn apply_weight_update_keeps_weight_for_unused_operators() {
+        let mut stats = vec![
+            OperatorStats {
+                weight: 2.5,
+                accumulated_score: 0.0,
+                usage_count: 0,
+            },
+            OperatorStats {
+                weight: 1.0,
+                accumulated_score: 10.0,
+                usage_count: 2,
+            },
+        ];
+        apply_weight_update(&mut stats, 0.5);
+        // Unused operator keeps its weight; used one blends toward its average.
+        assert!((stats[0].weight - 2.5).abs() < 1e-12);
+        assert!((stats[1].weight - 3.0).abs() < 1e-12);
+    }
+
+    // Minimal stub model so token-routed `feedback` can be tested deterministically.
+    #[derive(Clone)]
+    struct StubModel;
+
+    impl crate::OptModel for StubModel {
+        type SolutionType = ();
+        type TransitionType = ();
+        type ScoreType = i32;
+
+        fn generate_random_solution<R: rand::Rng>(
+            &self,
+            _rng: &mut R,
+        ) -> Result<(Self::SolutionType, Self::ScoreType), crate::LocalsearchError> {
+            Ok(((), 0))
+        }
+
+        fn generate_trial_solution<R: rand::Rng>(
+            &self,
+            current_solution: Self::SolutionType,
+            current_score: Self::ScoreType,
+            _rng: &mut R,
+        ) -> (Self::SolutionType, Self::TransitionType, Self::ScoreType) {
+            (current_solution, (), current_score)
+        }
+    }
+
+    #[derive(Clone)]
+    struct StubDestroy;
+
+    impl DestroyOperator<StubModel, ()> for StubDestroy {
+        fn destroy(&self, _model: &StubModel, _solution: &(), _rng: &mut StdRng) {}
+
+        fn dyn_clone(&self) -> Box<dyn DestroyOperator<StubModel, ()>> {
+            Box::new(self.clone())
+        }
+    }
+
+    #[derive(Clone)]
+    struct StubRepair;
+
+    impl RepairOperator<StubModel, ()> for StubRepair {
+        fn repair(&self, _model: &StubModel, _partial: (), _rng: &mut StdRng) -> ((), i32) {
+            ((), 0)
+        }
+
+        fn dyn_clone(&self) -> Box<dyn RepairOperator<StubModel, ()>> {
+            Box::new(self.clone())
+        }
+    }
+
+    #[test]
+    fn feedback_credits_token_holder() {
+        let mut generator = AlnsTrialGenerator::<StubModel, ()>::new(
+            vec![Box::new(StubDestroy), Box::new(StubDestroy)],
+            vec![Box::new(StubRepair), Box::new(StubRepair)],
+        )
+        .with_segment_size(usize::MAX)
+        .with_rewards(Rewards::new(1.0, 0.0, 0.0, 0.0));
+        // The token — not recency — decides who is credited: tokens carry
+        // the operator pair, so the loop can generate trials in parallel
+        // and credit only the winner.
+        generator.feedback((1, 1), TrialOutcome::NewBest);
+        assert_eq!(generator.destroy_usage(), vec![0, 1]);
+        assert_eq!(generator.repair_usage(), vec![0, 1]);
+        assert_eq!(generator.destroy_scores(), vec![0.0, 1.0]);
+        assert_eq!(generator.repair_scores(), vec![0.0, 1.0]);
     }
 }

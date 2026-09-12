@@ -36,7 +36,7 @@ use localsearch::{
     },
 };
 use ordered_float::NotNan;
-use rand::{RngExt as _, seq::SliceRandom};
+use rand::{RngExt as _, rngs::StdRng, seq::SliceRandom};
 
 // ---------------------------------------------------------------------------
 // TSP model
@@ -159,15 +159,14 @@ struct RandomRemoval {
 }
 
 impl DestroyOperator<TSPModel, PartialTour> for RandomRemoval {
-    fn destroy(&self, _model: &TSPModel, solution: SolutionType) -> PartialTour {
-        let mut rng = rand::rng();
+    fn destroy(&self, _model: &TSPModel, solution: &SolutionType, rng: &mut StdRng) -> PartialTour {
         let n = solution.len() - 2; // exclude the start city pinned at both ends
         let frac = rng.random_range(self.min_frac..=self.max_frac);
         let n_remove = (((n as f64) * frac).round() as usize).clamp(1, n);
 
-        let mut partial: Vec<Option<usize>> = solution.into_iter().map(Some).collect();
+        let mut partial: Vec<Option<usize>> = solution.iter().copied().map(Some).collect();
         let mut interior: Vec<usize> = (1..partial.len() - 1).collect();
-        interior.shuffle(&mut rng);
+        interior.shuffle(rng);
         let mut removed = Vec::with_capacity(n_remove);
         for &i in interior.iter().take(n_remove) {
             // SAFETY: interior only references indices 1..len-1, all of which
@@ -193,8 +192,7 @@ struct WorstRemoval {
 }
 
 impl DestroyOperator<TSPModel, PartialTour> for WorstRemoval {
-    fn destroy(&self, model: &TSPModel, solution: SolutionType) -> PartialTour {
-        let mut rng = rand::rng();
+    fn destroy(&self, model: &TSPModel, solution: &SolutionType, rng: &mut StdRng) -> PartialTour {
         let n = solution.len() - 2;
         let frac = rng.random_range(self.min_frac..=self.max_frac);
         let n_remove = (((n as f64) * frac).round() as usize).clamp(1, n);
@@ -214,7 +212,7 @@ impl DestroyOperator<TSPModel, PartialTour> for WorstRemoval {
         // Highest savings first.
         savings.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-        let mut partial: Vec<Option<usize>> = solution.into_iter().map(Some).collect();
+        let mut partial: Vec<Option<usize>> = solution.iter().copied().map(Some).collect();
         let mut removed = Vec::with_capacity(n_remove);
         for &(i, _) in savings.iter().take(n_remove) {
             removed.push(partial[i].unwrap());
@@ -240,8 +238,7 @@ struct ShawRemoval {
 }
 
 impl DestroyOperator<TSPModel, PartialTour> for ShawRemoval {
-    fn destroy(&self, model: &TSPModel, solution: SolutionType) -> PartialTour {
-        let mut rng = rand::rng();
+    fn destroy(&self, model: &TSPModel, solution: &SolutionType, rng: &mut StdRng) -> PartialTour {
         let n = solution.len() - 2;
         let frac = rng.random_range(self.min_frac..=self.max_frac);
         let n_remove = (((n as f64) * frac).round() as usize).clamp(1, n);
@@ -256,7 +253,7 @@ impl DestroyOperator<TSPModel, PartialTour> for ShawRemoval {
             .collect();
         related.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
-        let mut partial: Vec<Option<usize>> = solution.into_iter().map(Some).collect();
+        let mut partial: Vec<Option<usize>> = solution.iter().copied().map(Some).collect();
         let mut removed = Vec::with_capacity(n_remove);
         for &(i, _) in related.iter().take(n_remove) {
             removed.push(partial[i].unwrap());
@@ -329,10 +326,10 @@ impl RepairOperator<TSPModel, PartialTour> for GreedyInsertion {
         &self,
         model: &TSPModel,
         (mut partial, mut removed): PartialTour,
+        rng: &mut StdRng,
     ) -> (SolutionType, ScoreType) {
-        let mut rng = rand::rng();
         // Process removed cities in random order to break symmetry.
-        removed.shuffle(&mut rng);
+        removed.shuffle(rng);
 
         for city in removed {
             let mut best_pos = 0;
@@ -351,7 +348,6 @@ impl RepairOperator<TSPModel, PartialTour> for GreedyInsertion {
                 }
             }
             partial[best_pos] = Some(city);
-            let _ = &mut rng; // silence unused-mut when n_remove == 0
         }
 
         let solution: SolutionType = partial.into_iter().map(|s| s.unwrap()).collect();
@@ -377,9 +373,9 @@ impl RepairOperator<TSPModel, PartialTour> for RandomInsertion {
         &self,
         _model: &TSPModel,
         (mut partial, mut removed): PartialTour,
+        rng: &mut StdRng,
     ) -> (SolutionType, ScoreType) {
-        let mut rng = rand::rng();
-        removed.shuffle(&mut rng);
+        removed.shuffle(rng);
 
         for city in removed {
             let gaps: Vec<usize> = partial

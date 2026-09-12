@@ -1,7 +1,13 @@
-use std::time::Duration;
+use std::{
+    sync::{
+        Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
 
 use ordered_float::NotNan;
-use rand::{RngExt as _, distr::Uniform, prelude::Distribution};
+use rand::{RngExt as _, SeedableRng as _, distr::Uniform, prelude::Distribution, rngs::StdRng};
 
 use super::QuadraticModel;
 use crate::{
@@ -79,8 +85,13 @@ impl OptModel for SumModel {
 struct DestroyFirstHalf;
 
 impl DestroyOperator<SumModel, PartialSolution> for DestroyFirstHalf {
-    fn destroy(&self, _model: &SumModel, solution: Vec<usize>) -> PartialSolution {
-        let mut partial: PartialSolution = solution.into_iter().map(Some).collect();
+    fn destroy(
+        &self,
+        _model: &SumModel,
+        solution: &Vec<usize>,
+        _rng: &mut StdRng,
+    ) -> PartialSolution {
+        let mut partial: PartialSolution = solution.iter().copied().map(Some).collect();
         let half = partial.len() / 2;
         for v in partial.iter_mut().take(half) {
             *v = None;
@@ -98,8 +109,13 @@ impl DestroyOperator<SumModel, PartialSolution> for DestroyFirstHalf {
 struct DestroySecondHalf;
 
 impl DestroyOperator<SumModel, PartialSolution> for DestroySecondHalf {
-    fn destroy(&self, _model: &SumModel, solution: Vec<usize>) -> PartialSolution {
-        let mut partial: PartialSolution = solution.into_iter().map(Some).collect();
+    fn destroy(
+        &self,
+        _model: &SumModel,
+        solution: &Vec<usize>,
+        _rng: &mut StdRng,
+    ) -> PartialSolution {
+        let mut partial: PartialSolution = solution.iter().copied().map(Some).collect();
         let half = partial.len() / 2;
         for v in partial.iter_mut().skip(half) {
             *v = None;
@@ -120,13 +136,17 @@ struct RandomRepair {
 }
 
 impl RepairOperator<SumModel, PartialSolution> for RandomRepair {
-    fn repair(&self, model: &SumModel, mut partial: PartialSolution) -> (Vec<usize>, NotNan<f64>) {
-        let mut rng = rand::rng();
+    fn repair(
+        &self,
+        model: &SumModel,
+        mut partial: PartialSolution,
+        rng: &mut StdRng,
+    ) -> (Vec<usize>, NotNan<f64>) {
         let dist = Uniform::new(self.value_range.0, self.value_range.1)
             .expect("value range must be valid");
         for slot in partial.iter_mut() {
             if slot.is_none() {
-                *slot = Some(dist.sample(&mut rng));
+                *slot = Some(dist.sample(rng));
             }
         }
         let solution = partial
@@ -185,33 +205,37 @@ fn default_step_matches_legacy_behavior() {
 // Custom generator is invoked through `step_with_generator`.
 // ---------------------------------------------------------------------------
 
+// Atomics + mutex keep the generator `Sync` so the loop can invoke it from
+// rayon worker threads.
 #[derive(Default)]
 struct CountingGenerator {
-    generate_calls: usize,
-    feedback_calls: usize,
-    last_outcome: Option<TrialOutcome>,
+    generate_calls: AtomicUsize,
+    feedback_calls: AtomicUsize,
+    last_outcome: Mutex<Option<TrialOutcome>>,
 }
 
 impl TrialGenerator<QuadraticModel> for CountingGenerator {
-    fn generate_trial<R: rand::Rng>(
-        &mut self,
+    type Token = ();
+
+    fn generate_trial(
+        &self,
         _model: &QuadraticModel,
-        current_solution: Vec<f64>,
+        current_solution: &Vec<f64>,
         current_score: NotNan<f64>,
-        _rng: &mut R,
-    ) -> (Vec<f64>, NotNan<f64>) {
-        self.generate_calls += 1;
+        _rng: &mut StdRng,
+    ) -> (Vec<f64>, NotNan<f64>, Self::Token) {
+        self.generate_calls.fetch_add(1, Ordering::Relaxed);
         // Nudge one coordinate; the loop still applies its acceptance logic.
-        let mut next = current_solution;
+        let mut next = current_solution.clone();
         if !next.is_empty() {
             next[0] += 0.1;
         }
-        (next, current_score)
+        (next, current_score, ())
     }
 
-    fn feedback(&mut self, outcome: TrialOutcome) {
-        self.feedback_calls += 1;
-        self.last_outcome = Some(outcome);
+    fn feedback(&mut self, _token: Self::Token, outcome: TrialOutcome) {
+        self.feedback_calls.fetch_add(1, Ordering::Relaxed);
+        *self.last_outcome.lock().expect("mutex poisoned") = Some(outcome);
     }
 }
 
@@ -233,9 +257,15 @@ fn custom_generator_is_invoked_through_step_with_generator() {
         generator,
     );
     // n_iter iterations × n_trials per iteration.
-    assert_eq!(returned.generate_calls, 5);
-    assert_eq!(returned.feedback_calls, 5);
-    assert!(returned.last_outcome.is_some());
+    assert_eq!(returned.generate_calls.load(Ordering::Relaxed), 5);
+    assert_eq!(returned.feedback_calls.load(Ordering::Relaxed), 5);
+    assert!(
+        returned
+            .last_outcome
+            .lock()
+            .expect("mutex poisoned")
+            .is_some()
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -267,21 +297,16 @@ fn alns_destroy_operator_selection_respects_weights() {
     let model = SumModel::new(4, (0, 100));
     let mut total_destroy_picks = [0usize, 0usize];
     let mut total_repair_picks = [0usize; 1];
-    for _ in 0..2000 {
+    for i in 0..2000 {
         let mut local = build_alns().with_segment_size(usize::MAX);
-        let mut rng = rand::rng();
-        let (_solution, _score) =
+        let mut rng = StdRng::seed_from_u64(42 + i);
+        let solution = vec![1, 2, 3, 4];
+        let (_solution, _score, token) =
             <AlnsTrialGenerator<SumModel, PartialSolution> as TrialGenerator<SumModel>>::generate_trial(
-                &mut local,
-                &model,
-                vec![1, 2, 3, 4],
-                NotNan::new(10.0).unwrap(),
-                &mut rng,
+                &local, &model, &solution, NotNan::new(10.0).unwrap(), &mut rng,
             );
-        // Drain the stacks via feedback (we don't care about the outcome here).
-        local.feedback(TrialOutcome::Rejected);
-        // The destroy/repair stack should always have exactly one selection
-        // for each generate_trial call when n_trials == 1.
+        // Credit the trial via its token (we don't care about the outcome here).
+        local.feedback(token, TrialOutcome::Rejected);
         total_destroy_picks[0] += local.destroy_usage()[0];
         total_destroy_picks[1] += local.destroy_usage()[1];
         total_repair_picks[0] += local.repair_usage()[0];
@@ -339,11 +364,14 @@ fn alns_feedback_credits_rewards_to_selected_operators() {
         TrialOutcome::Accepted,
         TrialOutcome::Rejected,
     ] {
-        let mut local_rng = rand::rng();
-        let _ = <AlnsTrialGenerator<SumModel, PartialSolution> as TrialGenerator<SumModel>>::generate_trial(
-            &mut generator,
+        let mut local_rng = StdRng::seed_from_u64(7);
+        let solution = vec![1, 2, 3, 4];
+        let (_, _, token) = <AlnsTrialGenerator<SumModel, PartialSolution> as TrialGenerator<
+            SumModel,
+        >>::generate_trial(
+            &generator,
             &model,
-            vec![1, 2, 3, 4],
+            &solution,
             NotNan::new(10.0).unwrap(),
             &mut local_rng,
         );
@@ -353,7 +381,7 @@ fn alns_feedback_credits_rewards_to_selected_operators() {
             TrialOutcome::Accepted => 2.0,
             TrialOutcome::Rejected => 0.0,
         };
-        generator.feedback(outcome);
+        generator.feedback(token, outcome);
         // After this feedback, *some* destroy and *some* repair operator was
         // credited. Verify usage incremented and the aggregate reward is
         // accumulated correctly across all operators.
@@ -393,16 +421,19 @@ fn alns_updates_weights_at_segment_boundaries() {
     // Run 3 trials with reward 9 (Improved) each. With segment_size=3 and
     // reaction_factor=0.5, after the third feedback the weights are blended
     // with the segment average.
-    for _ in 0..3 {
-        let mut rng = rand::rng();
-        let _ = <AlnsTrialGenerator<SumModel, PartialSolution> as TrialGenerator<SumModel>>::generate_trial(
-            &mut generator,
+    for i in 0..3 {
+        let mut rng = StdRng::seed_from_u64(i as u64);
+        let solution = vec![1, 2, 3, 4];
+        let (_, _, token) = <AlnsTrialGenerator<SumModel, PartialSolution> as TrialGenerator<
+            SumModel,
+        >>::generate_trial(
+            &generator,
             &model,
-            vec![1, 2, 3, 4],
+            &solution,
             NotNan::new(10.0).unwrap(),
             &mut rng,
         );
-        generator.feedback(TrialOutcome::Improved);
+        generator.feedback(token, TrialOutcome::Improved);
     }
     // After segment ends, usage and accumulated scores must reset.
     let usage = generator.destroy_usage();
@@ -447,9 +478,8 @@ fn alns_generator_state_survives_step_with_generator() {
         handler,
         initial,
     );
-    // After the step, the generator's stacks must be empty (every
-    // `generate_trial` had its matching `feedback`) and the usage / scores
-    // must reflect the 10 trials that ran.
+    // The usage / scores must reflect the 10 trials that ran (one credit
+    // per iteration; tokens leave no pending state behind).
     let total_destroy_usage: usize = returned.destroy_usage().iter().sum();
     let total_repair_usage: usize = returned.repair_usage().iter().sum();
     assert_eq!(total_destroy_usage, 10);
@@ -475,4 +505,35 @@ fn alns_runs_through_generic_optimizer() {
     // The generator stored inside the optimizer must be the ALNS one.
     assert_eq!(optimizer.generator().n_destroy_operators(), 2);
     assert_eq!(optimizer.generator().n_repair_operators(), 1);
+}
+
+// ---------------------------------------------------------------------------
+// ALNS with n_trials > 1: only the winner is credited per iteration and no
+// pending selections leak across iterations.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn alns_with_multiple_trials_credits_only_winner_per_iteration() {
+    let model = SumModel::new(4, (0, 100));
+    let opt = LocalSearchLoop::new(100, 3, usize::MAX);
+    let handler = EpsilonGreedy::new(0.5);
+    let mut cb = |_p| {};
+    let initial = build_alns().with_segment_size(usize::MAX);
+    let (_, _, returned) = opt.step_with_generator(
+        &model,
+        vec![1, 2, 3, 4],
+        NotNan::new(10.0).unwrap(),
+        10,
+        Duration::from_secs(1),
+        &mut cb,
+        handler,
+        initial,
+    );
+    // One credit per iteration — not one per generated candidate.
+    // (Tokens carry the operator pair, so no pending state can leak and the
+    // winner is always credited.)
+    let total_destroy_usage: usize = returned.destroy_usage().iter().sum();
+    let total_repair_usage: usize = returned.repair_usage().iter().sum();
+    assert_eq!(total_destroy_usage, 10);
+    assert_eq!(total_repair_usage, 10);
 }

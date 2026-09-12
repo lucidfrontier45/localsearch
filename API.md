@@ -94,16 +94,16 @@ The acceptance/scheduling logic of each algorithm lives in a `TransitionHandler`
 
 ## Trial generators and ALNS
 
-The trial-generation side of the search loop is pluggable through the `TrialGenerator` trait (`src/optim/search_loop.rs`). A generator produces one trial per `generate_trial` call and receives a `TrialOutcome` feedback once the loop knows what happened to that trial.
+The trial-generation side of the search loop is pluggable through the `TrialGenerator` trait (`src/optim/search_loop.rs`). `generate_trial` takes `&self`, so the loop generates the `n_trials` candidates of each iteration in parallel via rayon — each trial draws from a per-trial `StdRng` fork seeded sequentially for reproducibility. Each trial returns a `Token` identifying its operators; only the winner's token is handed to `feedback(token, outcome)` (winner-takes-all).
 
 - `TrialOutcome` (`src/optim/search_loop.rs`) — classifies the trial as `NewBest`, `Improved`, `Accepted`, or `Rejected`. Adaptive generators (ALNS) use this to credit operator weights.
-- `TrialGenerator<M: OptModel>` (`src/optim/search_loop.rs`) — `generate_trial(...)` and `feedback(outcome)`; object-safe so generators can be stored behind trait objects.
+- `TrialGenerator<M: OptModel>` (`src/optim/search_loop.rs`) — `generate_trial(&self, model, &solution, score, rng) -> (solution, score, Token)` with `type Token: Send`, plus `feedback(&mut self, token, outcome)`. Implementations must be `Sync`.
 - `DefaultTrialGenerator` (`src/optim/search_loop.rs`) — the default generator; just calls `OptModel::generate_trial_solution` and ignores feedback.
 - `LocalSearchLoop::step_with_generator(model, initial_solution, initial_score, n_iter, time_limit, callback, handler, generator) -> (StepResult<...>, H, G)` — same loop as `step`, but trial generation is driven by the supplied `generator`. The generator is returned alongside the result so its adapted state (e.g. ALNS weights) can be inspected.
 
 ALNS is built on top of this trait:
 
-- `DestroyOperator<M, P>` / `RepairOperator<M, P>` (`src/optim/alns.rs`) — traits the user implements to define destroy and repair operators. Operators must be `Send + Sync` and provide a `dyn_clone` method so the trait stays object-safe (a blanket `Clone` impl on `Box<dyn DestroyOperator<_, _>>` / `Box<dyn RepairOperator<_, _>>` delegates to `dyn_clone`).
+- `DestroyOperator<M, P>` / `RepairOperator<M, P>` (`src/optim/alns.rs`) — traits the user implements to define destroy and repair operators. Operators receive the loop's per-trial `StdRng` fork and a borrowed solution (`destroy(&self, model, &solution, rng)`), so all randomness flows from the loop and stays reproducible. Operators must be `Send + Sync` and provide a `dyn_clone` method so the trait stays object-safe (a blanket `Clone` impl on `Box<dyn DestroyOperator<_, _>>` / `Box<dyn RepairOperator<_, _>>` delegates to `dyn_clone`).
 - `Rewards` (`src/optim/alns.rs`) — per-outcome reward table (`new_best`, `improved`, `accepted`, `rejected`); defaults follow Ropke & Pisinger (33 / 9 / 13 / 0).
 - `AlnsTrialGenerator<M, P>` (`src/optim/alns.rs`) — holds destroy and repair operator pools with independent roulette-wheel weights, segment-based weight updates, and a reaction-factor blending rule. Built with `AlnsTrialGenerator::new(destroy, repair)`; builder methods: `with_segment_size`, `with_reaction_factor`, `with_destroy_rewards`, `with_repair_rewards`, `with_rewards`. Inspected via `destroy_weights` / `repair_weights` / `destroy_usage` / `repair_usage` / `destroy_scores` / `repair_scores` / `trials_in_segment`.
 - `GenericLocalSearchOptimizer::with_trial_generator(generator)` — swaps in an ALNS generator (or any other `TrialGenerator`) for the default one; returns a new optimizer with the new generator type.

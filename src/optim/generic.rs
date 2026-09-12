@@ -105,7 +105,7 @@ where
     M: OptModel,
     M::ScoreType: Ord + Send + Sync + Copy,
     H: TransitionHandler<M::ScoreType> + Clone,
-    G: TrialGenerator<M> + Clone,
+    G: TrialGenerator<M> + Clone + Sync,
 {
     fn optimize(
         &self,
