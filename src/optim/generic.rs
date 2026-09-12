@@ -31,7 +31,7 @@ pub struct GenericLocalSearchOptimizer<ST, H> {
 impl<ST, H> GenericLocalSearchOptimizer<ST, H>
 where
     ST: Ord + Send + Sync + Copy,
-    H: TransitionHandler<ST> + Send + Sync,
+    H: TransitionHandler<ST>,
 {
     /// Constructor of `GenericLocalSearchOptimizer`.
     ///

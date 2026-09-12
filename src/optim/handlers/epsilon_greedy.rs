@@ -4,13 +4,22 @@ use crate::optim::transition::{TransitionHandler, UpdateCtx};
 /// with fixed probability `epsilon`.
 #[derive(Clone, Copy, Debug)]
 pub struct EpsilonGreedy {
-    /// Probability of accepting a worsening move. Must be in `[0, 1]`.
+    /// Probability of accepting a worsening move in `[0, 1]` (`new` clamps).
     pub epsilon: f64,
 }
 
 impl EpsilonGreedy {
     /// Constructor.
+    ///
+    /// Values outside `[0, 1]` are clamped into range.
     pub const fn new(epsilon: f64) -> Self {
+        let epsilon = if epsilon < 0.0 {
+            0.0
+        } else if epsilon > 1.0 {
+            1.0
+        } else {
+            epsilon
+        };
         Self { epsilon }
     }
 }
