@@ -78,7 +78,8 @@ The acceptance/scheduling logic of each algorithm lives in a `TransitionHandler`
 - Tuning helpers:
   - `tune_temperature(model, initial_solution_and_score, n_warmup, target_prob) -> f64` — tunes inverse temperature from warmup trials (target acceptance probability for uphill moves).
   - `tune_cooling_rate(initial_beta, final_beta, n_iter) -> f64` — geometric cooling rate between two betas.
-  - Concrete optimizers additionally expose `tune_initial_temperature` / `tune_cooling_rate` builder methods (require `ScoreType = NotNan<f64>`).
+  - The `SimulatedAnnealing` handler exposes `tune_initial_temperature` and `tune_cooling_rate` builders that return the handler with `beta` tuned from warmup trials and `cooling_rate` computed to reach `1e2` after `n_iter` iterations. The `AdaptiveAnnealing` handler exposes `tune_initial_temperature` (target probability taken from `scheduler.initial_target_acc`). Useful when driving handlers through `GenericLocalSearchOptimizer`.
+  - Concrete optimizers additionally expose `tune_initial_temperature` / `tune_cooling_rate` builder methods that delegate to the stored handler (require `ScoreType = NotNan<f64>`).
 
 ## Loop and generic optimizer
 

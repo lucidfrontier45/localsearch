@@ -1,8 +1,9 @@
-use super::metropolis::metropolis_probability;
+use super::metropolis::{metropolis_probability, tune_temperature};
 use std::num::NonZero;
 
 use ordered_float::NotNan;
 
+use crate::OptModel;
 use crate::optim::transition::{TransitionHandler, UpdateCtx};
 
 /// Simulated-annealing handler with geometric cooling of `beta`.
@@ -26,6 +27,46 @@ impl SimulatedAnnealing {
             beta,
             cooling_rate,
             update_frequency,
+        }
+    }
+
+    /// Tune the initial inverse temperature `beta` based on random warmup trials.
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_solution_and_score` : the initial solution to start warmup from. If `None`, a random solution will be generated.
+    /// - `n_warmup` : number of warmup iterations to run
+    /// - `target_initial_prob` : target acceptance probability for uphill moves at the beginning
+    /// - `returns` : handler with `beta` tuned for the target initial acceptance probability
+    pub fn tune_initial_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
+        self,
+        model: &M,
+        initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
+        n_warmup: usize,
+        target_initial_prob: f64,
+    ) -> Self {
+        Self {
+            beta: tune_temperature(
+                model,
+                initial_solution_and_score,
+                n_warmup,
+                target_initial_prob,
+            ),
+            ..self
+        }
+    }
+
+    /// Tune the cooling rate so that `beta` is cooled to `1e2` after `n_iter` iterations.
+    ///
+    /// - `n_iter` : total number of iterations planned for the optimization
+    /// - `returns` : handler with `cooling_rate` computed from the current `beta`
+    pub fn tune_cooling_rate(self, n_iter: usize) -> Self {
+        Self {
+            cooling_rate: tune_cooling_rate(
+                self.beta,
+                1e2,
+                n_iter / self.update_frequency.get(),
+            ),
+            ..self
         }
     }
 }

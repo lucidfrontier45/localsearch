@@ -2,9 +2,7 @@ use std::num::NonZero;
 
 use ordered_float::NotNan;
 
-use super::{
-    LocalSearchLoop, LocalSearchOptimizer, SimulatedAnnealing, tune_cooling_rate, tune_temperature,
-};
+use super::{LocalSearchLoop, LocalSearchOptimizer, SimulatedAnnealing};
 use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 /// Optimizer that implements the simulated annealing algorithm
@@ -58,30 +56,21 @@ impl SimulatedAnnealingOptimizer {
         n_warmup: usize,
         target_initial_prob: f64,
     ) -> Self {
-        let tuned_beta = tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
-
         Self {
-            handler: SimulatedAnnealing {
-                beta: tuned_beta,
-                ..self.handler
-            },
+            handler: self.handler.tune_initial_temperature(
+                model,
+                initial_solution,
+                n_warmup,
+                target_initial_prob,
+            ),
             ..self
         }
     }
 
     /// Tune cooling rate based on the handler's current initial beta, final beta of 1e2
     pub fn tune_cooling_rate(self, n_iter: usize) -> Self {
-        let cooling_rate = tune_cooling_rate(
-            self.handler.beta,
-            1e2,
-            n_iter / self.handler.update_frequency.get(),
-        );
-
         Self {
-            handler: SimulatedAnnealing {
-                cooling_rate,
-                ..self.handler
-            },
+            handler: self.handler.tune_cooling_rate(n_iter),
             ..self
         }
     }

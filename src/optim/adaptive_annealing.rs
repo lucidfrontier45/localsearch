@@ -2,9 +2,7 @@ use std::num::NonZero;
 
 use ordered_float::NotNan;
 
-use super::{
-    AdaptiveAnnealing, AdaptiveScheduler, LocalSearchLoop, LocalSearchOptimizer, tune_temperature,
-};
+use super::{AdaptiveAnnealing, AdaptiveScheduler, LocalSearchLoop, LocalSearchOptimizer};
 use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 /// Optimizer that implements the adaptive annealing algorithm which tries to adapt temperature
@@ -46,18 +44,10 @@ impl AdaptiveAnnealingOptimizer {
         initial_solution: Option<(M::SolutionType, M::ScoreType)>,
         n_warmup: usize,
     ) -> Self {
-        let tuned_beta = tune_temperature(
-            model,
-            initial_solution,
-            n_warmup,
-            self.handler.scheduler.initial_target_acc,
-        );
-
         Self {
-            handler: AdaptiveAnnealing {
-                beta: tuned_beta,
-                ..self.handler
-            },
+            handler: self
+                .handler
+                .tune_initial_temperature(model, initial_solution, n_warmup),
             ..self
         }
     }

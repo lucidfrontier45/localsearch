@@ -1,8 +1,9 @@
-use super::metropolis::metropolis_probability;
+use super::metropolis::{metropolis_probability, tune_temperature};
 use std::{f64::consts::PI, num::NonZero};
 
 use ordered_float::NotNan;
 
+use crate::OptModel;
 use crate::optim::transition::{TransitionHandler, UpdateCtx};
 
 /// Target acceptance-rate schedule used by [`AdaptiveScheduler`].
@@ -117,6 +118,31 @@ impl AdaptiveAnnealing {
             beta,
             scheduler,
             update_frequency,
+        }
+    }
+
+    /// Tune the initial inverse temperature `beta` based on random warmup trials.
+    ///
+    /// The target acceptance probability is taken from `scheduler.initial_target_acc`.
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_solution_and_score` : the initial solution to start warmup from. If `None`, a random solution will be generated.
+    /// - `n_warmup` : number of warmup iterations to run
+    /// - `returns` : handler with `beta` tuned for the scheduler's initial target acceptance rate
+    pub fn tune_initial_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
+        self,
+        model: &M,
+        initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
+        n_warmup: usize,
+    ) -> Self {
+        Self {
+            beta: tune_temperature(
+                model,
+                initial_solution_and_score,
+                n_warmup,
+                self.scheduler.initial_target_acc,
+            ),
+            ..self
         }
     }
 }
