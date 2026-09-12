@@ -2,7 +2,7 @@ use std::num::NonZero;
 
 use crate::{
     Duration, OptModel,
-    optim::{LocalSearchOptimizer, Metropolis, ParallelTemperingOptimizer},
+    optim::{LocalSearchOptimizer, ParallelTemperingOptimizer},
     tests::QuadraticModel,
 };
 
@@ -28,7 +28,6 @@ fn test_parallel_tempering_basic() {
             Some((init_sol, init_score)),
             200,
             Duration::from_secs(1),
-            Metropolis::new(1.0),
         )
         .unwrap();
 

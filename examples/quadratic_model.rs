@@ -3,7 +3,7 @@ use std::time::Duration;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     LocalsearchError, OptModel, OptProgress,
-    optim::{EpsilonGreedy, HillClimbingOptimizer, LocalSearchOptimizer},
+    optim::{HillClimbingOptimizer, LocalSearchOptimizer},
 };
 use ordered_float::NotNan;
 use rand::{self, RngExt as _, distr::Uniform, prelude::Distribution};
@@ -89,14 +89,7 @@ fn main() {
         pb.set_position(op.iter as u64);
     };
 
-    let res = opt.run_with_callback(
-        &model,
-        None,
-        n_iter,
-        time_limit,
-        &mut callback,
-        EpsilonGreedy::new(0.0),
-    );
+    let res = opt.run_with_callback(&model, None, n_iter, time_limit, &mut callback);
     pb.finish();
     dbg!(res.unwrap());
 }

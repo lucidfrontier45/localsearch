@@ -8,7 +8,6 @@ use crate::{Duration, OptModel, callback::OptCallbackFn};
 /// threshold ("water level") that decreases adaptively over iterations.
 /// A trial solution is accepted if its score is below or equal to the current water level.
 #[derive(Clone, Copy)]
-#[allow(dead_code)] // fields document config for callers building the handler
 pub struct GreatDelugeOptimizer {
     /// Patience: the optimizer will give up if there is no improvement after this many iterations
     patience: usize,
@@ -42,11 +41,15 @@ impl GreatDelugeOptimizer {
     }
 }
 
-impl<M, H> LocalSearchOptimizer<M, H> for GreatDelugeOptimizer
-where
-    M: OptModel<ScoreType = NotNan<f64>>,
-    H: Into<GreatDeluge> + From<GreatDeluge>,
-{
+impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for GreatDelugeOptimizer {
+    /// Start optimization
+    ///
+    /// - `model`: the model to optimize
+    /// - `initial_solution`: the initial solution to start optimization
+    /// - `initial_score`: the initial score of the initial solution
+    /// - `n_iter`: maximum iterations
+    /// - `time_limit`: maximum iteration time
+    /// - `callback`: callback function that will be invoked at the end of each iteration
     fn optimize(
         &self,
         model: &M,
@@ -55,19 +58,20 @@ where
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        handler: H,
-    ) -> (M::SolutionType, M::ScoreType, H) {
-        let h: GreatDeluge = handler.into();
+    ) -> (M::SolutionType, M::ScoreType) {
+        // Initialize water level from this run's initial score
+        let initial_level = initial_score.into_inner() * self.level_factor;
+        let handler = GreatDeluge::new(initial_level);
         let opt = GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
-        let (solution, score, h) = opt.optimize_with_handler(
+        let (solution, score, _) = opt.optimize_with_handler(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-            h,
+            handler,
         );
-        (solution, score, H::from(h))
+        (solution, score)
     }
 }

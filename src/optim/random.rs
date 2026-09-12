@@ -15,11 +15,15 @@ impl RandomSearchOptimizer {
     }
 }
 
-impl<M, H> LocalSearchOptimizer<M, H> for RandomSearchOptimizer
-where
-    M: OptModel,
-    H: Into<crate::optim::EpsilonGreedy> + From<crate::optim::EpsilonGreedy>,
-{
+impl<M: OptModel> LocalSearchOptimizer<M> for RandomSearchOptimizer {
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_solution` : the initial solution to start optimization
+    /// - `initial_score` : the initial score of the initial solution
+    /// - `n_iter`: maximum iterations
+    /// - `time_limit`: maximum iteration time
+    /// - `callback` : callback function that will be invoked at the end of each iteration
     fn optimize(
         &self,
         model: &M,
@@ -28,17 +32,16 @@ where
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        handler: H,
-    ) -> (M::SolutionType, M::ScoreType, H) {
-        let inner = EpsilonGreedyOptimizer::new(self.patience, 1, usize::MAX, 1.0);
-        inner.optimize(
+    ) -> (M::SolutionType, M::ScoreType) {
+        // Random search = epsilon-greedy with epsilon = 1 (accept every move)
+        let optimizer = EpsilonGreedyOptimizer::new(self.patience, 1, usize::MAX, 1.0);
+        optimizer.optimize(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-            handler,
         )
     }
 }

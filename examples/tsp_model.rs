@@ -11,11 +11,10 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     LocalsearchError, OptModel, OptProgress,
     optim::{
-        AdaptiveAnnealing, AdaptiveAnnealingOptimizer, AdaptiveScheduler, EpsilonGreedy,
-        EpsilonGreedyOptimizer, GreatDeluge, GreatDelugeOptimizer, HillClimbingOptimizer,
-        LocalSearchOptimizer, Metropolis, ParallelTemperingOptimizer, PopulationAnnealingOptimizer,
-        RelativeAnnealing, RelativeAnnealingOptimizer, SimulatedAnnealing, SimulatedAnnealingOptimizer,
-        TabuList, TabuSearchOptimizer, TsallisAnnealing,
+        AdaptiveAnnealingOptimizer, AdaptiveScheduler, EpsilonGreedyOptimizer,
+        GreatDelugeOptimizer, HillClimbingOptimizer, LocalSearchOptimizer,
+        ParallelTemperingOptimizer, PopulationAnnealingOptimizer, RelativeAnnealingOptimizer,
+        SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
         TsallisRelativeAnnealingOptimizer,
     },
     utils::RingBuffer,
@@ -280,7 +279,6 @@ fn main() {
         println!("run GreatDelugeOptimizer");
         pb.reset();
         let opt = GreatDelugeOptimizer::new(patience, 16, return_iter, 1.05);
-        let handler = GreatDeluge::new(0.0);
         let (sol, score) = opt
             .run_with_callback(
                 &tsp_model,
@@ -288,7 +286,6 @@ fn main() {
                 n_iter,
                 time_limit,
                 &mut callback,
-                handler,
             )
             .unwrap();
         run_one("GreatDelugeOptimizer", sol, score);
@@ -297,7 +294,6 @@ fn main() {
         println!("run HillClimbingOptimizer");
         pb.reset();
         let opt = HillClimbingOptimizer::new(patience, 16);
-        let handler = EpsilonGreedy::new(0.0);
         let (sol, score) = opt
             .run_with_callback(
                 &tsp_model,
@@ -305,7 +301,6 @@ fn main() {
                 n_iter,
                 time_limit,
                 &mut callback,
-                handler,
             )
             .unwrap();
         run_one("HillClimbingOptimizer", sol, score);
@@ -323,7 +318,6 @@ fn main() {
         )
         .tune_initial_temperature(&tsp_model, None, 200, 0.5)
         .tune_cooling_rate(n_iter);
-        let handler = SimulatedAnnealing::new(1.0, 0.9, NonZero::new(100).unwrap());
         let (sol, score) = opt
             .run_with_callback(
                 &tsp_model,
@@ -331,7 +325,6 @@ fn main() {
                 n_iter,
                 time_limit,
                 &mut callback,
-                handler,
             )
             .unwrap();
         run_one("SimulatedAnnealingOptimizer", sol, score);
@@ -348,11 +341,6 @@ fn main() {
             NonZero::new(100).expect("update_frequency must be >= 1"),
         )
         .tune_initial_temperature(&tsp_model, None, 200);
-        let handler = AdaptiveAnnealing::new(
-            1.0,
-            AdaptiveScheduler::default(),
-            NonZero::new(100).unwrap(),
-        );
         let (sol, score) = opt
             .run_with_callback(
                 &tsp_model,
@@ -360,7 +348,6 @@ fn main() {
                 n_iter,
                 time_limit,
                 &mut callback,
-                handler,
             )
             .unwrap();
         run_one("AdaptiveAnnealingOptimizer", sol, score);
@@ -379,7 +366,6 @@ fn main() {
         )
         .tune_initial_temperature(&tsp_model, None, 200, 0.5)
         .tune_cooling_rate(n_iter);
-        let handler = Metropolis::new(1.0);
         let (sol, score) = opt
             .run_with_callback(
                 &tsp_model,
@@ -387,7 +373,6 @@ fn main() {
                 n_iter,
                 time_limit,
                 &mut callback,
-                handler,
             )
             .unwrap();
         run_one("PopulationAnnealingOptimizer", sol, score);
@@ -404,7 +389,6 @@ fn main() {
             1e2,
             NonZero::new(10).expect("update_frequency must be >= 1"),
         );
-        let handler = Metropolis::new(1.0);
         let (sol, score) = opt
             .run_with_callback(
                 &tsp_model,
@@ -412,7 +396,6 @@ fn main() {
                 n_iter,
                 time_limit,
                 &mut callback,
-                handler,
             )
             .unwrap();
         run_one("ParallelTemperingOptimizer", sol, score);
@@ -421,7 +404,6 @@ fn main() {
         println!("run TabuSearchOptimizer");
         pb.reset();
         let opt = TabuSearchOptimizer::<DequeTabuList>::new(patience, 128, return_iter, 10);
-        let handler = DequeTabuList::default();
         let (sol, score) = opt
             .run_with_callback(
                 &tsp_model,
@@ -429,7 +411,6 @@ fn main() {
                 n_iter,
                 time_limit,
                 &mut callback,
-                handler,
             )
             .unwrap();
         run_one("TabuSearchOptimizer", sol, score);
@@ -438,7 +419,6 @@ fn main() {
         println!("run EpsilonGreedyOptimizer");
         pb.reset();
         let opt = EpsilonGreedyOptimizer::new(patience, 16, return_iter, 0.9);
-        let handler = EpsilonGreedy::new(0.9);
         let (sol, score) = opt
             .run_with_callback(
                 &tsp_model,
@@ -446,7 +426,6 @@ fn main() {
                 n_iter,
                 time_limit,
                 &mut callback,
-                handler,
             )
             .unwrap();
         run_one("EpsilonGreedyOptimizer", sol, score);
@@ -455,7 +434,6 @@ fn main() {
         println!("run RelativeAnnealingOptimizer");
         pb.reset();
         let opt = RelativeAnnealingOptimizer::new(patience, 16, return_iter, 1.0e2);
-        let handler = RelativeAnnealing::new(1.0e2);
         let (sol, score) = opt
             .run_with_callback(
                 &tsp_model,
@@ -463,7 +441,6 @@ fn main() {
                 n_iter,
                 time_limit,
                 &mut callback,
-                handler,
             )
             .unwrap();
         run_one("RelativeAnnealingOptimizer", sol, score);
@@ -480,14 +457,6 @@ fn main() {
             2.5,
             1.0,
         );
-        let handler = TsallisAnnealing::new(
-            0.0,
-            1.0e2,
-            2.5,
-            1.0,
-            AdaptiveScheduler::default(),
-            NonZero::new(100).unwrap(),
-        );
         let (sol, score) = opt
             .run_with_callback(
                 &tsp_model,
@@ -495,7 +464,6 @@ fn main() {
                 n_iter,
                 time_limit,
                 &mut callback,
-                handler,
             )
             .unwrap();
         run_one("TsallisRelativeAnnealingOptimizer", sol, score);

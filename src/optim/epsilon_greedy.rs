@@ -5,7 +5,6 @@ use crate::{Duration, OptModel, callback::OptCallbackFn};
 /// Unlike a total greedy algorithm such as hill climbing,
 /// it allows transitions that worsens the score with a fixed probability
 #[derive(Clone, Copy)]
-#[allow(dead_code)] // fields document config for callers building the handler
 pub struct EpsilonGreedyOptimizer {
     patience: usize,
     n_trials: usize,
@@ -31,11 +30,15 @@ impl EpsilonGreedyOptimizer {
     }
 }
 
-impl<M, H> LocalSearchOptimizer<M, H> for EpsilonGreedyOptimizer
-where
-    M: OptModel,
-    H: Into<EpsilonGreedy> + From<EpsilonGreedy>,
-{
+impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_solution` : the initial solution to start optimization
+    /// - `initial_score` : the initial score of the initial solution
+    /// - `n_iter`: maximum iterations
+    /// - `time_limit`: maximum iteration time
+    /// - `callback` : callback function that will be invoked at the end of each iteration
     fn optimize(
         &self,
         model: &M,
@@ -44,19 +47,18 @@ where
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        handler: H,
-    ) -> (M::SolutionType, M::ScoreType, H) {
-        let h: EpsilonGreedy = handler.into();
+    ) -> (M::SolutionType, M::ScoreType) {
+        let handler = EpsilonGreedy::new(self.epsilon);
         let opt = GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
-        let (solution, score, h) = opt.optimize_with_handler(
+        let (solution, score, _) = opt.optimize_with_handler(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-            h,
+            handler,
         );
-        (solution, score, H::from(h))
+        (solution, score)
     }
 }

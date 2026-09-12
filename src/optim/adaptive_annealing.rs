@@ -10,7 +10,6 @@ use crate::{Duration, OptModel, callback::OptCallbackFn, optim::metropolis::tune
 /// Optimizer that implements the adaptive annealing algorithm which tries to adapt temperature
 /// to realize target acceptance rate scheduling.
 #[derive(Clone, Copy)]
-#[allow(dead_code)] // fields document config for callers building the handler
 pub struct AdaptiveAnnealingOptimizer {
     /// The optimizer will give up if there is no improvement of the score after this number of iterations
     patience: usize,
@@ -67,11 +66,15 @@ impl AdaptiveAnnealingOptimizer {
     }
 }
 
-impl<M, H> LocalSearchOptimizer<M, H> for AdaptiveAnnealingOptimizer
-where
-    M: OptModel<ScoreType = NotNan<f64>>,
-    H: Into<AdaptiveAnnealing> + From<AdaptiveAnnealing>,
-{
+impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveAnnealingOptimizer {
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_solution` : the initial solution to start optimization
+    /// - `initial_score` : the initial score of the initial solution
+    /// - `n_iter`: maximum iterations
+    /// - `time_limit`: maximum iteration time
+    /// - `callback` : callback function that will be invoked at the end of each iteration
     fn optimize(
         &self,
         model: &M,
@@ -80,19 +83,19 @@ where
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        handler: H,
-    ) -> (M::SolutionType, M::ScoreType, H) {
-        let h: AdaptiveAnnealing = handler.into();
+    ) -> (M::SolutionType, M::ScoreType) {
+        let handler =
+            AdaptiveAnnealing::new(self.initial_beta, self.scheduler, self.update_frequency);
         let opt = GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
-        let (solution, score, h) = opt.optimize_with_handler(
+        let (solution, score, _) = opt.optimize_with_handler(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-            h,
+            handler,
         );
-        (solution, score, H::from(h))
+        (solution, score)
     }
 }

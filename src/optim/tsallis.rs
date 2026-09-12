@@ -12,10 +12,9 @@ use crate::{Duration, OptModel, callback::OptCallbackFn};
 /// This is a generalization of relative annealing using Tsallis statistics.
 /// The acceptance probability for worse solutions is
 /// `[1 - (1-q) * beta * ΔE / (E - E_best + ξ)]^{1/(1-q)}`,
-/// where `ΔE = trial - current`, `E = current`, `E_best = offset`.
+/// where `ΔE = trial - current`, `E = current`, `E = E_best` is the offset.
 /// Assumes `q > 1.0`.
 #[derive(Clone, Copy)]
-#[allow(dead_code)] // fields document config for callers building the handler
 pub struct TsallisRelativeAnnealingOptimizer {
     patience: usize,
     n_trials: usize,
@@ -69,11 +68,17 @@ impl TsallisRelativeAnnealingOptimizer {
     }
 }
 
-impl<M, H> LocalSearchOptimizer<M, H> for TsallisRelativeAnnealingOptimizer
-where
-    M: OptModel<ScoreType = NotNan<f64>>,
-    H: Into<TsallisAnnealing> + From<TsallisAnnealing>,
+impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
+    for TsallisRelativeAnnealingOptimizer
 {
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_solution` : the initial solution to start optimization
+    /// - `initial_score` : the initial score of the initial solution
+    /// - `n_iter`: maximum iterations
+    /// - `time_limit`: maximum iteration time
+    /// - `callback` : callback function that will be invoked at the end of each iteration
     fn optimize(
         &self,
         model: &M,
@@ -82,19 +87,26 @@ where
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        handler: H,
-    ) -> (M::SolutionType, M::ScoreType, H) {
-        let h: TsallisAnnealing = handler.into();
+    ) -> (M::SolutionType, M::ScoreType) {
+        // The offset is seeded from this run's initial score and then tracks the best score.
+        let handler = TsallisAnnealing::new(
+            initial_score.into_inner(),
+            self.initial_beta,
+            self.q,
+            self.xi,
+            self.scheduler,
+            self.update_frequency,
+        );
         let opt = GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
-        let (solution, score, h) = opt.optimize_with_handler(
+        let (solution, score, _) = opt.optimize_with_handler(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-            h,
+            handler,
         );
-        (solution, score, H::from(h))
+        (solution, score)
     }
 }

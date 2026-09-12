@@ -3,27 +3,19 @@ use std::time::Duration;
 use approx::assert_abs_diff_eq;
 
 use super::QuadraticModel;
-use crate::optim::{
-    EpsilonGreedy, EpsilonGreedyOptimizer, HillClimbingOptimizer, LocalSearchOptimizer,
-};
+use crate::optim::{EpsilonGreedyOptimizer, HillClimbingOptimizer, LocalSearchOptimizer};
 
 #[test]
 fn test() {
     let model = QuadraticModel::new(3, vec![2.0, 0.0, -3.5], (-10.0, 10.0));
-    let opts: [Box<dyn LocalSearchOptimizer<QuadraticModel, EpsilonGreedy>>; 2] = [
+    let opts: [Box<dyn LocalSearchOptimizer<QuadraticModel>>; 2] = [
         Box::new(HillClimbingOptimizer::new(1000, 10)),
         Box::new(EpsilonGreedyOptimizer::new(1000, 10, 200, 0.1)),
     ];
 
     for opt in opts.iter() {
         let (final_solution, final_score) = opt
-            .run(
-                &model,
-                None,
-                10000,
-                Duration::from_secs(10),
-                EpsilonGreedy::new(0.0),
-            )
+            .run(&model, None, 10000, Duration::from_secs(10))
             .unwrap();
         assert_abs_diff_eq!(2.0, final_solution[0], epsilon = 0.05);
         assert_abs_diff_eq!(0.0, final_solution[1], epsilon = 0.05);

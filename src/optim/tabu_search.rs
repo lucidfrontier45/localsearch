@@ -64,7 +64,7 @@ impl<T: TabuList> TabuSearchOptimizer<T> {
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
-    /// - `default_tabu_size` : default size for tabu lists built when no handler is supplied.
+    /// - `default_tabu_size` : default size of the tabu list
     pub fn new(
         patience: usize,
         n_trials: usize,
@@ -105,10 +105,7 @@ impl<T: TabuList> TabuSearchOptimizer<T> {
     }
 }
 
-impl<T: TabuList> TabuSearchOptimizer<T>
-where
-    T: TabuList,
-{
+impl<T: TabuList> TabuSearchOptimizer<T> {
     /// Start optimization with the supplied tabu list as the per-call handler.
     ///
     /// - `model` : the model to optimize
@@ -225,11 +222,8 @@ where
     }
 }
 
-impl<T, M, H> LocalSearchOptimizer<M, H> for TabuSearchOptimizer<T>
-where
-    T: TabuList,
-    M: OptModel<TransitionType = H::Item>,
-    H: TabuList,
+impl<T: TabuList, M: OptModel<TransitionType = T::Item>> LocalSearchOptimizer<M>
+    for TabuSearchOptimizer<T>
 {
     fn optimize(
         &self,
@@ -239,16 +233,15 @@ where
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        handler: H,
-    ) -> (M::SolutionType, M::ScoreType, H) {
-        self.optimize_with_handler(
+    ) -> (M::SolutionType, M::ScoreType) {
+        let (solution, score, _) = self.optimize_default(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-            handler,
-        )
+        );
+        (solution, score)
     }
 }

@@ -15,7 +15,6 @@ use crate::{Duration, OptModel, callback::OptCallbackFn};
 /// `current_score == 0` is clamped to `f64::EPSILON`, keeping the result finite
 /// and the acceptance direction intact (improvement accepted, worsening rejected).
 #[derive(Clone, Copy)]
-#[allow(dead_code)] // fields document config for callers building the handler
 pub struct LogisticAnnealingOptimizer {
     patience: usize,
     n_trials: usize,
@@ -41,11 +40,15 @@ impl LogisticAnnealingOptimizer {
     }
 }
 
-impl<M, H> LocalSearchOptimizer<M, H> for LogisticAnnealingOptimizer
-where
-    M: OptModel<ScoreType = NotNan<f64>>,
-    H: Into<LogisticAnnealing> + From<LogisticAnnealing>,
-{
+impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for LogisticAnnealingOptimizer {
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_solution` : the initial solution to start optimization
+    /// - `initial_score` : the initial score of the initial solution
+    /// - `n_iter`: maximum iterations
+    /// - `time_limit`: maximum iteration time
+    /// - `callback` : callback function that will be invoked at the end of each iteration
     fn optimize(
         &self,
         model: &M,
@@ -54,19 +57,18 @@ where
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        handler: H,
-    ) -> (M::SolutionType, M::ScoreType, H) {
-        let h: LogisticAnnealing = handler.into();
+    ) -> (M::SolutionType, M::ScoreType) {
+        let handler = LogisticAnnealing::new(self.w);
         let opt = GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
-        let (solution, score, h) = opt.optimize_with_handler(
+        let (solution, score, _) = opt.optimize_with_handler(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-            h,
+            handler,
         );
-        (solution, score, H::from(h))
+        (solution, score)
     }
 }

@@ -3,7 +3,7 @@ use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 use rand::RngExt as _;
 use rayon::prelude::*;
 
-use super::{LocalSearchOptimizer, transition::TransitionHandler};
+use super::transition::TransitionHandler;
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
@@ -37,8 +37,8 @@ pub struct StepResult<S, ST> {
 /// is invoked so it can adapt its internal state (cooling schedule, water
 /// level, …) before trials are evaluated.
 ///
-/// The handler is supplied per-call via [`Self::optimize_with_handler`] and
-/// [`Self::step_with_handler`]; this optimizer stores no handler field.
+/// The handler is supplied per-call via [`Self::step`] and
+/// [`Self::optimize_with_handler`]; this optimizer stores no handler field.
 pub struct GenericLocalSearchOptimizer<ST: Ord + Sync + Send + Copy> {
     patience: usize,
     n_trials: usize,
@@ -213,33 +213,5 @@ impl<ST: Ord + Sync + Send + Copy> GenericLocalSearchOptimizer<ST> {
             handler,
         );
         (result.best_solution, result.best_score, handler)
-    }
-}
-
-impl<M, ST, H> LocalSearchOptimizer<M, H> for GenericLocalSearchOptimizer<ST>
-where
-    M: OptModel<ScoreType = ST>,
-    ST: Ord + Sync + Send + Copy,
-    H: TransitionHandler<ST>,
-{
-    fn optimize(
-        &self,
-        model: &M,
-        initial_solution: M::SolutionType,
-        initial_score: M::ScoreType,
-        n_iter: usize,
-        time_limit: Duration,
-        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        handler: H,
-    ) -> (M::SolutionType, M::ScoreType, H) {
-        self.optimize_with_handler(
-            model,
-            initial_solution,
-            initial_score,
-            n_iter,
-            time_limit,
-            callback,
-            handler,
-        )
     }
 }

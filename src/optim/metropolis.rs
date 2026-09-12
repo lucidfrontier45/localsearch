@@ -87,23 +87,17 @@ impl MetropolisOptimizer {
             beta,
         }
     }
-
-    /// Access the underlying `beta` (used by parallel/population wrappers).
-    pub const fn beta(&self) -> f64 {
-        self.beta
-    }
-
-    /// Access the optimizer's iteration knobs (used by parallel/population wrappers).
-    pub const fn knobs(&self) -> (usize, usize, usize) {
-        (self.patience, self.n_trials, self.return_iter)
-    }
 }
 
-impl<M, H> LocalSearchOptimizer<M, H> for MetropolisOptimizer
-where
-    M: OptModel<ScoreType = NotNan<f64>>,
-    H: Into<Metropolis> + From<Metropolis>,
-{
+impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for MetropolisOptimizer {
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_solution` : the initial solution to start optimization
+    /// - `initial_score` : the initial score of the initial solution
+    /// - `n_iter`: maximum iterations
+    /// - `time_limit`: maximum iteration time
+    /// - `callback` : callback function that will be invoked at the end of each iteration
     fn optimize(
         &self,
         model: &M,
@@ -112,19 +106,17 @@ where
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        handler: H,
-    ) -> (M::SolutionType, M::ScoreType, H) {
-        let m: Metropolis = handler.into();
+    ) -> (M::SolutionType, M::ScoreType) {
         let opt = GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
-        let (solution, score, m) = opt.optimize_with_handler(
+        let (solution, score, _) = opt.optimize_with_handler(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-            m,
+            Metropolis::new(self.beta),
         );
-        (solution, score, H::from(m))
+        (solution, score)
     }
 }

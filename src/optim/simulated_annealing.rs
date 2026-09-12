@@ -3,23 +3,20 @@ use std::num::NonZero;
 use ordered_float::NotNan;
 
 use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer, SimulatedAnnealing};
-use crate::{
-    Duration, OptModel, callback::OptCallbackFn, optim::metropolis::tune_temperature,
-};
+use crate::{Duration, OptModel, callback::OptCallbackFn, optim::metropolis::tune_temperature};
 
 /// Tune cooling rate based on initial and final inverse temperatures and number of iterations
 /// initial beta will be cooled to final beta after n_iter iterations
 /// - `initial_beta` : initial inverse temperature
 /// - `final_beta` : final inverse temperature
 /// - `n_iter` : number of iterations
-/// - returns : cooling rate
+/// - `returns` : cooling rate
 pub fn tune_cooling_rate(initial_beta: f64, final_beta: f64, n_iter: usize) -> f64 {
     (final_beta / initial_beta).powf(1.0 / n_iter as f64)
 }
 
 /// Optimizer that implements the simulated annealing algorithm
 #[derive(Clone, Copy)]
-#[allow(dead_code)] // fields document config for callers building the handler
 pub struct SimulatedAnnealingOptimizer {
     /// The optimizer will give up if there is no improvement of the score after this number of iterations
     patience: usize,
@@ -95,11 +92,15 @@ impl SimulatedAnnealingOptimizer {
     }
 }
 
-impl<M, H> LocalSearchOptimizer<M, H> for SimulatedAnnealingOptimizer
-where
-    M: OptModel<ScoreType = NotNan<f64>>,
-    H: Into<SimulatedAnnealing> + From<SimulatedAnnealing>,
-{
+impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for SimulatedAnnealingOptimizer {
+    /// Start optimization
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_solution` : the initial solution to start optimization
+    /// - `initial_score` : the initial score of the initial solution
+    /// - `n_iter`: maximum iterations
+    /// - `time_limit`: maximum iteration time
+    /// - `callback` : callback function that will be invoked at the end of each iteration
     fn optimize(
         &self,
         model: &M,
@@ -108,19 +109,19 @@ where
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        handler: H,
-    ) -> (M::SolutionType, M::ScoreType, H) {
-        let h: SimulatedAnnealing = handler.into();
+    ) -> (M::SolutionType, M::ScoreType) {
+        let handler =
+            SimulatedAnnealing::new(self.initial_beta, self.cooling_rate, self.update_frequency);
         let opt = GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
-        let (solution, score, h) = opt.optimize_with_handler(
+        let (solution, score, _) = opt.optimize_with_handler(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-            h,
+            handler,
         );
-        (solution, score, H::from(h))
+        (solution, score)
     }
 }

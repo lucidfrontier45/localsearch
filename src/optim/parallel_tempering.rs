@@ -113,12 +113,8 @@ impl ParallelTemperingOptimizer {
     }
 }
 
-impl<M, H> LocalSearchOptimizer<M, H> for ParallelTemperingOptimizer
-where
-    M: OptModel<ScoreType = NotNan<f64>>,
-{
-    /// Start optimization. The handler argument is ignored — each replica
-    /// builds its own [`Metropolis`] handler from `self.betas`.
+impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelTemperingOptimizer {
+    /// Start optimization
     fn optimize(
         &self,
         model: &M,
@@ -127,8 +123,7 @@ where
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        _handler: H,
-    ) -> (M::SolutionType, M::ScoreType, H) {
+    ) -> (M::SolutionType, M::ScoreType) {
         let start_time = Instant::now();
         let mut rng = rand::rng();
 
@@ -247,6 +242,6 @@ where
             callback(progress);
         }
 
-        (best_solution.borrow().clone(), best_score, _handler)
+        (best_solution.borrow().clone(), best_score)
     }
 }

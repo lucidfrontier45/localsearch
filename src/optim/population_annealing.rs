@@ -90,12 +90,10 @@ impl PopulationAnnealingOptimizer {
     }
 }
 
-impl<M, H> LocalSearchOptimizer<M, H> for PopulationAnnealingOptimizer
-where
-    M: OptModel<ScoreType = NotNan<f64>>,
+impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
+    for PopulationAnnealingOptimizer
 {
-    /// Start optimization. The handler argument is ignored — each population
-    /// member builds its own [`Metropolis`] handler from `current_beta`.
+    /// Start optimization
     fn optimize(
         &self,
         model: &M,
@@ -104,8 +102,7 @@ where
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        _handler: H,
-    ) -> (M::SolutionType, M::ScoreType, H) {
+    ) -> (M::SolutionType, M::ScoreType) {
         let start_time = Instant::now();
         let mut rng = rand::rng();
 
@@ -243,6 +240,6 @@ where
         }
 
         let final_best_solution = (*best_solution.borrow()).clone();
-        (final_best_solution, best_score, _handler)
+        (final_best_solution, best_score)
     }
 }
