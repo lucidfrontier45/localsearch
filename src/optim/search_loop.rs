@@ -248,7 +248,7 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
             //    evaluated and fed back (winner-takes-all).
             assert!(self.n_trials > 0, "n_trials must be at least 1");
             let seeds: Vec<u64> = (0..self.n_trials).map(|_| rng.random()).collect();
-            let mut candidates: Vec<(M::SolutionType, M::ScoreType, G::Token)> = seeds
+            let (trial_solution, trial_score, winner_token) = seeds
                 .into_par_iter()
                 .map(|seed| {
                     let mut local_rng = rand::rngs::StdRng::seed_from_u64(seed);
@@ -259,14 +259,8 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
                         &mut local_rng,
                     )
                 })
-                .collect();
-            let winner = candidates
-                .iter()
-                .enumerate()
-                .min_by_key(|(_, cand)| cand.1)
-                .map(|(idx, _)| idx)
+                .min_by_key(|(_, score, _)| *score)
                 .expect("n_trials must be at least 1");
-            let (trial_solution, trial_score, winner_token) = candidates.swap_remove(winner);
 
             // 4. Classify the trial outcome and apply best-score bookkeeping.
             //    `previous_best` is captured before any updates so that the
