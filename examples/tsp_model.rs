@@ -9,13 +9,13 @@ use std::{
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
-    LocalsearchError, OptModel, OptProgress,
+    LocalsearchError, OptCallbackFn, OptModel, OptProgress,
     optim::{
         AdaptiveAnnealingOptimizer, AdaptiveScheduler, EpsilonGreedyOptimizer,
-        GreatDelugeOptimizer, HillClimbingOptimizer, LocalSearchOptimizer,
-        ParallelTemperingOptimizer, PopulationAnnealingOptimizer, RelativeAnnealingOptimizer,
-        SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
-        TsallisRelativeAnnealingOptimizer,
+        GenericLocalSearchOptimizer, GreatDelugeOptimizer, HillClimbingOptimizer,
+        LocalSearchOptimizer, ParallelTemperingOptimizer, PopulationAnnealingOptimizer,
+        RelativeAnnealingOptimizer, SimulatedAnnealingOptimizer, TabuList,
+        TabuSearchOptimizer, TargetAccScheduleMode, TsallisAnnealing,
     },
     utils::RingBuffer,
 };
@@ -229,10 +229,359 @@ fn create_pbar(n_iter: u64) -> ProgressBar {
     pb
 }
 
+fn print_usage(program: &str) {
+    eprintln!("Usage: {program} <input_file> [opt_route_file] [--optimizer <name> ...] [--all]");
+    eprintln!();
+    eprintln!("Arguments:");
+    eprintln!("  <input_file>            TSP coordinates file (<id> <x> <y> per line)");
+    eprintln!("  [opt_route_file]      optional file with optimal route (one city id per line)");
+    eprintln!();
+    eprintln!("Options:");
+    eprintln!("  --optimizer <name>, -o <name>  run only this optimizer (repeatable, comma-separated OK)");
+    eprintln!("  --all                           run all optimizers (default when --optimizer is absent)");
+    eprintln!("  --help, -h                    show this help");
+    eprintln!();
+    eprintln!("Available optimizers:");
+    for name in ALL_OPTIMIZERS {
+        eprintln!("  {name}");
+    }
+}
+
+const ALL_OPTIMIZERS: &[&str] = &[
+    "great-deluge",
+    "hill-climbing",
+    "simulated-annealing",
+    "adaptive-annealing",
+    "population-annealing",
+    "parallel-tempering",
+    "tabu-search",
+    "epsilon-greedy",
+    "relative-annealing",
+    "tsallis-annealing",
+];
+
+fn normalize_optimizer_name(name: &str) -> Option<&'static str> {
+    let n = name.trim().to_lowercase().replace('_', "-");
+    match n.as_str() {
+        "great-deluge" | "greatdeluge" | "deluge" => Some("great-deluge"),
+        "hill-climbing" | "hillclimbing" | "hill" | "hc" => Some("hill-climbing"),
+        "simulated-annealing" | "simulatedannealing" | "sa" => Some("simulated-annealing"),
+        "adaptive-annealing" | "adaptiveannealing" | "adaptive" => Some("adaptive-annealing"),
+        "population-annealing" | "populationannealing" | "population" | "pa" => {
+            Some("population-annealing")
+        }
+        "parallel-tempering" | "paralleltempering" | "tempering" | "pt" => {
+            Some("parallel-tempering")
+        }
+        "tabu-search" | "tabusearch" | "tabu" => Some("tabu-search"),
+        "epsilon-greedy" | "epsilongreedy" | "epsilon" | "egreedy" => Some("epsilon-greedy"),
+        "relative-annealing" | "relativeannealing" | "relative" => Some("relative-annealing"),
+        "tsallis-annealing" | "tsallisannealing" | "tsallis" => Some("tsallis-annealing"),
+        _ => None,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_one_optimizer<O>(
+    display_name: &str,
+    opt: O,
+    tsp_model: &TSPModel,
+    initial_solution: Option<(SolutionType, ScoreType)>,
+    n_iter: usize,
+    time_limit: Duration,
+    pb: &ProgressBar,
+    callback: &mut dyn OptCallbackFn<SolutionType, ScoreType>,
+) where
+    O: LocalSearchOptimizer<TSPModel>,
+{
+    println!("run {display_name}");
+    pb.reset();
+    let (sol, score) = opt
+        .run_with_callback(tsp_model, initial_solution, n_iter, time_limit, callback)
+        .unwrap();
+    pb.finish_and_clear();
+    println!(
+        "{display_name}: final score = {}, num of cities {}",
+        score,
+        sol.len()
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_optimizer_by_name(
+    name: &str,
+    tsp_model: &TSPModel,
+    initial_solution: &Option<(SolutionType, ScoreType)>,
+    n_iter: usize,
+    return_iter: usize,
+    time_limit: Duration,
+    patience: usize,
+    pb: &ProgressBar,
+    callback: &mut dyn OptCallbackFn<SolutionType, ScoreType>,
+) {
+    match name {
+        "great-deluge" => {
+            let opt = GreatDelugeOptimizer::new(patience, 16, return_iter, 1.05);
+            run_one_optimizer(
+                "GreatDelugeOptimizer",
+                opt,
+                tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                pb,
+                callback,
+            );
+        }
+        "hill-climbing" => {
+            let opt = HillClimbingOptimizer::new(patience, 16);
+            run_one_optimizer(
+                "HillClimbingOptimizer",
+                opt,
+                tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                pb,
+                callback,
+            );
+        }
+        "simulated-annealing" => {
+            let opt = SimulatedAnnealingOptimizer::new(
+                patience,
+                16,
+                return_iter,
+                1.0,
+                0.9,
+                NonZero::new(100).expect("update_frequency must be >= 1"),
+            )
+            .tune_initial_temperature(tsp_model, None, 200, 0.5)
+            .tune_cooling_rate(n_iter);
+            run_one_optimizer(
+                "SimulatedAnnealingOptimizer",
+                opt,
+                tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                pb,
+                callback,
+            );
+        }
+        "adaptive-annealing" => {
+            let opt = AdaptiveAnnealingOptimizer::new(
+                patience,
+                16,
+                return_iter,
+                1.0,
+                AdaptiveScheduler::default(),
+                NonZero::new(100).expect("update_frequency must be >= 1"),
+            )
+            .tune_initial_temperature(tsp_model, None, 200);
+            run_one_optimizer(
+                "AdaptiveAnnealingOptimizer",
+                opt,
+                tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                pb,
+                callback,
+            );
+        }
+        "population-annealing" => {
+            let opt = PopulationAnnealingOptimizer::new(
+                patience,
+                16,
+                return_iter,
+                1.0,
+                0.9,
+                NonZero::new(100).expect("update_frequency must be >= 1"),
+                16,
+            )
+            .tune_initial_temperature(tsp_model, None, 200, 0.5)
+            .tune_cooling_rate(n_iter);
+            run_one_optimizer(
+                "PopulationAnnealingOptimizer",
+                opt,
+                tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                pb,
+                callback,
+            );
+        }
+        "parallel-tempering" => {
+            let opt = ParallelTemperingOptimizer::with_geometric_betas(
+                patience,
+                16,
+                return_iter,
+                8,
+                1e-3,
+                1e2,
+                NonZero::new(10).expect("update_frequency must be >= 1"),
+            );
+            run_one_optimizer(
+                "ParallelTemperingOptimizer",
+                opt,
+                tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                pb,
+                callback,
+            );
+        }
+        "tabu-search" => {
+            let opt = TabuSearchOptimizer::<DequeTabuList>::new(patience, 128, return_iter, 10);
+            run_one_optimizer(
+                "TabuSearchOptimizer",
+                opt,
+                tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                pb,
+                callback,
+            );
+        }
+        "epsilon-greedy" => {
+            let opt = EpsilonGreedyOptimizer::new(patience, 16, return_iter, 0.9);
+            run_one_optimizer(
+                "EpsilonGreedyOptimizer",
+                opt,
+                tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                pb,
+                callback,
+            );
+        }
+        "relative-annealing" => {
+            let opt = RelativeAnnealingOptimizer::new(patience, 16, return_iter, 1.0e2);
+            run_one_optimizer(
+                "RelativeAnnealingOptimizer",
+                opt,
+                tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                pb,
+                callback,
+            );
+        }
+        "tsallis-annealing" => {
+            let initial_score = initial_solution.as_ref().unwrap().1.into_inner();
+            let handler = TsallisAnnealing::new(
+                initial_score,
+                1.0e2,
+                2.5,
+                1.0,
+                AdaptiveScheduler::new(0.3, 0.3, TargetAccScheduleMode::Constant, 0.05),
+                NonZero::new(100).expect("update_frequency must be >= 1"),
+            );
+            let opt = GenericLocalSearchOptimizer::<ScoreType, TsallisAnnealing>::new(
+                patience,
+                16,
+                return_iter,
+                handler,
+            );
+            run_one_optimizer(
+                "TsallisAnnealing",
+                opt,
+                tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                pb,
+                callback,
+            );
+        }
+        _ => unreachable!("unknown canonical optimizer name: {name}"),
+    }
+}
+
+fn parse_optimizer_list(value: &str, selected: &mut Vec<&'static str>, program: &str) {
+    for part in value.split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        match normalize_optimizer_name(part) {
+            Some(canonical) => {
+                if !selected.contains(&canonical) {
+                    selected.push(canonical);
+                }
+            }
+            None => {
+                eprintln!("error: unknown optimizer '{part}'");
+                print_usage(program);
+                std::process::exit(2);
+            }
+        }
+    }
+}
+
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
-    let input_file = args.get(1).unwrap();
-    let coords = read_lines(input_file)
+    let program = args
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "tsp_model".to_string());
+
+    let mut input_file: Option<String> = None;
+    let mut opt_route_file: Option<String> = None;
+    let mut selected: Vec<&'static str> = Vec::new();
+    let mut run_all = false;
+
+    let mut idx = 1;
+    while idx < args.len() {
+        let arg = args[idx].as_str();
+        if arg == "--optimizer" || arg == "-o" {
+            idx += 1;
+            if idx >= args.len() {
+                eprintln!("error: {arg} requires a value");
+                print_usage(&program);
+                std::process::exit(2);
+            }
+            parse_optimizer_list(&args[idx].clone(), &mut selected, &program);
+        } else if let Some(value) = arg.strip_prefix("--optimizer=") {
+            parse_optimizer_list(value, &mut selected, &program);
+        } else if arg == "--all" {
+            run_all = true;
+        } else if arg == "--help" || arg == "-h" {
+            print_usage(&program);
+            return;
+        } else if arg.starts_with('-') {
+            eprintln!("error: unknown option '{arg}'");
+            print_usage(&program);
+            std::process::exit(2);
+        } else if input_file.is_none() {
+            input_file = Some(args[idx].clone());
+        } else if opt_route_file.is_none() {
+            opt_route_file = Some(args[idx].clone());
+        } else {
+            eprintln!("error: unexpected positional argument '{}'", args[idx]);
+            print_usage(&program);
+            std::process::exit(2);
+        }
+        idx += 1;
+    }
+
+    let Some(input_file) = input_file else {
+        print_usage(&program);
+        std::process::exit(2);
+    };
+
+    let to_run: Vec<&'static str> = if run_all || selected.is_empty() {
+        ALL_OPTIMIZERS.to_vec()
+    } else {
+        selected
+    };
+
+    let coords = read_lines(&input_file)
         .unwrap()
         .map(|line| {
             let line = line.unwrap();
@@ -256,7 +605,6 @@ fn main() {
 
     let pb = create_pbar(n_iter as u64);
     let mut callback = |op: OptProgress<SolutionType, ScoreType>| {
-        // eprintln!("iter {}, score {}", op.iter, op.score);
         pb.set_message(format!(
             "best score {:.4e}, acceptance ratio {:.2}",
             op.score.into_inner(),
@@ -265,214 +613,23 @@ fn main() {
         pb.set_position(op.iter as u64);
     };
 
-    let run_one = |name: &str, sol: SolutionType, score: ScoreType| {
-        pb.finish_and_clear();
-        println!(
-            "{}: final score = {}, num of cities {}",
+    for name in &to_run {
+        run_optimizer_by_name(
             name,
-            score,
-            sol.len()
+            &tsp_model,
+            &initial_solution,
+            n_iter,
+            return_iter,
+            time_limit,
+            patience,
+            &pb,
+            &mut callback,
         );
-    };
-
-    {
-        println!("run GreatDelugeOptimizer");
-        pb.reset();
-        let opt = GreatDelugeOptimizer::new(patience, 16, return_iter, 1.05);
-        let (sol, score) = opt
-            .run_with_callback(
-                &tsp_model,
-                initial_solution.clone(),
-                n_iter,
-                time_limit,
-                &mut callback,
-            )
-            .unwrap();
-        run_one("GreatDelugeOptimizer", sol, score);
-    }
-    {
-        println!("run HillClimbingOptimizer");
-        pb.reset();
-        let opt = HillClimbingOptimizer::new(patience, 16);
-        let (sol, score) = opt
-            .run_with_callback(
-                &tsp_model,
-                initial_solution.clone(),
-                n_iter,
-                time_limit,
-                &mut callback,
-            )
-            .unwrap();
-        run_one("HillClimbingOptimizer", sol, score);
-    }
-    {
-        println!("run SimulatedAnnealingOptimizer");
-        pb.reset();
-        let opt = SimulatedAnnealingOptimizer::new(
-            patience,
-            16,
-            return_iter,
-            1.0,
-            0.9,
-            NonZero::new(100).expect("update_frequency must be >= 1"),
-        )
-        .tune_initial_temperature(&tsp_model, None, 200, 0.5)
-        .tune_cooling_rate(n_iter);
-        let (sol, score) = opt
-            .run_with_callback(
-                &tsp_model,
-                initial_solution.clone(),
-                n_iter,
-                time_limit,
-                &mut callback,
-            )
-            .unwrap();
-        run_one("SimulatedAnnealingOptimizer", sol, score);
-    }
-    {
-        println!("run AdaptiveAnnealingOptimizer");
-        pb.reset();
-        let opt = AdaptiveAnnealingOptimizer::new(
-            patience,
-            16,
-            return_iter,
-            1.0,
-            AdaptiveScheduler::default(),
-            NonZero::new(100).expect("update_frequency must be >= 1"),
-        )
-        .tune_initial_temperature(&tsp_model, None, 200);
-        let (sol, score) = opt
-            .run_with_callback(
-                &tsp_model,
-                initial_solution.clone(),
-                n_iter,
-                time_limit,
-                &mut callback,
-            )
-            .unwrap();
-        run_one("AdaptiveAnnealingOptimizer", sol, score);
-    }
-    {
-        println!("run PopulationAnnealingOptimizer");
-        pb.reset();
-        let opt = PopulationAnnealingOptimizer::new(
-            patience,
-            16,
-            return_iter,
-            1.0,
-            0.9,
-            NonZero::new(100).expect("update_frequency must be >= 1"),
-            16,
-        )
-        .tune_initial_temperature(&tsp_model, None, 200, 0.5)
-        .tune_cooling_rate(n_iter);
-        let (sol, score) = opt
-            .run_with_callback(
-                &tsp_model,
-                initial_solution.clone(),
-                n_iter,
-                time_limit,
-                &mut callback,
-            )
-            .unwrap();
-        run_one("PopulationAnnealingOptimizer", sol, score);
-    }
-    {
-        println!("run ParallelTemperingOptimizer");
-        pb.reset();
-        let opt = ParallelTemperingOptimizer::with_geometric_betas(
-            patience,
-            16,
-            return_iter,
-            8,
-            1e-3,
-            1e2,
-            NonZero::new(10).expect("update_frequency must be >= 1"),
-        );
-        let (sol, score) = opt
-            .run_with_callback(
-                &tsp_model,
-                initial_solution.clone(),
-                n_iter,
-                time_limit,
-                &mut callback,
-            )
-            .unwrap();
-        run_one("ParallelTemperingOptimizer", sol, score);
-    }
-    {
-        println!("run TabuSearchOptimizer");
-        pb.reset();
-        let opt = TabuSearchOptimizer::<DequeTabuList>::new(patience, 128, return_iter, 10);
-        let (sol, score) = opt
-            .run_with_callback(
-                &tsp_model,
-                initial_solution.clone(),
-                n_iter,
-                time_limit,
-                &mut callback,
-            )
-            .unwrap();
-        run_one("TabuSearchOptimizer", sol, score);
-    }
-    {
-        println!("run EpsilonGreedyOptimizer");
-        pb.reset();
-        let opt = EpsilonGreedyOptimizer::new(patience, 16, return_iter, 0.9);
-        let (sol, score) = opt
-            .run_with_callback(
-                &tsp_model,
-                initial_solution.clone(),
-                n_iter,
-                time_limit,
-                &mut callback,
-            )
-            .unwrap();
-        run_one("EpsilonGreedyOptimizer", sol, score);
-    }
-    {
-        println!("run RelativeAnnealingOptimizer");
-        pb.reset();
-        let opt = RelativeAnnealingOptimizer::new(patience, 16, return_iter, 1.0e2);
-        let (sol, score) = opt
-            .run_with_callback(
-                &tsp_model,
-                initial_solution.clone(),
-                n_iter,
-                time_limit,
-                &mut callback,
-            )
-            .unwrap();
-        run_one("RelativeAnnealingOptimizer", sol, score);
-    }
-    {
-        println!("run TsallisRelativeAnnealingOptimizer");
-        pb.reset();
-        let opt = TsallisRelativeAnnealingOptimizer::new(
-            patience,
-            16,
-            return_iter,
-            1.0e2,
-            NonZero::new(100).expect("update_frequency must be >= 1"),
-            2.5,
-            1.0,
-        );
-        let (sol, score) = opt
-            .run_with_callback(
-                &tsp_model,
-                initial_solution.clone(),
-                n_iter,
-                time_limit,
-                &mut callback,
-            )
-            .unwrap();
-        run_one("TsallisRelativeAnnealingOptimizer", sol, score);
     }
 
-    if args.len() < 3 {
+    let Some(opt_route_file) = opt_route_file else {
         return;
-    }
-    let opt_route_file = args.get(2).unwrap();
+    };
     let opt_solution = read_lines(opt_route_file)
         .unwrap()
         .map(|line| {
