@@ -31,14 +31,17 @@ pub struct StepResult<S, ST> {
 /// operators that produced the trial.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrialOutcome {
-    /// Trial produced a new global best solution and was accepted.
+    /// Trial produced a new global best solution. Classified independently
+    /// of acceptance: the global best is recorded before the acceptance
+    /// check, so a rejected trial that beat the best still earns this credit.
     NewBest,
     /// Trial improved over the current solution and was accepted, but did
     /// not improve the global best.
     Improved,
     /// Trial was accepted but did not improve the current solution.
     Accepted,
-    /// Trial was rejected by the acceptance criterion.
+    /// Trial was rejected by the acceptance criterion (and did not beat the
+    /// global best — see [`TrialOutcome::NewBest`]).
     Rejected,
 }
 
@@ -284,8 +287,11 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
             acceptance_counter.enqueue(accepted);
 
             // 6. Tell the generator what happened so adaptive schemes can
-            //    update their internal state.
-            let outcome = if accepted && trial_score < previous_best {
+            //    update their internal state. `NewBest` is classified
+            //    independently of acceptance: the global best is recorded
+            //    before the acceptance check, so a rejected trial that
+            //    nonetheless beat the previous best still earns the credit.
+            let outcome = if trial_score < previous_best {
                 TrialOutcome::NewBest
             } else if accepted && trial_score < current_score {
                 TrialOutcome::Improved

@@ -15,7 +15,7 @@ use crate::{
     optim::{
         AlnsTrialGenerator, DefaultTrialGenerator, DestroyOperator, EpsilonGreedy,
         GenericLocalSearchOptimizer, LocalSearchLoop, LocalSearchOptimizer, RepairOperator,
-        TrialGenerator, TrialOutcome,
+        TransitionHandler, TrialGenerator, TrialOutcome, UpdateCtx,
     },
 };
 
@@ -536,4 +536,80 @@ fn alns_with_multiple_trials_credits_only_winner_per_iteration() {
     let total_repair_usage: usize = returned.repair_usage().iter().sum();
     assert_eq!(total_destroy_usage, 10);
     assert_eq!(total_repair_usage, 10);
+}
+
+// ---------------------------------------------------------------------------
+// A trial that beats the global best is credited `NewBest` even when the
+// acceptance handler rejects it (best bookkeeping runs before acceptance).
+// ---------------------------------------------------------------------------
+
+/// Handler that always rejects. Deliberately violates the
+/// improving-transitions-return-1.0 contract so classification of rejected
+/// trials can be exercised.
+struct AlwaysReject;
+
+impl TransitionHandler<NotNan<f64>> for AlwaysReject {
+    fn update(&mut self, _ctx: &UpdateCtx<'_, NotNan<f64>>) {}
+
+    fn evaluate(&self, _current: NotNan<f64>, _trial: NotNan<f64>) -> f64 {
+        0.0
+    }
+}
+
+/// Generator whose every trial strictly improves on every previous one
+/// (score decreases with each call), recording the outcome it was last
+/// credited with. Deriving the score from the call count — not from
+/// `current_score` — keeps trials improving even when the handler rejects
+/// every one.
+#[derive(Default)]
+struct ImprovingGenerator {
+    calls: AtomicUsize,
+    last_outcome: Mutex<Option<TrialOutcome>>,
+}
+
+impl TrialGenerator<QuadraticModel> for ImprovingGenerator {
+    type Token = ();
+
+    fn generate_trial(
+        &self,
+        _model: &QuadraticModel,
+        current_solution: &Vec<f64>,
+        _current_score: NotNan<f64>,
+        _rng: &mut StdRng,
+    ) -> (Vec<f64>, NotNan<f64>, Self::Token) {
+        let calls = self.calls.fetch_add(1, Ordering::Relaxed) as f64;
+        let next = NotNan::new(-calls).expect("finite test score");
+        (current_solution.clone(), next, ())
+    }
+
+    fn feedback(&mut self, _token: Self::Token, outcome: TrialOutcome) {
+        *self.last_outcome.lock().expect("mutex poisoned") = Some(outcome);
+    }
+}
+
+#[test]
+fn rejected_trial_beating_best_reports_new_best() {
+    let model = QuadraticModel::new(1, vec![0.0], (-1.0, 1.0));
+    let opt = LocalSearchLoop::new(10, 1, usize::MAX);
+    let handler = AlwaysReject;
+    let mut cb = |_p| {};
+    let (result, _, generator) = opt.step_with_generator(
+        &model,
+        vec![0.5],
+        NotNan::new(0.25).unwrap(),
+        5,
+        Duration::from_secs(1),
+        &mut cb,
+        handler,
+        ImprovingGenerator::default(),
+    );
+    // Every trial strictly improves, so the recorded global best keeps
+    // dropping even though the handler rejects every single one.
+    assert!(result.best_score.into_inner() < 0.25);
+    // The generator must be credited `NewBest` — not `Rejected` — for a
+    // trial that produced the recorded global best.
+    assert_eq!(
+        *generator.last_outcome.lock().expect("mutex poisoned"),
+        Some(TrialOutcome::NewBest)
+    );
 }
