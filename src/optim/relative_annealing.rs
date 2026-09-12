@@ -62,6 +62,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeA
     fn optimize(
         &self,
         model: &M,
+        state: &M::StateType,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
@@ -74,9 +75,9 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeA
             self.return_iter,
             |current, trial| transition_prob(current, trial, self.beta),
         );
-
         optimizer.optimize(
             model,
+            state,
             initial_solution,
             initial_score,
             n_iter,
@@ -85,6 +86,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeA
         )
     }
 }
+
 
 #[cfg(test)]
 mod test {

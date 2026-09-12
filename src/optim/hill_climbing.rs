@@ -29,6 +29,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
     fn optimize(
         &self,
         model: &M,
+        state: &M::StateType,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
@@ -38,6 +39,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
         let optimizer = EpsilonGreedyOptimizer::new(self.patience, self.n_trials, usize::MAX, 0.0);
         optimizer.optimize(
             model,
+            state,
             initial_solution,
             initial_score,
             n_iter,
@@ -46,3 +48,4 @@ impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
         )
     }
 }
+

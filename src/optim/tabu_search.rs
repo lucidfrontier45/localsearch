@@ -97,6 +97,7 @@ where
     fn optimize_with_tabu_list<M: OptModel<TransitionType = T::Item>>(
         &self,
         model: &M,
+        state: &M::StateType,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
@@ -124,6 +125,7 @@ where
                 .map(|_| {
                     let mut rng = rand::rng();
                     let (solution, transitions, score) = model.generate_trial_solution(
+                        state,
                         current_solution.clone(),
                         current_score,
                         &mut rng,
@@ -210,6 +212,7 @@ impl<T: TabuList, M: OptModel<TransitionType = T::Item>> LocalSearchOptimizer<M>
     fn optimize(
         &self,
         model: &M,
+        state: &M::StateType,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
@@ -220,6 +223,7 @@ impl<T: TabuList, M: OptModel<TransitionType = T::Item>> LocalSearchOptimizer<M>
         tabu_list.set_size(self.default_tabu_size);
         let (solution, score, _) = self.optimize_with_tabu_list(
             model,
+            state,
             initial_solution,
             initial_score,
             n_iter,
@@ -230,3 +234,4 @@ impl<T: TabuList, M: OptModel<TransitionType = T::Item>> LocalSearchOptimizer<M>
         (solution, score)
     }
 }
+

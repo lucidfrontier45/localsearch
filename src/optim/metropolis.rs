@@ -29,19 +29,24 @@ pub(crate) fn calculate_temperature_from_acceptance_prob(
 
 pub(crate) fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
     model: &M,
+    state: &M::StateType,
     initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
     n_warmup: usize,
 ) -> Vec<f64> {
     let mut rng = rand::rng();
-    let (current_solution, current_score) =
-        initial_solution_and_score.unwrap_or(model.generate_random_solution(&mut rng).unwrap());
+    let (current_solution, current_score) = initial_solution_and_score
+        .unwrap_or_else(|| model.generate_random_solution(state, &mut rng).unwrap());
 
     let energy_diffs: Vec<f64> = (0..n_warmup)
         .into_par_iter()
         .filter_map(|_| {
             let mut rng = rand::rng();
-            let (_, _, trial_score) =
-                model.generate_trial_solution(current_solution.clone(), current_score, &mut rng);
+            let (_, _, trial_score) = model.generate_trial_solution(
+                state,
+                current_solution.clone(),
+                current_score,
+                &mut rng,
+            );
             let ds = trial_score - current_score;
             if ds > NotNan::new(0.0).unwrap() {
                 Some(ds.into_inner())
@@ -57,11 +62,13 @@ pub(crate) fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
 /// Tune inverse temperature beta based on initial random trials
 pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
     model: &M,
+    state: &M::StateType,
     initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
     n_warmup: usize,
     target_prob: f64,
 ) -> f64 {
-    let energy_diffs = gather_energy_diffs(model, initial_solution_and_score, n_warmup);
+    let energy_diffs =
+        gather_energy_diffs(model, state, initial_solution_and_score, n_warmup);
     if energy_diffs.is_empty() {
         1.0
     } else {
@@ -100,9 +107,11 @@ impl MetropolisOptimizer {
     }
 
     /// Perform one optimization step
+    #[allow(clippy::too_many_arguments)]
     pub fn step<M: OptModel<ScoreType = NotNan<f64>>>(
         &self,
         model: &M,
+        state: &M::StateType,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
@@ -120,6 +129,7 @@ impl MetropolisOptimizer {
         );
         generic_optimizer.step(
             model,
+            state,
             initial_solution,
             initial_score,
             n_iter,
@@ -128,6 +138,7 @@ impl MetropolisOptimizer {
         )
     }
 }
+
 
 impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for MetropolisOptimizer {
     /// Start optimization
@@ -141,6 +152,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Metropoli
     fn optimize(
         &self,
         model: &M,
+        state: &M::StateType,
         initial_solution: <M as OptModel>::SolutionType,
         initial_score: <M as OptModel>::ScoreType,
         n_iter: usize,
@@ -149,6 +161,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Metropoli
     ) -> (<M as OptModel>::SolutionType, <M as OptModel>::ScoreType) {
         let step_result = self.step(
             model,
+            state,
             initial_solution,
             initial_score,
             n_iter,
@@ -158,3 +171,4 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Metropoli
         (step_result.best_solution, step_result.best_score)
     }
 }
+

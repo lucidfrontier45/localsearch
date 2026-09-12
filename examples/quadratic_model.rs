@@ -37,17 +37,19 @@ impl OptModel for QuadraticModel {
     type SolutionType = SolutionType;
     type TransitionType = ();
     type ScoreType = ScoreType;
+    type StateType = ();
     fn generate_random_solution<R: rand::Rng>(
         &self,
+        _state: &Self::StateType,
         rng: &mut R,
     ) -> Result<(Self::SolutionType, Self::ScoreType), LocalsearchError> {
         let solution = self.dist.sample_iter(rng).take(self.k).collect::<Vec<_>>();
         let score = self.evaluate_solution(&solution);
         Ok((solution, score))
     }
-
     fn generate_trial_solution<R: rand::Rng>(
         &self,
+        _state: &Self::StateType,
         current_solution: Self::SolutionType,
         _current_score: Self::ScoreType,
         rng: &mut R,
@@ -89,7 +91,7 @@ fn main() {
         pb.set_position(op.iter as u64);
     };
 
-    let res = opt.run_with_callback(&model, None, n_iter, time_limit, &mut callback);
+    let res = opt.run_with_callback(&model, &(), None, n_iter, time_limit, &mut callback);
     pb.finish();
     dbg!(res.unwrap());
 }

@@ -77,9 +77,11 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
     /// - `n_iter`: maximum iterations
     /// - `time_limit`: maximum iteration time
     /// - `callback` : callback function that will be invoked at the end of each iteration
+    #[allow(clippy::too_many_arguments)]
     pub fn step<M: OptModel<ScoreType = ST>>(
         &self,
         model: &M,
+        state: &M::StateType,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
@@ -109,6 +111,7 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
                 .map(|_| {
                     let mut rng = rand::rng();
                     let (solution, _, score) = model.generate_trial_solution(
+                        state,
                         current_solution.clone(),
                         current_score,
                         &mut rng,
@@ -198,6 +201,7 @@ where
     fn optimize(
         &self,
         model: &M,
+        state: &M::StateType,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
@@ -206,6 +210,7 @@ where
     ) -> (M::SolutionType, M::ScoreType) {
         let step_result = self.step(
             model,
+            state,
             initial_solution,
             initial_score,
             n_iter,
@@ -215,6 +220,7 @@ where
         (step_result.best_solution, step_result.best_score)
     }
 }
+
 
 #[cfg(test)]
 mod tests {

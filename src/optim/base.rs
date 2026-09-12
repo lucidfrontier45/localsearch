@@ -4,11 +4,13 @@ use crate::{Duration, LocalsearchError, OptModel, callback::OptCallbackFn};
 
 /// Optimizer that implements local search algorithm
 #[auto_impl(&, Box, Rc, Arc)]
+#[allow(clippy::too_many_arguments)]
 pub trait LocalSearchOptimizer<M: OptModel> {
     /// Start optimization
     fn optimize(
         &self,
         model: &M,
+        state: &M::StateType,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
@@ -20,12 +22,14 @@ pub trait LocalSearchOptimizer<M: OptModel> {
     fn run(
         &self,
         model: &M,
+        state: &M::StateType,
         initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
         n_iter: usize,
         time_limit: Duration,
     ) -> Result<(M::SolutionType, M::ScoreType), LocalsearchError> {
         self.run_with_callback(
             model,
+            state,
             initial_solution_and_score,
             n_iter,
             time_limit,
@@ -37,6 +41,7 @@ pub trait LocalSearchOptimizer<M: OptModel> {
     fn run_with_callback(
         &self,
         model: &M,
+        state: &M::StateType,
         initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
         n_iter: usize,
         time_limit: Duration,
@@ -46,15 +51,16 @@ pub trait LocalSearchOptimizer<M: OptModel> {
             Some((solution, score)) => (solution, score),
             None => {
                 let mut rng = rand::rng();
-                model.generate_random_solution(&mut rng)?
+                model.generate_random_solution(state, &mut rng)?
             }
         };
 
         let (initial_solution, initial_score) =
-            model.preprocess_solution(initial_solution, initial_score)?;
+            model.preprocess_solution(state, initial_solution, initial_score)?;
 
         let (solution, score) = self.optimize(
             model,
+            state,
             initial_solution,
             initial_score,
             n_iter,
@@ -62,7 +68,7 @@ pub trait LocalSearchOptimizer<M: OptModel> {
             callback,
         );
 
-        let (solution, score) = model.postprocess_solution(solution, score);
+        let (solution, score) = model.postprocess_solution(state, solution, score);
         Ok((solution, score))
     }
 }

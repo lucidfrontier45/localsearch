@@ -49,6 +49,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
     fn optimize(
         &self,
         model: &M,
+        state: &M::StateType,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
@@ -63,6 +64,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
         );
         optimizer.optimize(
             model,
+            state,
             initial_solution,
             initial_score,
             n_iter,
@@ -71,3 +73,4 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
         )
     }
 }
+

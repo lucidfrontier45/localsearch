@@ -32,10 +32,12 @@ impl QuadraticModel {
 impl OptModel for QuadraticModel {
     type SolutionType = SolutionType;
     type TransitionType = TransitionType;
-    type ScoreType = NotNan<f64>;
+    type ScoreType = ScoreType;
+    type StateType = ();
 
     fn generate_random_solution<R: rand::Rng>(
         &self,
+        _state: &Self::StateType,
         rng: &mut R,
     ) -> Result<(Self::SolutionType, Self::ScoreType), LocalsearchError> {
         let solution = self.dist.sample_iter(rng).take(self.k).collect::<Vec<_>>();
@@ -45,6 +47,7 @@ impl OptModel for QuadraticModel {
 
     fn generate_trial_solution<R: rand::Rng>(
         &self,
+        _state: &Self::StateType,
         current_solution: Self::SolutionType,
         _current_score: Self::ScoreType,
         rng: &mut R,

@@ -74,11 +74,18 @@ impl SimulatedAnnealingOptimizer {
     pub fn tune_initial_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
         self,
         model: &M,
+        state: &M::StateType,
         initial_solution: Option<(M::SolutionType, M::ScoreType)>,
         n_warmup: usize,
         target_initial_prob: f64,
     ) -> Self {
-        let tuned_beta = tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
+        let tuned_beta = tune_temperature(
+            model,
+            state,
+            initial_solution,
+            n_warmup,
+            target_initial_prob,
+        );
 
         Self {
             initial_beta: tuned_beta,
@@ -110,6 +117,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
     fn optimize(
         &self,
         model: &M,
+        state: &M::StateType,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
@@ -139,11 +147,12 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         );
         generic_optimizer.optimize(
             model,
+            state,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             &mut callback_with_update,
         )
-    }
+}
 }

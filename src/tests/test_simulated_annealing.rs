@@ -17,7 +17,7 @@ fn test() {
         NonZero::new(1).expect("update_frequency must be >= 1"),
     );
     let (final_solution, final_score) = opt
-        .run(&model, None, 5000, Duration::from_secs(10))
+        .run(&model, &(), None, 5000, Duration::from_secs(10))
         .unwrap();
     assert_abs_diff_eq!(2.0, final_solution[0], epsilon = 0.05);
     assert_abs_diff_eq!(0.0, final_solution[1], epsilon = 0.05);

@@ -101,8 +101,10 @@ impl OptModel for TSPModel {
     type SolutionType = SolutionType;
     type TransitionType = TransitionType;
     type ScoreType = ScoreType;
+    type StateType = ();
     fn generate_random_solution<R: rand::Rng>(
         &self,
+        _state: &Self::StateType,
         rng: &mut R,
     ) -> Result<(Self::SolutionType, Self::ScoreType), LocalsearchError> {
         let mut cities = self
@@ -129,6 +131,7 @@ impl OptModel for TSPModel {
 
     fn generate_trial_solution<R: rand::Rng>(
         &self,
+        _state: &Self::StateType,
         current_solution: Self::SolutionType,
         current_score: Self::ScoreType,
         rng: &mut R,
@@ -251,7 +254,7 @@ fn main() {
     let patience = n_iter / 2;
 
     let mut rng = rand::rng();
-    let initial_solution = tsp_model.generate_random_solution(&mut rng).ok();
+    let initial_solution = tsp_model.generate_random_solution(&(), &mut rng).ok();
 
     let pb = create_pbar(n_iter as u64);
     let mut callback = |op: OptProgress<SolutionType, ScoreType>| {
@@ -284,7 +287,7 @@ fn main() {
                     0.9,
                     NonZero::new(100).expect("update_frequency must be >= 1"),
                 )
-                .tune_initial_temperature(&tsp_model, None, 200, 0.5)
+                .tune_initial_temperature(&tsp_model, &(), None, 200, 0.5)
                 .tune_cooling_rate(n_iter),
             ),
         ),
@@ -299,7 +302,7 @@ fn main() {
                     Default::default(),
                     NonZero::new(100).expect("update_frequency must be >= 1"),
                 )
-                .tune_initial_temperature(&tsp_model, None, 200),
+                .tune_initial_temperature(&tsp_model, &(), None, 200),
             ),
         ),
         (
@@ -314,7 +317,7 @@ fn main() {
                     NonZero::new(100).expect("update_frequency must be >= 1"),
                     16,
                 )
-                .tune_initial_temperature(&tsp_model, None, 200, 0.5)
+                .tune_initial_temperature(&tsp_model, &(), None, 200, 0.5)
                 .tune_cooling_rate(n_iter),
             ),
         ),
@@ -372,6 +375,7 @@ fn main() {
         let (final_solution, final_score) = optimizer
             .run_with_callback(
                 &tsp_model,
+                &(),
                 initial_solution.clone(),
                 n_iter,
                 time_limit,

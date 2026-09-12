@@ -68,11 +68,18 @@ impl PopulationAnnealingOptimizer {
     pub fn tune_initial_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
         self,
         model: &M,
+        state: &M::StateType,
         initial_solution: Option<(M::SolutionType, M::ScoreType)>,
         n_warmup: usize,
         target_initial_prob: f64,
     ) -> Self {
-        let tuned_beta = tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
+        let tuned_beta = tune_temperature(
+            model,
+            state,
+            initial_solution,
+            n_warmup,
+            target_initial_prob,
+        );
 
         Self {
             initial_beta: tuned_beta,
@@ -106,6 +113,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
     fn optimize(
         &self,
         model: &M,
+        state: &M::StateType,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
@@ -121,8 +129,12 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
 
         for _ in 0..self.population_size {
             // Generate a random solution for other members
-            let (solution, _, score) =
-                model.generate_trial_solution(initial_solution.clone(), initial_score, &mut rng);
+            let (solution, _, score) = model.generate_trial_solution(
+                state,
+                initial_solution.clone(),
+                initial_score,
+                &mut rng,
+            );
             population.push((solution, score));
         }
 
@@ -169,6 +181,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
 
                     metropolis.step(
                         model,
+                        state,
                         solution.clone(),
                         *score,
                         update_freq,

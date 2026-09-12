@@ -94,12 +94,13 @@ impl ParallelTemperingOptimizer {
     pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
         self,
         model: &M,
+        state: &M::StateType,
         initial_solution: Option<(M::SolutionType, M::ScoreType)>,
         n_warmup: usize,
         target_max_prob: f64,
         target_min_prob: f64,
     ) -> Self {
-        let energy_diffs = gather_energy_diffs(model, initial_solution, n_warmup);
+        let energy_diffs = gather_energy_diffs(model, state, initial_solution, n_warmup);
         if energy_diffs.is_empty() {
             return self;
         }
@@ -130,6 +131,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
     fn optimize(
         &self,
         model: &M,
+        state: &M::StateType,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
@@ -183,6 +185,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
                     let mut cb = &mut |_p: OptProgress<M::SolutionType, M::ScoreType>| {};
                     m.step(
                         model,
+                        state,
                         sol.clone(),
                         *score,
                         update_freq,

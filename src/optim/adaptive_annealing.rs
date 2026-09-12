@@ -163,11 +163,13 @@ impl AdaptiveAnnealingOptimizer {
     pub fn tune_initial_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
         self,
         model: &M,
+        state: &M::StateType,
         initial_solution: Option<(M::SolutionType, M::ScoreType)>,
         n_warmup: usize,
     ) -> Self {
         let tuned_beta = tune_temperature(
             model,
+            state,
             initial_solution,
             n_warmup,
             self.scheduler.initial_target_acc,
@@ -192,6 +194,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
     fn optimize(
         &self,
         model: &M,
+        state: &M::StateType,
         initial_solution: M::SolutionType,
         initial_score: M::ScoreType,
         n_iter: usize,
@@ -226,11 +229,13 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
         );
         generic_optimizer.optimize(
             model,
+            state,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             &mut callback_with_update,
         )
-    }
+}
+
 }
