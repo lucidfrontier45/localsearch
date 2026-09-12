@@ -1,4 +1,4 @@
-use super::{EpsilonGreedy, GenericLocalSearchOptimizer, LocalSearchOptimizer};
+use super::{EpsilonGreedy, LocalSearchLoop, LocalSearchOptimizer};
 use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 /// Optimizer that implements epsilon-greedy algorithm.
@@ -49,7 +49,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
         let handler = EpsilonGreedy::new(self.epsilon);
-        let opt = GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
+        let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
         let (solution, score, _) = opt.optimize_with_handler(
             model,
             initial_solution,

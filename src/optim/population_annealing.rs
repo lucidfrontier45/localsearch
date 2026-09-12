@@ -4,7 +4,7 @@ use ordered_float::NotNan;
 use rand::{RngExt as _, distr::weighted::WeightedIndex, prelude::Distribution};
 use rayon::prelude::*;
 
-use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer, Metropolis, tune_cooling_rate,
+use super::{LocalSearchLoop, LocalSearchOptimizer, Metropolis, tune_cooling_rate,
     tune_temperature,
 };
 use crate::{
@@ -146,7 +146,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             }
 
             let opt =
-                GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
+                LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
             let update_freq = self.update_frequency.get();
 
             // Process each member of the population

@@ -2,7 +2,7 @@ use std::num::NonZero;
 
 use ordered_float::NotNan;
 
-use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer, SimulatedAnnealing, tune_cooling_rate,
+use super::{LocalSearchLoop, LocalSearchOptimizer, SimulatedAnnealing, tune_cooling_rate,
     tune_temperature,
 };
 use crate::{Duration, OptModel, callback::OptCallbackFn};
@@ -105,7 +105,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
     ) -> (M::SolutionType, M::ScoreType) {
         let handler =
             SimulatedAnnealing::new(self.initial_beta, self.cooling_rate, self.update_frequency);
-        let opt = GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
+        let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
         let (solution, score, _) = opt.optimize_with_handler(
             model,
             initial_solution,

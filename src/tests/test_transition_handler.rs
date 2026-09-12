@@ -7,7 +7,7 @@ use std::{
 use ordered_float::NotNan;
 
 use crate::optim::{
-    AdaptiveAnnealingHandler, AdaptiveScheduler, EpsilonGreedyHandler, GenericLocalSearchOptimizer,
+    AdaptiveAnnealingHandler, AdaptiveScheduler, EpsilonGreedyHandler, LocalSearchLoop,
     GreatDelugeHandler, LogisticAnnealingHandler, MetropolisHandler, RelativeAnnealingHandler,
     SimulatedAnnealingHandler, TargetAccScheduleMode, TransitionHandler, TsallisHandler, UpdateCtx,
 };
@@ -146,7 +146,7 @@ fn generic_step_passes_acceptance_ratio_to_update_context() {
     let handler = RecordingHandler {
         updates: Arc::clone(&updates),
     };
-    let optimizer = GenericLocalSearchOptimizer::new(10, 1, usize::MAX);
+    let optimizer = LocalSearchLoop::new(10, 1, usize::MAX);
     let mut callback = |_progress| {};
     let (result, returned_handler) = optimizer.step(
         &IncreasingModel,

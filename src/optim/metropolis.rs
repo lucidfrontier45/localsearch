@@ -1,6 +1,6 @@
 use ordered_float::NotNan;
 
-use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer, Metropolis};
+use super::{LocalSearchLoop, LocalSearchOptimizer, Metropolis};
 use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 /// Optimizer that implements the Metropolis algorithm with constant beta.
@@ -52,7 +52,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Metropoli
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        let opt = GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
+        let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
         let (solution, score, _) = opt.optimize_with_handler(
             model,
             initial_solution,

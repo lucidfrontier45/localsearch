@@ -1,6 +1,6 @@
 use ordered_float::NotNan;
 
-use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer, LogisticAnnealing};
+use super::{LocalSearchLoop, LocalSearchOptimizer, LogisticAnnealing};
 use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 /// Optimizer that implements logistic annealing algorithm
@@ -59,7 +59,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for LogisticA
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
         let handler = LogisticAnnealing::new(self.w);
-        let opt = GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
+        let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
         let (solution, score, _) = opt.optimize_with_handler(
             model,
             initial_solution,

@@ -8,6 +8,7 @@ mod great_deluge;
 mod handlers;
 mod hill_climbing;
 mod logistic_annealing;
+mod search_loop;
 mod metropolis;
 mod parallel_tempering;
 mod population_annealing;
@@ -21,7 +22,8 @@ mod tsallis;
 pub use adaptive_annealing::AdaptiveAnnealingOptimizer;
 pub use base::LocalSearchOptimizer;
 pub use epsilon_greedy::EpsilonGreedyOptimizer;
-pub use generic::{GenericLocalSearchOptimizer, StepResult};
+pub use generic::GenericLocalSearchOptimizer;
+pub use search_loop::{LocalSearchLoop, StepResult};
 pub use great_deluge::GreatDelugeOptimizer;
 pub use handlers::{
     AdaptiveAnnealing, AdaptiveAnnealingHandler, AdaptiveScheduler, EpsilonGreedy,

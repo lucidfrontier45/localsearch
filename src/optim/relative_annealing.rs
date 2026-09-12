@@ -1,6 +1,6 @@
 use ordered_float::NotNan;
 
-use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer, RelativeAnnealing};
+use super::{LocalSearchLoop, LocalSearchOptimizer, RelativeAnnealing};
 use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 /// Optimizer that implements relative annealing algorithm
@@ -59,7 +59,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeA
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
         let handler = RelativeAnnealing::new(self.beta);
-        let opt = GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
+        let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
         let (solution, score, _) = opt.optimize_with_handler(
             model,
             initial_solution,

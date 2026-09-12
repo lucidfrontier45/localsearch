@@ -4,12 +4,13 @@ use ordered_float::NotNan;
 use rand::RngExt as _;
 use rayon::prelude::*;
 
-use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer, Metropolis,
-    calculate_temperature_from_acceptance_prob, gather_energy_diffs, generic::StepResult,
+use super::{LocalSearchLoop, LocalSearchOptimizer, Metropolis,
+    calculate_temperature_from_acceptance_prob, gather_energy_diffs,
 };
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
+    optim::StepResult,
 };
 
 /// Parallel Tempering (Replica Exchange) optimizer
@@ -167,7 +168,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
                 .enumerate()
                 .map(|(idx, (sol, score))| {
                     let opt =
-                        GenericLocalSearchOptimizer::new(self.patience, n_trials, self.return_iter);
+                        LocalSearchLoop::new(self.patience, n_trials, self.return_iter);
                     let mut cb = &mut |_p: OptProgress<M::SolutionType, M::ScoreType>| {};
                     opt.step(
                         model,
