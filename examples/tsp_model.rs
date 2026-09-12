@@ -11,10 +11,12 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use localsearch::{
     LocalsearchError, OptModel, OptProgress,
     optim::{
-        AdaptiveAnnealingOptimizer, EpsilonGreedyOptimizer, GreatDelugeOptimizer,
-        HillClimbingOptimizer, LocalSearchOptimizer, ParallelTemperingOptimizer,
-        PopulationAnnealingOptimizer, RelativeAnnealingOptimizer, SimulatedAnnealingOptimizer,
-        TabuList, TabuSearchOptimizer, TsallisRelativeAnnealingOptimizer,
+        AdaptiveAnnealing, AdaptiveAnnealingOptimizer, AdaptiveScheduler, EpsilonGreedy,
+        EpsilonGreedyOptimizer, GreatDeluge, GreatDelugeOptimizer, HillClimbingOptimizer,
+        LocalSearchOptimizer, Metropolis, ParallelTemperingOptimizer, PopulationAnnealingOptimizer,
+        RelativeAnnealing, RelativeAnnealingOptimizer, SimulatedAnnealing, SimulatedAnnealingOptimizer,
+        TabuList, TabuSearchOptimizer, TsallisAnnealing,
+        TsallisRelativeAnnealingOptimizer,
     },
     utils::RingBuffer,
 };
@@ -264,126 +266,239 @@ fn main() {
         pb.set_position(op.iter as u64);
     };
 
-    let optimizers: Vec<(&str, Box<dyn LocalSearchOptimizer<TSPModel>>)> = vec![
-        (
-            "GreatDelugeOptimizer",
-            Box::new(GreatDelugeOptimizer::new(patience, 16, return_iter, 1.05)),
-        ),
-        (
-            "HillClimbingOptimizer",
-            Box::new(HillClimbingOptimizer::new(patience, 16)),
-        ),
-        (
-            "SimulatedAnnealingOptimizer",
-            Box::new(
-                SimulatedAnnealingOptimizer::new(
-                    patience,
-                    16,
-                    return_iter,
-                    1.0,
-                    0.9,
-                    NonZero::new(100).expect("update_frequency must be >= 1"),
-                )
-                .tune_initial_temperature(&tsp_model, None, 200, 0.5)
-                .tune_cooling_rate(n_iter),
-            ),
-        ),
-        (
-            "AdaptiveAnnealingOptimizer",
-            Box::new(
-                AdaptiveAnnealingOptimizer::new(
-                    patience,
-                    16,
-                    return_iter,
-                    1.0,
-                    Default::default(),
-                    NonZero::new(100).expect("update_frequency must be >= 1"),
-                )
-                .tune_initial_temperature(&tsp_model, None, 200),
-            ),
-        ),
-        (
-            "PopulationAnnealingOptimizer",
-            Box::new(
-                PopulationAnnealingOptimizer::new(
-                    patience,
-                    16,
-                    return_iter,
-                    1.0,
-                    0.9,
-                    NonZero::new(100).expect("update_frequency must be >= 1"),
-                    16,
-                )
-                .tune_initial_temperature(&tsp_model, None, 200, 0.5)
-                .tune_cooling_rate(n_iter),
-            ),
-        ),
-        (
-            "ParallelTemperingOptimizer",
-            Box::new(ParallelTemperingOptimizer::with_geometric_betas(
-                patience,
-                16,
-                return_iter,
-                8,                                                        // replicas
-                1e-3,                                                     // beta_min
-                1e2,                                                      // beta_max
-                NonZero::new(10).expect("update_frequency must be >= 1"), // update_frequency
-            )),
-        ),
-        (
-            "TabuSearchOptimizer",
-            Box::new(TabuSearchOptimizer::<DequeTabuList>::new(
-                patience,
-                128,
-                return_iter,
-                10,
-            )),
-        ),
-        (
-            "EpsilonGreedyOptimizer",
-            Box::new(EpsilonGreedyOptimizer::new(patience, 16, return_iter, 0.9)),
-        ),
-        (
-            "RelativeAnnealingOptimizer",
-            Box::new(RelativeAnnealingOptimizer::new(
-                patience,
-                16,
-                return_iter,
-                1.0e2,
-            )),
-        ),
-        (
-            "TsallisRelativeAnnealingOptimizer",
-            Box::new(TsallisRelativeAnnealingOptimizer::new(
-                patience,
-                16,
-                return_iter,
-                1.0e2,
-                NonZero::new(100).expect("update_frequency must be >= 1"),
-                2.5,
-                1.0,
-            )),
-        ),
-    ];
+    let run_one = |name: &str, sol: SolutionType, score: ScoreType| {
+        pb.finish_and_clear();
+        println!(
+            "{}: final score = {}, num of cities {}",
+            name,
+            score,
+            sol.len()
+        );
+    };
 
-    for (name, optimizer) in optimizers {
-        println!("run {}", name);
+    {
+        println!("run GreatDelugeOptimizer");
         pb.reset();
-        let (final_solution, final_score) = optimizer
+        let opt = GreatDelugeOptimizer::new(patience, 16, return_iter, 1.05);
+        let handler = GreatDeluge::new(0.0);
+        let (sol, score) = opt
             .run_with_callback(
                 &tsp_model,
                 initial_solution.clone(),
                 n_iter,
                 time_limit,
                 &mut callback,
+                handler,
             )
             .unwrap();
-        pb.finish_and_clear();
-        println!(
-            "final score = {}, num of cities {}",
-            final_score,
-            final_solution.len()
+        run_one("GreatDelugeOptimizer", sol, score);
+    }
+    {
+        println!("run HillClimbingOptimizer");
+        pb.reset();
+        let opt = HillClimbingOptimizer::new(patience, 16);
+        let handler = EpsilonGreedy::new(0.0);
+        let (sol, score) = opt
+            .run_with_callback(
+                &tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                &mut callback,
+                handler,
+            )
+            .unwrap();
+        run_one("HillClimbingOptimizer", sol, score);
+    }
+    {
+        println!("run SimulatedAnnealingOptimizer");
+        pb.reset();
+        let opt = SimulatedAnnealingOptimizer::new(
+            patience,
+            16,
+            return_iter,
+            1.0,
+            0.9,
+            NonZero::new(100).expect("update_frequency must be >= 1"),
+        )
+        .tune_initial_temperature(&tsp_model, None, 200, 0.5)
+        .tune_cooling_rate(n_iter);
+        let handler = SimulatedAnnealing::new(1.0, 0.9, NonZero::new(100).unwrap());
+        let (sol, score) = opt
+            .run_with_callback(
+                &tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                &mut callback,
+                handler,
+            )
+            .unwrap();
+        run_one("SimulatedAnnealingOptimizer", sol, score);
+    }
+    {
+        println!("run AdaptiveAnnealingOptimizer");
+        pb.reset();
+        let opt = AdaptiveAnnealingOptimizer::new(
+            patience,
+            16,
+            return_iter,
+            1.0,
+            AdaptiveScheduler::default(),
+            NonZero::new(100).expect("update_frequency must be >= 1"),
+        )
+        .tune_initial_temperature(&tsp_model, None, 200);
+        let handler = AdaptiveAnnealing::new(
+            1.0,
+            AdaptiveScheduler::default(),
+            NonZero::new(100).unwrap(),
         );
+        let (sol, score) = opt
+            .run_with_callback(
+                &tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                &mut callback,
+                handler,
+            )
+            .unwrap();
+        run_one("AdaptiveAnnealingOptimizer", sol, score);
+    }
+    {
+        println!("run PopulationAnnealingOptimizer");
+        pb.reset();
+        let opt = PopulationAnnealingOptimizer::new(
+            patience,
+            16,
+            return_iter,
+            1.0,
+            0.9,
+            NonZero::new(100).expect("update_frequency must be >= 1"),
+            16,
+        )
+        .tune_initial_temperature(&tsp_model, None, 200, 0.5)
+        .tune_cooling_rate(n_iter);
+        let handler = Metropolis::new(1.0);
+        let (sol, score) = opt
+            .run_with_callback(
+                &tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                &mut callback,
+                handler,
+            )
+            .unwrap();
+        run_one("PopulationAnnealingOptimizer", sol, score);
+    }
+    {
+        println!("run ParallelTemperingOptimizer");
+        pb.reset();
+        let opt = ParallelTemperingOptimizer::with_geometric_betas(
+            patience,
+            16,
+            return_iter,
+            8,
+            1e-3,
+            1e2,
+            NonZero::new(10).expect("update_frequency must be >= 1"),
+        );
+        let handler = Metropolis::new(1.0);
+        let (sol, score) = opt
+            .run_with_callback(
+                &tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                &mut callback,
+                handler,
+            )
+            .unwrap();
+        run_one("ParallelTemperingOptimizer", sol, score);
+    }
+    {
+        println!("run TabuSearchOptimizer");
+        pb.reset();
+        let opt = TabuSearchOptimizer::<DequeTabuList>::new(patience, 128, return_iter, 10);
+        let handler = DequeTabuList::default();
+        let (sol, score) = opt
+            .run_with_callback(
+                &tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                &mut callback,
+                handler,
+            )
+            .unwrap();
+        run_one("TabuSearchOptimizer", sol, score);
+    }
+    {
+        println!("run EpsilonGreedyOptimizer");
+        pb.reset();
+        let opt = EpsilonGreedyOptimizer::new(patience, 16, return_iter, 0.9);
+        let handler = EpsilonGreedy::new(0.9);
+        let (sol, score) = opt
+            .run_with_callback(
+                &tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                &mut callback,
+                handler,
+            )
+            .unwrap();
+        run_one("EpsilonGreedyOptimizer", sol, score);
+    }
+    {
+        println!("run RelativeAnnealingOptimizer");
+        pb.reset();
+        let opt = RelativeAnnealingOptimizer::new(patience, 16, return_iter, 1.0e2);
+        let handler = RelativeAnnealing::new(1.0e2);
+        let (sol, score) = opt
+            .run_with_callback(
+                &tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                &mut callback,
+                handler,
+            )
+            .unwrap();
+        run_one("RelativeAnnealingOptimizer", sol, score);
+    }
+    {
+        println!("run TsallisRelativeAnnealingOptimizer");
+        pb.reset();
+        let opt = TsallisRelativeAnnealingOptimizer::new(
+            patience,
+            16,
+            return_iter,
+            1.0e2,
+            NonZero::new(100).expect("update_frequency must be >= 1"),
+            2.5,
+            1.0,
+        );
+        let handler = TsallisAnnealing::new(
+            0.0,
+            1.0e2,
+            2.5,
+            1.0,
+            AdaptiveScheduler::default(),
+            NonZero::new(100).unwrap(),
+        );
+        let (sol, score) = opt
+            .run_with_callback(
+                &tsp_model,
+                initial_solution.clone(),
+                n_iter,
+                time_limit,
+                &mut callback,
+                handler,
+            )
+            .unwrap();
+        run_one("TsallisRelativeAnnealingOptimizer", sol, score);
     }
 
     if args.len() < 3 {

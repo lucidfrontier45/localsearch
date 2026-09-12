@@ -5,12 +5,12 @@ use rand::{RngExt as _, distr::weighted::WeightedIndex, prelude::Distribution};
 use rayon::prelude::*;
 
 use super::{
-    LocalSearchOptimizer, metropolis::tune_temperature, simulated_annealing::tune_cooling_rate,
+    GenericLocalSearchOptimizer, LocalSearchOptimizer, Metropolis, metropolis::tune_temperature,
+    simulated_annealing::tune_cooling_rate,
 };
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
-    optim::MetropolisOptimizer,
 };
 
 /// Optimizer that implements the population annealing algorithm
@@ -90,17 +90,12 @@ impl PopulationAnnealingOptimizer {
     }
 }
 
-impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
-    for PopulationAnnealingOptimizer
+impl<M, H> LocalSearchOptimizer<M, H> for PopulationAnnealingOptimizer
+where
+    M: OptModel<ScoreType = NotNan<f64>>,
 {
-    /// Start optimization
-    ///
-    /// - `model`: the model to optimize
-    /// - `initial_solution`: the initial solution to start optimization
-    /// - `initial_score`: the initial score of the initial solution
-    /// - `n_iter`: maximum iterations
-    /// - `time_limit`: maximum iteration time
-    /// - `callback`: callback function that will be invoked at the end of each iteration
+    /// Start optimization. The handler argument is ignored — each population
+    /// member builds its own [`Metropolis`] handler from `current_beta`.
     fn optimize(
         &self,
         model: &M,
@@ -109,7 +104,8 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-    ) -> (M::SolutionType, M::ScoreType) {
+        _handler: H,
+    ) -> (M::SolutionType, M::ScoreType, H) {
         let start_time = Instant::now();
         let mut rng = rand::rng();
 
@@ -149,12 +145,8 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 break;
             }
 
-            let metropolis = MetropolisOptimizer::new(
-                self.patience,
-                self.n_trials,
-                self.return_iter,
-                current_beta,
-            );
+            let opt =
+                GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
             let update_freq = self.update_frequency.get();
 
             // Process each member of the population
@@ -165,13 +157,14 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                     let temp_callback =
                         &mut |_progress: OptProgress<M::SolutionType, M::ScoreType>| {};
 
-                    metropolis.to_generic().step(
+                    opt.step(
                         model,
                         solution.clone(),
                         *score,
                         update_freq,
                         time_limit.saturating_sub(duration),
                         temp_callback,
+                        Metropolis::new(current_beta),
                     )
                 })
                 .collect::<Vec<_>>();
@@ -180,10 +173,10 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             iter = iter.saturating_add(update_freq);
 
             // 2. Update best solution and score
-            let best_step_result = step_results.iter().min_by_key(|r| r.best_score).unwrap();
-            if best_step_result.best_score < best_score {
-                best_score = best_step_result.best_score;
-                best_solution.replace(best_step_result.best_solution.clone());
+            let best_step_result = step_results.iter().min_by_key(|r| r.0.best_score).unwrap();
+            if best_step_result.0.best_score < best_score {
+                best_score = best_step_result.0.best_score;
+                best_solution.replace(best_step_result.0.best_solution.clone());
                 return_stagnation_counter = 0;
                 patience_stagnation_counter = 0;
             } else {
@@ -195,7 +188,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             // 3. Update accepted counter
             let acceptance_ratio = step_results
                 .iter()
-                .map(|r| r.acceptance_counter.acceptance_ratio())
+                .map(|r| r.0.acceptance_counter.acceptance_ratio())
                 .sum::<f64>()
                 / self.population_size as f64;
 
@@ -218,7 +211,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             current_beta *= self.cooling_rate;
             let new_population: Vec<(M::SolutionType, M::ScoreType)> = step_results
                 .into_iter()
-                .map(|r| (r.last_solution, r.last_score))
+                .map(|r| (r.0.last_solution, r.0.last_score))
                 .collect();
 
             // Population update: resample based on Boltzmann distribution weights
@@ -250,6 +243,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         }
 
         let final_best_solution = (*best_solution.borrow()).clone();
-        (final_best_solution, best_score)
+        (final_best_solution, best_score, _handler)
     }
 }

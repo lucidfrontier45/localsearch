@@ -36,42 +36,39 @@ pub struct StepResult<S, ST> {
 /// At the start of every iteration the handler's [`TransitionHandler::update`]
 /// is invoked so it can adapt its internal state (cooling schedule, water
 /// level, …) before trials are evaluated.
-pub struct GenericLocalSearchOptimizer<
-    ST: Ord + Sync + Send + Copy,
-    H: TransitionHandler<ST> + Clone,
-> {
+///
+/// The handler is supplied per-call via [`Self::optimize_with_handler`] and
+/// [`Self::step_with_handler`]; this optimizer stores no handler field.
+pub struct GenericLocalSearchOptimizer<ST: Ord + Sync + Send + Copy> {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
-    handler: H,
     phantom: PhantomData<ST>,
 }
 
-impl<ST: Ord + Sync + Send + Copy, H: TransitionHandler<ST> + Clone>
-    GenericLocalSearchOptimizer<ST, H>
-{
+impl<ST: Ord + Sync + Send + Copy> GenericLocalSearchOptimizer<ST> {
     /// Constructor of `GenericLocalSearchOptimizer`.
     ///
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
-    /// - `handler` : transition handler providing acceptance probabilities and per-iteration state updates.
-    pub fn new(patience: usize, n_trials: usize, return_iter: usize, handler: H) -> Self {
+    pub fn new(patience: usize, n_trials: usize, return_iter: usize) -> Self {
         Self {
             patience,
             n_trials,
             return_iter,
-            handler,
             phantom: PhantomData,
         }
     }
 
-    /// Perform one optimization step (up to `n_iter` iterations or `time_limit`).
+    /// Perform one optimization step (up to `n_iter` iterations or `time_limit`)
+    /// with the supplied handler.
     ///
-    /// Returns a [`StepResult`] containing the best and last solutions/scores
-    /// observed during this step along with the acceptance counter.
-    pub fn step<M: OptModel<ScoreType = ST>>(
+    /// Returns the [`StepResult`] alongside the (possibly mutated) handler so
+    /// per-iteration state survives the call.
+    #[allow(clippy::too_many_arguments)]
+    pub fn step<M, H>(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
@@ -79,8 +76,12 @@ impl<ST: Ord + Sync + Send + Copy, H: TransitionHandler<ST> + Clone>
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-    ) -> StepResult<M::SolutionType, M::ScoreType> {
-        let mut handler = self.handler.clone();
+        mut handler: H,
+    ) -> (StepResult<M::SolutionType, M::ScoreType>, H)
+    where
+        M: OptModel<ScoreType = ST>,
+        H: TransitionHandler<ST>,
+    {
         let start_time = Instant::now();
         let mut rng = rand::rng();
         let mut current_solution = initial_solution;
@@ -173,30 +174,54 @@ impl<ST: Ord + Sync + Send + Copy, H: TransitionHandler<ST> + Clone>
         }
 
         let best_solution = (*best_solution.borrow()).clone();
-        StepResult {
+        let result = StepResult {
             best_solution,
             best_score,
             last_solution: current_solution,
             last_score: current_score,
             acceptance_counter,
-        }
+        };
+        (result, handler)
+    }
+
+    /// Run optimization with the supplied handler.
+    ///
+    /// Returns `(best_solution, best_score, handler)` where `handler` is the
+    /// same instance passed in, with any per-iteration state mutations applied.
+    #[allow(clippy::too_many_arguments)]
+    pub fn optimize_with_handler<M, H>(
+        &self,
+        model: &M,
+        initial_solution: M::SolutionType,
+        initial_score: M::ScoreType,
+        n_iter: usize,
+        time_limit: Duration,
+        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
+        handler: H,
+    ) -> (M::SolutionType, M::ScoreType, H)
+    where
+        M: OptModel<ScoreType = ST>,
+        H: TransitionHandler<ST>,
+    {
+        let (result, handler) = self.step(
+            model,
+            initial_solution,
+            initial_score,
+            n_iter,
+            time_limit,
+            callback,
+            handler,
+        );
+        (result.best_solution, result.best_score, handler)
     }
 }
 
-impl<ST, H, M> LocalSearchOptimizer<M> for GenericLocalSearchOptimizer<ST, H>
+impl<M, ST, H> LocalSearchOptimizer<M, H> for GenericLocalSearchOptimizer<ST>
 where
-    ST: Ord + Sync + Send + Copy,
-    H: TransitionHandler<ST> + Clone,
     M: OptModel<ScoreType = ST>,
+    ST: Ord + Sync + Send + Copy,
+    H: TransitionHandler<ST>,
 {
-    /// Start optimization
-    ///
-    /// - `model` : the model to optimize
-    /// - `initial_solution` : the initial solution to start optimization
-    /// - `initial_score` : the initial score of the initial solution
-    /// - `n_iter`: maximum iterations
-    /// - `time_limit`: maximum iteration time
-    /// - `callback` : callback function that will be invoked at the end of each iteration
     fn optimize(
         &self,
         model: &M,
@@ -205,15 +230,16 @@ where
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-    ) -> (M::SolutionType, M::ScoreType) {
-        let step_result = self.step(
+        handler: H,
+    ) -> (M::SolutionType, M::ScoreType, H) {
+        self.optimize_with_handler(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-        );
-        (step_result.best_solution, step_result.best_score)
+            handler,
+        )
     }
 }

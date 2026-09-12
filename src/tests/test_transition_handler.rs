@@ -146,16 +146,19 @@ fn generic_step_passes_acceptance_ratio_to_update_context() {
     let handler = RecordingHandler {
         updates: Arc::clone(&updates),
     };
-    let optimizer = GenericLocalSearchOptimizer::new(10, 1, usize::MAX, handler);
+    let optimizer = GenericLocalSearchOptimizer::new(10, 1, usize::MAX);
     let mut callback = |_progress| {};
-    let result = optimizer.step(
+    let (result, returned_handler) = optimizer.step(
         &IncreasingModel,
         0,
         0,
         2,
         Duration::from_secs(1),
         &mut callback,
+        handler,
     );
+    // Handler survives the call.
+    assert_eq!(returned_handler.updates.lock().unwrap().len(), 2);
 
     assert_eq!(result.acceptance_counter.acceptance_ratio(), 1.0);
     assert_eq!(

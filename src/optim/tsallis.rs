@@ -15,6 +15,7 @@ use crate::{Duration, OptModel, callback::OptCallbackFn};
 /// where `ΔE = trial - current`, `E = current`, `E_best = offset`.
 /// Assumes `q > 1.0`.
 #[derive(Clone, Copy)]
+#[allow(dead_code)] // fields document config for callers building the handler
 pub struct TsallisRelativeAnnealingOptimizer {
     patience: usize,
     n_trials: usize,
@@ -32,7 +33,7 @@ impl TsallisRelativeAnnealingOptimizer {
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
-    /// - `return_iter` : returns to the best solution if there is no improvement after this number of iterations.
+    /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
     /// - `initial_beta` : initial weight to be multiplied with the relative score difference.
     ///   Recommended value is reciprocal of expected relative score difference.
     /// - `update_frequency` : non-zero frequency at which certain parameters (like beta) are updated during optimization.
@@ -68,17 +69,11 @@ impl TsallisRelativeAnnealingOptimizer {
     }
 }
 
-impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
-    for TsallisRelativeAnnealingOptimizer
+impl<M, H> LocalSearchOptimizer<M, H> for TsallisRelativeAnnealingOptimizer
+where
+    M: OptModel<ScoreType = NotNan<f64>>,
+    H: Into<TsallisAnnealing> + From<TsallisAnnealing>,
 {
-    /// Start optimization
-    ///
-    /// - `model` : the model to optimize
-    /// - `initial_solution` : the initial solution to start optimization
-    /// - `initial_score` : the initial score of the initial solution
-    /// - `n_iter`: maximum iterations
-    /// - `time_limit`: maximum iteration time
-    /// - `callback` : callback function that will be invoked at the end of each iteration
     fn optimize(
         &self,
         model: &M,
@@ -87,28 +82,19 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-    ) -> (M::SolutionType, M::ScoreType) {
-        let initial_offset = initial_score.into_inner();
-        let optimizer = GenericLocalSearchOptimizer::new(
-            self.patience,
-            self.n_trials,
-            self.return_iter,
-            TsallisAnnealing::new(
-                initial_offset,
-                self.initial_beta,
-                self.q,
-                self.xi,
-                self.scheduler,
-                self.update_frequency,
-            ),
-        );
-        optimizer.optimize(
+        handler: H,
+    ) -> (M::SolutionType, M::ScoreType, H) {
+        let h: TsallisAnnealing = handler.into();
+        let opt = GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
+        let (solution, score, h) = opt.optimize_with_handler(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-        )
+            h,
+        );
+        (solution, score, H::from(h))
     }
 }

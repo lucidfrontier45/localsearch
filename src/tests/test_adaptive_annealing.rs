@@ -3,7 +3,10 @@ use std::{num::NonZero, time::Duration};
 use approx::assert_abs_diff_eq;
 
 use super::QuadraticModel;
-use crate::optim::{AdaptiveAnnealingOptimizer, LocalSearchOptimizer};
+use crate::optim::{
+    AdaptiveAnnealing, AdaptiveAnnealingOptimizer, AdaptiveScheduler, LocalSearchOptimizer,
+    TargetAccScheduleMode,
+};
 
 #[test]
 fn test() {
@@ -13,11 +16,13 @@ fn test() {
         10,
         500,
         1e-2,
-        Default::default(),
+        AdaptiveScheduler::default(),
         NonZero::new(100).expect("update_frequency must be >= 1"),
     );
+    let scheduler = AdaptiveScheduler::new(0.3, 0.3, TargetAccScheduleMode::Constant, 0.05);
+    let handler = AdaptiveAnnealing::new(1e-2, scheduler, NonZero::new(100).unwrap());
     let (final_solution, final_score) = opt
-        .run(&model, None, 10000, Duration::from_secs(10))
+        .run(&model, None, 10000, Duration::from_secs(10), handler)
         .unwrap();
     assert_abs_diff_eq!(2.0, final_solution[0], epsilon = 0.05);
     assert_abs_diff_eq!(0.0, final_solution[1], epsilon = 0.05);

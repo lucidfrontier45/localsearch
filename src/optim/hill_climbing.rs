@@ -17,15 +17,11 @@ impl HillClimbingOptimizer {
     }
 }
 
-impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
-    /// Start optimization
-    ///
-    /// - `model` : the model to optimize
-    /// - `initial_solution` : the initial solution to start optimization
-    /// - `initial_score` : the initial score of the initial solution
-    /// - `n_iter`: maximum iterations
-    /// - `time_limit`: maximum iteration time
-    /// - `callback` : callback function that will be invoked at the end of each iteration
+impl<M, H> LocalSearchOptimizer<M, H> for HillClimbingOptimizer
+where
+    M: OptModel,
+    H: Into<crate::optim::EpsilonGreedy> + From<crate::optim::EpsilonGreedy>,
+{
     fn optimize(
         &self,
         model: &M,
@@ -34,15 +30,17 @@ impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-    ) -> (M::SolutionType, M::ScoreType) {
-        let optimizer = EpsilonGreedyOptimizer::new(self.patience, self.n_trials, usize::MAX, 0.0);
-        optimizer.optimize(
+        handler: H,
+    ) -> (M::SolutionType, M::ScoreType, H) {
+        let inner = EpsilonGreedyOptimizer::new(self.patience, self.n_trials, usize::MAX, 0.0);
+        inner.optimize(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
+            handler,
         )
     }
 }

@@ -77,7 +77,7 @@ impl MetropolisOptimizer {
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
-    /// - `return_iter` : returns to the best solution if there is no improvement after this number of iterations.
+    /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
     /// - `beta` : inverse temperature
     pub const fn new(patience: usize, n_trials: usize, return_iter: usize, beta: f64) -> Self {
         Self {
@@ -97,28 +97,13 @@ impl MetropolisOptimizer {
     pub const fn knobs(&self) -> (usize, usize, usize) {
         (self.patience, self.n_trials, self.return_iter)
     }
-
-    /// Build a [`GenericLocalSearchOptimizer`] pre-loaded with this
-    /// optimizer's parameters and a [`Metropolis`] handler using `self.beta`.
-    pub fn to_generic(&self) -> GenericLocalSearchOptimizer<NotNan<f64>, Metropolis> {
-        GenericLocalSearchOptimizer::new(
-            self.patience,
-            self.n_trials,
-            self.return_iter,
-            Metropolis::new(self.beta),
-        )
-    }
 }
 
-impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for MetropolisOptimizer {
-    /// Start optimization
-    ///
-    /// - `model` : the model to optimize
-    /// - `initial_solution` : the initial solution to start optimization
-    /// - `initial_score` : the initial score of the initial solution
-    /// - `n_iter`: maximum iterations
-    /// - `time_limit`: maximum iteration time
-    /// - `callback` : callback function that will be invoked at the end of each iteration
+impl<M, H> LocalSearchOptimizer<M, H> for MetropolisOptimizer
+where
+    M: OptModel<ScoreType = NotNan<f64>>,
+    H: Into<Metropolis> + From<Metropolis>,
+{
     fn optimize(
         &self,
         model: &M,
@@ -127,14 +112,19 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Metropoli
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-    ) -> (M::SolutionType, M::ScoreType) {
-        self.to_generic().optimize(
+        handler: H,
+    ) -> (M::SolutionType, M::ScoreType, H) {
+        let m: Metropolis = handler.into();
+        let opt = GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
+        let (solution, score, m) = opt.optimize_with_handler(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-        )
+            m,
+        );
+        (solution, score, H::from(m))
     }
 }

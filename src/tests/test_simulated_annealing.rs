@@ -3,7 +3,7 @@ use std::{num::NonZero, time::Duration};
 use approx::assert_abs_diff_eq;
 
 use super::QuadraticModel;
-use crate::optim::{LocalSearchOptimizer, SimulatedAnnealingOptimizer};
+use crate::optim::{LocalSearchOptimizer, SimulatedAnnealing, SimulatedAnnealingOptimizer};
 
 #[test]
 fn test() {
@@ -16,8 +16,9 @@ fn test() {
         0.99,
         NonZero::new(1).expect("update_frequency must be >= 1"),
     );
+    let handler = SimulatedAnnealing::new(1.0, 0.99, NonZero::new(1).unwrap());
     let (final_solution, final_score) = opt
-        .run(&model, None, 5000, Duration::from_secs(10))
+        .run(&model, None, 5000, Duration::from_secs(10), handler)
         .unwrap();
     assert_abs_diff_eq!(2.0, final_solution[0], epsilon = 0.05);
     assert_abs_diff_eq!(0.0, final_solution[1], epsilon = 0.05);

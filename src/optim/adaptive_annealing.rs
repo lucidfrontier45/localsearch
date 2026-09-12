@@ -10,6 +10,7 @@ use crate::{Duration, OptModel, callback::OptCallbackFn, optim::metropolis::tune
 /// Optimizer that implements the adaptive annealing algorithm which tries to adapt temperature
 /// to realize target acceptance rate scheduling.
 #[derive(Clone, Copy)]
+#[allow(dead_code)] // fields document config for callers building the handler
 pub struct AdaptiveAnnealingOptimizer {
     /// The optimizer will give up if there is no improvement of the score after this number of iterations
     patience: usize,
@@ -27,19 +28,6 @@ pub struct AdaptiveAnnealingOptimizer {
 
 impl AdaptiveAnnealingOptimizer {
     /// Creates a new `AdaptiveAnnealingOptimizer` instance with the specified parameters.
-    ///
-    /// # Arguments
-    ///
-    /// * `patience` - The number of iterations without improvement before terminating the optimization.
-    /// * `n_trials` - The number of candidate solutions to evaluate per iteration.
-    /// * `return_iter` - The number of iterations without improvement before reverting to the best solution.
-    /// * `initial_beta` - The initial inverse temperature for the annealing process.
-    /// * `scheduler` - The adaptive scheduler for target acceptance rate.
-    /// * `update_frequency` - The non-zero frequency (in iterations) at which adaptive parameters are updated.
-    ///
-    /// # Returns
-    ///
-    /// A new `AdaptiveAnnealingOptimizer` configured with the provided parameters.
     pub const fn new(
         patience: usize,
         n_trials: usize,
@@ -59,9 +47,6 @@ impl AdaptiveAnnealingOptimizer {
     }
 
     /// Tune inverse temperature parameter beta based on initial random trials
-    /// - `model` : the model to optimize
-    /// - `initial_solution` : the initial solution to start optimization. If None, a random solution will be generated.
-    /// - `n_warmup` : number of warmup iterations to run
     pub fn tune_initial_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
         self,
         model: &M,
@@ -82,15 +67,11 @@ impl AdaptiveAnnealingOptimizer {
     }
 }
 
-impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveAnnealingOptimizer {
-    /// Start optimization
-    ///
-    /// - `model` : the model to optimize
-    /// - `initial_solution` : the initial solution to start optimization.
-    /// - `initial_score` : the initial score of the initial solution
-    /// - `n_iter`: maximum iterations
-    /// - `time_limit`: maximum iteration time
-    /// - `callback` : callback function that will be invoked at the end of each iteration
+impl<M, H> LocalSearchOptimizer<M, H> for AdaptiveAnnealingOptimizer
+where
+    M: OptModel<ScoreType = NotNan<f64>>,
+    H: Into<AdaptiveAnnealing> + From<AdaptiveAnnealing>,
+{
     fn optimize(
         &self,
         model: &M,
@@ -99,20 +80,19 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-    ) -> (M::SolutionType, M::ScoreType) {
-        let optimizer = GenericLocalSearchOptimizer::new(
-            self.patience,
-            self.n_trials,
-            self.return_iter,
-            AdaptiveAnnealing::new(self.initial_beta, self.scheduler, self.update_frequency),
-        );
-        optimizer.optimize(
+        handler: H,
+    ) -> (M::SolutionType, M::ScoreType, H) {
+        let h: AdaptiveAnnealing = handler.into();
+        let opt = GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
+        let (solution, score, h) = opt.optimize_with_handler(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-        )
+            h,
+        );
+        (solution, score, H::from(h))
     }
 }

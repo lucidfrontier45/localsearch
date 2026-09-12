@@ -15,6 +15,7 @@ use crate::{Duration, OptModel, callback::OptCallbackFn};
 /// `current_score == 0` is clamped to `f64::EPSILON`, keeping the result finite
 /// and the acceptance direction intact (improvement accepted, worsening rejected).
 #[derive(Clone, Copy)]
+#[allow(dead_code)] // fields document config for callers building the handler
 pub struct RelativeAnnealingOptimizer {
     patience: usize,
     n_trials: usize,
@@ -28,7 +29,7 @@ impl RelativeAnnealingOptimizer {
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
-    /// - `return_iter` : returns to the best solution if there is no improvement after this number of iterations.
+    /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
     /// - `beta` : weight to be multiplied with the relative score difference.
     pub const fn new(patience: usize, n_trials: usize, return_iter: usize, beta: f64) -> Self {
         Self {
@@ -40,15 +41,11 @@ impl RelativeAnnealingOptimizer {
     }
 }
 
-impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeAnnealingOptimizer {
-    /// Start optimization
-    ///
-    /// - `model` : the model to optimize
-    /// - `initial_solution` : the initial solution to start optimization
-    /// - `initial_score` : the initial score of the initial solution
-    /// - `n_iter`: maximum iterations
-    /// - `time_limit`: maximum iteration time
-    /// - `callback` : callback function that will be invoked at the end of each iteration
+impl<M, H> LocalSearchOptimizer<M, H> for RelativeAnnealingOptimizer
+where
+    M: OptModel<ScoreType = NotNan<f64>>,
+    H: Into<RelativeAnnealing> + From<RelativeAnnealing>,
+{
     fn optimize(
         &self,
         model: &M,
@@ -57,20 +54,19 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeA
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-    ) -> (M::SolutionType, M::ScoreType) {
-        let optimizer = GenericLocalSearchOptimizer::new(
-            self.patience,
-            self.n_trials,
-            self.return_iter,
-            RelativeAnnealing::new(self.beta),
-        );
-        optimizer.optimize(
+        handler: H,
+    ) -> (M::SolutionType, M::ScoreType, H) {
+        let h: RelativeAnnealing = handler.into();
+        let opt = GenericLocalSearchOptimizer::new(self.patience, self.n_trials, self.return_iter);
+        let (solution, score, h) = opt.optimize_with_handler(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-        )
+            h,
+        );
+        (solution, score, H::from(h))
     }
 }
