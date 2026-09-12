@@ -81,4 +81,11 @@ flowchart TD
 - `src/model.rs` (OptModel definition)
 - `src/optim/base.rs` (LocalSearchOptimizer + helpers)
 - `src/callback.rs` (OptProgress and OptCallbackFn)
+- `src/optim/generic.rs` (`StepResult<S, ST, O = ()>`)
 
+## `StepResult`
+- Definition: `pub struct StepResult<S, ST, O = ()>` (`src/optim/generic.rs`).
+- Fields: `best_solution: S`, `best_score: ST`, `last_solution: S`, `last_score: ST`, `acceptance_counter: AcceptanceCounter`, `output: O`.
+- The `O` type parameter carries algorithm-specific output (for example, ALNS operator-selection statistics). Defaults to `()` so existing callers using `StepResult<S, ST>` keep working unchanged.
+- Construction at `output: ()` is the current value used by `GenericLocalSearchOptimizer::step`.
+- Downstream exhaustive struct literals now require specifying `output` (breaking change for exhaustive construction; documented above).

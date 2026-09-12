@@ -12,7 +12,11 @@ use crate::{
 
 /// Result of an optimization step, containing information about the best and last solutions,
 /// as well as the acceptance counter for the step.
-pub struct StepResult<S, ST> {
+///
+/// The `O` type parameter carries algorithm-specific output (for example, ALNS operator
+/// selection statistics). Defaults to `()` so existing callers using
+/// `StepResult<S, ST>` keep working unchanged.
+pub struct StepResult<S, ST, O = ()> {
     /// The best solution found during this step.
     pub best_solution: S,
     /// The score of the best solution found during this step.
@@ -23,6 +27,8 @@ pub struct StepResult<S, ST> {
     pub last_score: ST,
     /// Acceptance counter for the step.
     pub acceptance_counter: AcceptanceCounter,
+    /// Algorithm-specific output for this step (e.g., ALNS operator statistics).
+    pub output: O,
 }
 
 /// Optimizer that implements local search algorithm
@@ -163,7 +169,6 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
             );
             callback(progress);
         }
-
         let best_solution = (*best_solution.borrow()).clone();
         StepResult {
             best_solution,
@@ -171,6 +176,7 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
             last_solution: current_solution,
             last_score: current_score,
             acceptance_counter,
+            output: (),
         }
     }
 }
@@ -207,5 +213,63 @@ where
             callback,
         );
         (step_result.best_solution, step_result.best_score)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ordered_float::NotNan;
+
+    use super::StepResult;
+    use crate::counter::AcceptanceCounter;
+
+    #[test]
+    fn step_result_with_custom_output_constructs() {
+        #[derive(Debug, PartialEq)]
+        struct MyOut {
+            used: usize,
+            improved: bool,
+        }
+
+        let result: StepResult<Vec<f64>, NotNan<f64>, MyOut> = StepResult {
+            best_solution: vec![1.0, 2.0],
+            best_score: NotNan::new(0.0).unwrap(),
+            last_solution: vec![1.0, 2.0],
+            last_score: NotNan::new(0.0).unwrap(),
+            acceptance_counter: AcceptanceCounter::new(10),
+            output: MyOut {
+                used: 3,
+                improved: true,
+            },
+        };
+
+        assert_eq!(result.output.used, 3);
+        assert!(result.output.improved);
+    }
+
+    #[test]
+    fn step_result_struct_update_into_custom_output() {
+        let base: StepResult<Vec<f64>, NotNan<f64>> = StepResult {
+            best_solution: vec![1.0, 2.0],
+            best_score: NotNan::new(0.5).unwrap(),
+            last_solution: vec![1.0, 2.0],
+            last_score: NotNan::new(0.5).unwrap(),
+            acceptance_counter: AcceptanceCounter::new(10),
+            output: (),
+        };
+
+        // Struct-update ergonomics for a new `O`: copy existing fields, then assign
+        // a new `output`. Stable Rust allows this when fields (not `O`) line up.
+        let with_output: StepResult<Vec<f64>, NotNan<f64>, Vec<u32>> = StepResult {
+            best_solution: base.best_solution,
+            best_score: base.best_score,
+            last_solution: base.last_solution,
+            last_score: base.last_score,
+            acceptance_counter: base.acceptance_counter,
+            output: vec![1, 2, 3],
+        };
+
+        assert_eq!(with_output.output, vec![1, 2, 3]);
+        assert_eq!(with_output.best_score, NotNan::new(0.5).unwrap());
     }
 }

@@ -21,7 +21,7 @@ pub use adaptive_annealing::{
 };
 pub use base::{LocalSearchOptimizer, TransitionProbabilityFn};
 pub use epsilon_greedy::EpsilonGreedyOptimizer;
-pub use generic::GenericLocalSearchOptimizer;
+pub use generic::{GenericLocalSearchOptimizer, StepResult};
 pub use great_deluge::GreatDelugeOptimizer;
 pub use hill_climbing::HillClimbingOptimizer;
 pub use logistic_annealing::LogisticAnnealingOptimizer;
