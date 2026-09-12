@@ -19,11 +19,8 @@ pub struct TsallisRelativeAnnealingOptimizer {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
-    initial_beta: f64,
-    scheduler: AdaptiveScheduler,
-    update_frequency: NonZero<usize>,
-    q: f64,
-    xi: f64,
+    /// Transition handler that holds the Tsallis parameters and the scheduler
+    handler: TsallisAnnealing,
 }
 
 impl TsallisRelativeAnnealingOptimizer {
@@ -53,17 +50,13 @@ impl TsallisRelativeAnnealingOptimizer {
             patience,
             n_trials,
             return_iter,
-            initial_beta: beta,
-            update_frequency,
-            q,
-            xi,
-            scheduler,
+            handler: TsallisAnnealing::new(0.0, beta, q, xi, scheduler, update_frequency),
         }
     }
 
     /// Sets the scheduler for the optimizer.
     pub const fn with_scheduler(mut self, scheduler: AdaptiveScheduler) -> Self {
-        self.scheduler = scheduler;
+        self.handler.scheduler = scheduler;
         self
     }
 }
@@ -88,15 +81,10 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        // The offset is seeded from this run's initial score and then tracks the best score.
-        let handler = TsallisAnnealing::new(
-            initial_score.into_inner(),
-            self.initial_beta,
-            self.q,
-            self.xi,
-            self.scheduler,
-            self.update_frequency,
-        );
+        // Seed the per-run working copy of the handler from this run's initial score;
+        // the offset then tracks the best score via `update`.
+        let mut handler = self.handler;
+        handler.offset = initial_score.into_inner();
         let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
         let (result, _) = opt.step(
             model,

@@ -2,11 +2,10 @@ use std::num::NonZero;
 
 use ordered_float::NotNan;
 
-use super::{LocalSearchLoop, LocalSearchOptimizer, SimulatedAnnealing, tune_cooling_rate,
-    tune_temperature,
+use super::{
+    LocalSearchLoop, LocalSearchOptimizer, SimulatedAnnealing, tune_cooling_rate, tune_temperature,
 };
 use crate::{Duration, OptModel, callback::OptCallbackFn};
-
 
 /// Optimizer that implements the simulated annealing algorithm
 #[derive(Clone, Copy)]
@@ -17,12 +16,8 @@ pub struct SimulatedAnnealingOptimizer {
     n_trials: usize,
     /// Returns to the best solution if there is no improvement after this number of iterations
     return_iter: usize,
-    /// Initial inverse temperature
-    initial_beta: f64,
-    /// Cooling rate
-    cooling_rate: f64,
-    /// Non-zero number of steps after which temperature is updated
-    update_frequency: NonZero<usize>,
+    /// Transition handler that holds the inverse temperature and cooling schedule
+    handler: SimulatedAnnealing,
 }
 
 impl SimulatedAnnealingOptimizer {
@@ -47,9 +42,7 @@ impl SimulatedAnnealingOptimizer {
             patience,
             n_trials,
             return_iter,
-            initial_beta,
-            cooling_rate,
-            update_frequency,
+            handler: SimulatedAnnealing::new(initial_beta, cooling_rate, update_frequency),
         }
     }
 
@@ -68,18 +61,27 @@ impl SimulatedAnnealingOptimizer {
         let tuned_beta = tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
 
         Self {
-            initial_beta: tuned_beta,
+            handler: SimulatedAnnealing {
+                beta: tuned_beta,
+                ..self.handler
+            },
             ..self
         }
     }
 
-    /// Tune cooling rate based on self.initial_beta, final beta of 1e2
+    /// Tune cooling rate based on the handler's current initial beta, final beta of 1e2
     pub fn tune_cooling_rate(self, n_iter: usize) -> Self {
-        let cooling_rate =
-            tune_cooling_rate(self.initial_beta, 1e2, n_iter / self.update_frequency.get());
+        let cooling_rate = tune_cooling_rate(
+            self.handler.beta,
+            1e2,
+            n_iter / self.handler.update_frequency.get(),
+        );
 
         Self {
-            cooling_rate,
+            handler: SimulatedAnnealing {
+                cooling_rate,
+                ..self.handler
+            },
             ..self
         }
     }
@@ -103,8 +105,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        let handler =
-            SimulatedAnnealing::new(self.initial_beta, self.cooling_rate, self.update_frequency);
         let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
         let (result, _) = opt.step(
             model,
@@ -113,7 +113,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
             n_iter,
             time_limit,
             callback,
-            handler,
+            self.handler,
         );
         (result.best_solution, result.best_score)
     }

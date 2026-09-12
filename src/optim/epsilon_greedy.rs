@@ -9,7 +9,7 @@ pub struct EpsilonGreedyOptimizer {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
-    epsilon: f64,
+    handler: EpsilonGreedy,
 }
 
 impl EpsilonGreedyOptimizer {
@@ -25,7 +25,7 @@ impl EpsilonGreedyOptimizer {
             patience,
             n_trials,
             return_iter,
-            epsilon,
+            handler: EpsilonGreedy::new(epsilon),
         }
     }
 }
@@ -48,7 +48,6 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        let handler = EpsilonGreedy::new(self.epsilon);
         let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
         let (result, _) = opt.step(
             model,
@@ -57,7 +56,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
             n_iter,
             time_limit,
             callback,
-            handler,
+            self.handler,
         );
         (result.best_solution, result.best_score)
     }

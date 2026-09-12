@@ -2,8 +2,8 @@ use std::num::NonZero;
 
 use ordered_float::NotNan;
 
-use super::{AdaptiveAnnealing, AdaptiveScheduler, LocalSearchLoop, LocalSearchOptimizer,
-    tune_temperature,
+use super::{
+    AdaptiveAnnealing, AdaptiveScheduler, LocalSearchLoop, LocalSearchOptimizer, tune_temperature,
 };
 use crate::{Duration, OptModel, callback::OptCallbackFn};
 
@@ -17,12 +17,8 @@ pub struct AdaptiveAnnealingOptimizer {
     n_trials: usize,
     /// Returns to the best solution if there is no improvement after this number of iterations
     return_iter: usize,
-    /// Initial inverse temperature
-    initial_beta: f64,
-    /// Scheduler for target acceptance rate
-    scheduler: AdaptiveScheduler,
-    /// Non-zero frequency (in iterations) at which adaptive parameters are updated
-    update_frequency: NonZero<usize>,
+    /// Transition handler that holds the temperature and target-acceptance scheduler
+    handler: AdaptiveAnnealing,
 }
 
 impl AdaptiveAnnealingOptimizer {
@@ -39,9 +35,7 @@ impl AdaptiveAnnealingOptimizer {
             patience,
             n_trials,
             return_iter,
-            initial_beta,
-            scheduler,
-            update_frequency,
+            handler: AdaptiveAnnealing::new(initial_beta, scheduler, update_frequency),
         }
     }
 
@@ -56,11 +50,14 @@ impl AdaptiveAnnealingOptimizer {
             model,
             initial_solution,
             n_warmup,
-            self.scheduler.initial_target_acc,
+            self.handler.scheduler.initial_target_acc,
         );
 
         Self {
-            initial_beta: tuned_beta,
+            handler: AdaptiveAnnealing {
+                beta: tuned_beta,
+                ..self.handler
+            },
             ..self
         }
     }
@@ -84,8 +81,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        let handler =
-            AdaptiveAnnealing::new(self.initial_beta, self.scheduler, self.update_frequency);
         let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
         let (result, _) = opt.step(
             model,
@@ -94,7 +89,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
             n_iter,
             time_limit,
             callback,
-            handler,
+            self.handler,
         );
         (result.best_solution, result.best_score)
     }

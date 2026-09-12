@@ -98,6 +98,8 @@ All implement `LocalSearchOptimizer<M>` (most require `M::ScoreType = NotNan<f64
 
 Loop-based optimizers share the `patience` / `n_trials` / `return_iter` constructor parameters described above (algorithm-specific parameters follow them; e.g. `SimulatedAnnealingOptimizer::new(patience, n_trials, return_iter, initial_beta, cooling_rate, update_frequency)`).
 
+Each optimizer instantiates its `TransitionHandler` in the constructor and stores it as a blueprint; `optimize` clones the blueprint and runs the per-iteration `update` mutations on the working copy, so the optimizer can be reused across runs. Handlers whose state is seeded from the run's initial score (`GreatDeluge` water level, `TsallisAnnealing` offset) reseed the working copy at the start of `optimize`.
+
 ## Callback and Progress
 - Types: `OptProgress<S, SC>` and trait `OptCallbackFn<S, SC: PartialOrd>` are defined in `src/callback.rs` and re-exported from the crate root.
 - `OptProgress` fields: `iter: usize`, `acceptance_ratio: f64`, `solution: Rc<RefCell<S>>`, `score: SC` — the callback receives a reference-counted, mutable holder for the current best solution plus its score and iteration metadata.

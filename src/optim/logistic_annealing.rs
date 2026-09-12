@@ -19,7 +19,8 @@ pub struct LogisticAnnealingOptimizer {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
-    w: f64,
+    /// Transition handler that holds the weight parameter
+    handler: LogisticAnnealing,
 }
 
 impl LogisticAnnealingOptimizer {
@@ -35,7 +36,7 @@ impl LogisticAnnealingOptimizer {
             patience,
             n_trials,
             return_iter,
-            w,
+            handler: LogisticAnnealing::new(w),
         }
     }
 }
@@ -58,7 +59,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for LogisticA
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        let handler = LogisticAnnealing::new(self.w);
         let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
         let (result, _) = opt.step(
             model,
@@ -67,7 +67,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for LogisticA
             n_iter,
             time_limit,
             callback,
-            handler,
+            self.handler,
         );
         (result.best_solution, result.best_score)
     }

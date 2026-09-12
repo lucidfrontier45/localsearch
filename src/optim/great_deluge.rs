@@ -1,6 +1,6 @@
 use ordered_float::NotNan;
 
-use super::{LocalSearchLoop, GreatDeluge, LocalSearchOptimizer};
+use super::{GreatDeluge, LocalSearchLoop, LocalSearchOptimizer};
 use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 /// Optimizer that implements the Great Deluge Algorithm (GDA).
@@ -17,6 +17,8 @@ pub struct GreatDelugeOptimizer {
     return_iter: usize,
     /// Factor to initialize the water level as `initial_score * level_factor`
     level_factor: f64,
+    /// Handler blueprint; the water level is seeded per run from the initial score
+    handler: GreatDeluge,
 }
 
 impl GreatDelugeOptimizer {
@@ -37,6 +39,7 @@ impl GreatDelugeOptimizer {
             n_trials,
             return_iter,
             level_factor,
+            handler: GreatDeluge::new(0.0),
         }
     }
 }
@@ -59,9 +62,10 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for GreatDelu
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        // Initialize water level from this run's initial score
-        let initial_level = initial_score.into_inner() * self.level_factor;
-        let handler = GreatDeluge::new(initial_level);
+        // Seed the per-run working copy of the handler from this run's initial score
+        let mut handler = self.handler;
+        handler.initial_level = initial_score.into_inner() * self.level_factor;
+        handler.level = handler.initial_level;
         let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
         let (result, _) = opt.step(
             model,

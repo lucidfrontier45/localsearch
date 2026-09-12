@@ -12,8 +12,8 @@ pub struct MetropolisOptimizer {
     n_trials: usize,
     /// Returns to the best solution if there is no improvement after this number of iterations
     return_iter: usize,
-    /// Inverse temperature (beta)
-    beta: f64,
+    /// Transition handler that holds the inverse temperature
+    handler: Metropolis,
 }
 
 impl MetropolisOptimizer {
@@ -29,7 +29,7 @@ impl MetropolisOptimizer {
             patience,
             n_trials,
             return_iter,
-            beta,
+            handler: Metropolis::new(beta),
         }
     }
 }
@@ -60,7 +60,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Metropoli
             n_iter,
             time_limit,
             callback,
-            Metropolis::new(self.beta),
+            self.handler,
         );
         (result.best_solution, result.best_score)
     }
