@@ -48,7 +48,7 @@ where
             // Aspiration Criterion
             score < best_score ||
             // Not Tabu
-            !tabu_list.contains( &transition)
+            !tabu_list.contains(&transition)
         ) {
             return Some((solution, transition, score));
         }
@@ -64,6 +64,7 @@ impl<T: TabuList> TabuSearchOptimizer<T> {
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
+    /// - `default_tabu_size` : default size of the tabu list
     pub fn new(
         patience: usize,
         n_trials: usize,
@@ -78,23 +79,10 @@ impl<T: TabuList> TabuSearchOptimizer<T> {
             phantom: PhantomData,
         }
     }
-}
 
-impl<T> TabuSearchOptimizer<T>
-where
-    T: TabuList,
-{
-    #[allow(clippy::too_many_arguments)]
-    /// Start optimization
-    ///
-    /// - `model` : the model to optimize
-    /// - `initial_solution` : the initial solution to start optimization
-    /// - `initial_score` : the initial score of the initial solution
-    /// - `n_iter`: maximum iterations
-    /// - `time_limit`: maximum iteration time
-    /// - `callback` : callback function that will be invoked at the end of each iteration
-    /// - `tabu_list` : initial tabu list
-    fn optimize_with_tabu_list<M: OptModel<TransitionType = T::Item>>(
+    /// Convenience: build a fresh `T::default()` tabu list with the optimizer's
+    /// `default_tabu_size` and run optimization on it.
+    pub fn optimize_default<M: OptModel<TransitionType = T::Item>>(
         &self,
         model: &M,
         initial_solution: M::SolutionType,
@@ -102,8 +90,46 @@ where
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        mut tabu_list: T,
     ) -> (M::SolutionType, M::ScoreType, T) {
+        let mut tabu_list = T::default();
+        tabu_list.set_size(self.default_tabu_size);
+        self.optimize_with_handler(
+            model,
+            initial_solution,
+            initial_score,
+            n_iter,
+            time_limit,
+            callback,
+            tabu_list,
+        )
+    }
+}
+
+impl<T: TabuList> TabuSearchOptimizer<T> {
+    /// Start optimization with the supplied tabu list as the per-call handler.
+    ///
+    /// - `model` : the model to optimize
+    /// - `initial_solution` : the initial solution to start optimization
+    /// - `initial_score` : the initial score of the initial solution
+    /// - `n_iter`: maximum iterations
+    /// - `time_limit`: maximum iteration time
+    /// - `callback` : callback function that will be invoked at the end of each iteration
+    /// - `handler` : the tabu list to use; returned alongside the best solution/score.
+    #[allow(clippy::too_many_arguments)]
+    pub fn optimize_with_handler<M, H>(
+        &self,
+        model: &M,
+        initial_solution: M::SolutionType,
+        initial_score: M::ScoreType,
+        n_iter: usize,
+        time_limit: Duration,
+        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
+        mut tabu_list: H,
+    ) -> (M::SolutionType, M::ScoreType, H)
+    where
+        M: OptModel<TransitionType = H::Item>,
+        H: TabuList,
+    {
         let start_time = Instant::now();
         let mut current_solution = initial_solution;
         let mut current_score = initial_score;
@@ -134,7 +160,7 @@ where
 
             samples.sort_unstable_by_key(|(_, _, score)| *score);
 
-            let res = find_accepted_solution::<M, T>(samples, &tabu_list, best_score);
+            let res = find_accepted_solution::<M, H>(samples, &tabu_list, best_score);
 
             let accepted = res.is_some();
             acceptance_counter.enqueue(accepted);
@@ -199,14 +225,6 @@ where
 impl<T: TabuList, M: OptModel<TransitionType = T::Item>> LocalSearchOptimizer<M>
     for TabuSearchOptimizer<T>
 {
-    /// Start optimization
-    ///
-    /// - `model`: the model to optimize
-    /// - `initial_solution`: the initial solution to start optimization
-    /// - `initial_score`: the initial score of the initial solution
-    /// - `n_iter`: maximum iterations
-    /// - `time_limit`: maximum iteration time
-    /// - `callback`: callback function that will be invoked at the end of each iteration
     fn optimize(
         &self,
         model: &M,
@@ -216,16 +234,13 @@ impl<T: TabuList, M: OptModel<TransitionType = T::Item>> LocalSearchOptimizer<M>
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        let mut tabu_list = T::default();
-        tabu_list.set_size(self.default_tabu_size);
-        let (solution, score, _) = self.optimize_with_tabu_list(
+        let (solution, score, _) = self.optimize_default(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-            tabu_list,
         );
         (solution, score)
     }

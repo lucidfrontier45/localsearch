@@ -4,9 +4,8 @@ use ordered_float::NotNan;
 use rand::{RngExt as _, distr::weighted::WeightedIndex, prelude::Distribution};
 use rayon::prelude::*;
 
-use super::{
-    LocalSearchOptimizer, metropolis, metropolis::tune_temperature,
-    simulated_annealing::tune_cooling_rate,
+use super::{LocalSearchLoop, LocalSearchOptimizer, Metropolis, tune_cooling_rate,
+    tune_temperature,
 };
 use crate::{
     Duration, Instant, OptModel,
@@ -39,12 +38,12 @@ impl PopulationAnnealingOptimizer {
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
-    /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
+    /// - `return_iter` : returns to the best solution if there is no improvement after this number of iterations.
     /// - `initial_beta` : initial inverse temperature
     /// - `cooling_rate` : cooling rate
     /// - `update_frequency` : non-zero number of steps to run each simulated annealing before updating the population
     /// - `population_size` : number of simulated annealing processes to run in parallel
-    pub fn new(
+    pub const fn new(
         patience: usize,
         n_trials: usize,
         return_iter: usize,
@@ -72,8 +71,8 @@ impl PopulationAnnealingOptimizer {
         n_warmup: usize,
         target_initial_prob: f64,
     ) -> Self {
-        let tuned_beta = tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
-
+        let tuned_beta =
+            tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
         Self {
             initial_beta: tuned_beta,
             ..self
@@ -82,9 +81,11 @@ impl PopulationAnnealingOptimizer {
 
     /// Tune cooling rate to reach high inverse temperature (beta ~ 1e2) at the end of optimization
     pub fn tune_cooling_rate(self, n_iter: usize) -> Self {
-        let cooling_rate =
-            tune_cooling_rate(self.initial_beta, 1e2, n_iter / self.update_frequency.get());
-
+        let cooling_rate = tune_cooling_rate(
+            self.initial_beta,
+            1e2,
+            n_iter / self.update_frequency.get(),
+        );
         Self {
             cooling_rate,
             ..self
@@ -96,13 +97,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
     for PopulationAnnealingOptimizer
 {
     /// Start optimization
-    ///
-    /// - `model`: the model to optimize
-    /// - `initial_solution`: the initial solution to start optimization
-    /// - `initial_score`: the initial score of the initial solution
-    /// - `n_iter`: maximum iterations
-    /// - `time_limit`: maximum iteration time
-    /// - `callback`: callback function that will be invoked at the end of each iteration
     fn optimize(
         &self,
         model: &M,
@@ -151,12 +145,8 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 break;
             }
 
-            let metropolis = metropolis::MetropolisOptimizer::new(
-                self.patience,
-                self.n_trials,
-                self.return_iter,
-                current_beta,
-            );
+            let opt =
+                LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
             let update_freq = self.update_frequency.get();
 
             // Process each member of the population
@@ -167,13 +157,14 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                     let temp_callback =
                         &mut |_progress: OptProgress<M::SolutionType, M::ScoreType>| {};
 
-                    metropolis.step(
+                    opt.step(
                         model,
                         solution.clone(),
                         *score,
                         update_freq,
                         time_limit.saturating_sub(duration),
                         temp_callback,
+                        Metropolis::new(current_beta),
                     )
                 })
                 .collect::<Vec<_>>();
@@ -182,10 +173,10 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             iter = iter.saturating_add(update_freq);
 
             // 2. Update best solution and score
-            let best_step_result = step_results.iter().min_by_key(|r| r.best_score).unwrap();
-            if best_step_result.best_score < best_score {
-                best_score = best_step_result.best_score;
-                best_solution.replace(best_step_result.best_solution.clone());
+            let best_step_result = step_results.iter().min_by_key(|r| r.0.best_score).unwrap();
+            if best_step_result.0.best_score < best_score {
+                best_score = best_step_result.0.best_score;
+                best_solution.replace(best_step_result.0.best_solution.clone());
                 return_stagnation_counter = 0;
                 patience_stagnation_counter = 0;
             } else {
@@ -197,7 +188,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             // 3. Update accepted counter
             let acceptance_ratio = step_results
                 .iter()
-                .map(|r| r.acceptance_counter.acceptance_ratio())
+                .map(|r| r.0.acceptance_counter.acceptance_ratio())
                 .sum::<f64>()
                 / self.population_size as f64;
 
@@ -220,7 +211,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             current_beta *= self.cooling_rate;
             let new_population: Vec<(M::SolutionType, M::ScoreType)> = step_results
                 .into_iter()
-                .map(|r| (r.last_solution, r.last_score))
+                .map(|r| (r.0.last_solution, r.0.last_score))
                 .collect();
 
             // Population update: resample based on Boltzmann distribution weights

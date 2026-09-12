@@ -1,0 +1,55 @@
+use crate::optim::transition::{TransitionHandler, UpdateCtx};
+
+/// ε-greedy acceptance: improvements always accepted; otherwise accept
+/// with fixed probability `epsilon`.
+#[derive(Clone, Copy, Debug)]
+pub struct EpsilonGreedy {
+    /// Probability of accepting a worsening move in `[0, 1]` (`new` clamps).
+    pub epsilon: f64,
+}
+
+impl EpsilonGreedy {
+    /// Constructor.
+    ///
+    /// Values outside `[0, 1]` are clamped into range.
+    pub const fn new(epsilon: f64) -> Self {
+        let epsilon = if epsilon < 0.0 {
+            0.0
+        } else if epsilon > 1.0 {
+            1.0
+        } else {
+            epsilon
+        };
+        Self { epsilon }
+    }
+}
+
+impl<ST: Ord + Send + Sync + Copy> TransitionHandler<ST> for EpsilonGreedy {
+    fn update(&mut self, _ctx: &UpdateCtx<'_, ST>) {}
+
+    fn evaluate(&self, current: ST, trial: ST) -> f64 {
+        if trial < current { 1.0 } else { self.epsilon }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ordered_float::NotNan;
+
+    use super::EpsilonGreedy;
+    use crate::optim::transition::TransitionHandler;
+
+    #[test]
+    fn improvement_always_accepted() {
+        let h = EpsilonGreedy::new(0.1);
+        let p = h.evaluate(NotNan::new(1.0).unwrap(), NotNan::new(0.5).unwrap());
+        assert_eq!(p, 1.0);
+    }
+
+    #[test]
+    fn worsening_uses_epsilon() {
+        let h = EpsilonGreedy::new(0.25);
+        let p = h.evaluate(NotNan::new(1.0).unwrap(), NotNan::new(1.5).unwrap());
+        assert_eq!(p, 0.25);
+    }
+}

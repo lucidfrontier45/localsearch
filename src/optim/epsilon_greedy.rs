@@ -1,12 +1,5 @@
-use super::{GenericLocalSearchOptimizer, base::LocalSearchOptimizer};
+use super::{EpsilonGreedy, LocalSearchLoop, LocalSearchOptimizer};
 use crate::{Duration, OptModel, callback::OptCallbackFn};
-
-fn transition_prob<T: PartialOrd>(current: T, trial: T, epsilon: f64) -> f64 {
-    if trial < current {
-        return 1.0;
-    }
-    epsilon
-}
 
 /// Optimizer that implements epsilon-greedy algorithm.
 /// Unlike a total greedy algorithm such as hill climbing,
@@ -16,7 +9,7 @@ pub struct EpsilonGreedyOptimizer {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
-    epsilon: f64,
+    handler: EpsilonGreedy,
 }
 
 impl EpsilonGreedyOptimizer {
@@ -27,12 +20,12 @@ impl EpsilonGreedyOptimizer {
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
     /// - `epsilon` : probability to accept a transition that worsens the score. Must be in [0, 1].
-    pub fn new(patience: usize, n_trials: usize, return_iter: usize, epsilon: f64) -> Self {
+    pub const fn new(patience: usize, n_trials: usize, return_iter: usize, epsilon: f64) -> Self {
         Self {
             patience,
             n_trials,
             return_iter,
-            epsilon,
+            handler: EpsilonGreedy::new(epsilon),
         }
     }
 }
@@ -55,19 +48,16 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        let optimizer = GenericLocalSearchOptimizer::new(
-            self.patience,
-            self.n_trials,
-            self.return_iter,
-            |current, trial| transition_prob(current, trial, self.epsilon),
-        );
-        optimizer.optimize(
+        let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
+        let (result, _) = opt.step(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
             callback,
-        )
+            self.handler,
+        );
+        (result.best_solution, result.best_score)
     }
 }

@@ -1,12 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
-
 use ordered_float::NotNan;
 
-use super::{GenericLocalSearchOptimizer, base::LocalSearchOptimizer};
-use crate::{
-    Duration, OptModel,
-    callback::{OptCallbackFn, OptProgress},
-};
+use super::{GreatDeluge, LocalSearchLoop, LocalSearchOptimizer};
+use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 /// Optimizer that implements the Great Deluge Algorithm (GDA).
 /// Unlike probabilistic methods like simulated annealing, GDA uses a deterministic
@@ -20,8 +15,10 @@ pub struct GreatDelugeOptimizer {
     n_trials: usize,
     /// Return to the current best solution if there is no improvement after this many iterations
     return_iter: usize,
-    /// Factor to initialize the water level as initial_score * level_factor
+    /// Factor to initialize the water level as `initial_score * level_factor`
     level_factor: f64,
+    /// Handler blueprint; the water level is seeded per run from the initial score
+    handler: GreatDeluge,
 }
 
 impl GreatDelugeOptimizer {
@@ -29,14 +26,20 @@ impl GreatDelugeOptimizer {
     ///
     /// - `patience`: the optimizer will give up if there is no improvement after this many iterations
     /// - `n_trials`: number of trial solutions to generate and evaluate at each iteration
-    /// - `return_iter`: returns to the current best solution if there is no improvement after this many iterations
+    /// - `return_iter`: returns to the best solution if there is no improvement after this many iterations
     /// - `level_factor`: multiplier for initial water level (e.g., 1.1 for 10% above initial score)
-    pub fn new(patience: usize, n_trials: usize, return_iter: usize, level_factor: f64) -> Self {
+    pub const fn new(
+        patience: usize,
+        n_trials: usize,
+        return_iter: usize,
+        level_factor: f64,
+    ) -> Self {
         Self {
             patience,
             n_trials,
             return_iter,
             level_factor,
+            handler: GreatDeluge::new(0.0),
         }
     }
 }
@@ -59,44 +62,20 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for GreatDelu
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        // Initialize water level
-        let initial_level = initial_score.into_inner() * self.level_factor;
-        let water_level = Rc::new(RefCell::new(initial_level));
-
-        let transition_fn = {
-            // Clone the Rc so the closure owns its water_level reference, similar to SimulatedAnnealingOptimizer
-            let water_level = Rc::clone(&water_level);
-            move |_current: NotNan<f64>, trial: NotNan<f64>| -> f64 {
-                let wl = *water_level.borrow();
-                if trial.into_inner() < wl { 1.0 } else { 0.0 }
-            }
-        };
-
-        let optimizer = GenericLocalSearchOptimizer::new(
-            self.patience,
-            self.n_trials,
-            self.return_iter,
-            transition_fn,
-        );
-
-        let mut wrapped_callback = |progress: OptProgress<M::SolutionType, M::ScoreType>| {
-            // Update water level using the current best score from progress
-            let progress_ratio = (progress.iter as f64) / (n_iter as f64);
-            let best_f = progress.score.into_inner();
-            let new_level = initial_level - (initial_level - best_f) * progress_ratio;
-            water_level.replace(new_level);
-
-            // Call the original callback
-            callback(progress);
-        };
-
-        optimizer.optimize(
+        // Seed the per-run working copy of the handler from this run's initial score
+        let mut handler = self.handler;
+        handler.initial_level = initial_score.into_inner() * self.level_factor;
+        handler.level = handler.initial_level;
+        let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
+        let (result, _) = opt.step(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
-            &mut wrapped_callback,
-        )
+            callback,
+            handler,
+        );
+        (result.best_solution, result.best_score)
     }
 }

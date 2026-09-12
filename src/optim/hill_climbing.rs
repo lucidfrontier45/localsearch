@@ -12,7 +12,7 @@ impl HillClimbingOptimizer {
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
-    pub fn new(patience: usize, n_trials: usize) -> Self {
+    pub const fn new(patience: usize, n_trials: usize) -> Self {
         Self { patience, n_trials }
     }
 }
@@ -35,6 +35,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
+        // Hill climbing = epsilon-greedy with epsilon = 0 (never accept worsening moves)
         let optimizer = EpsilonGreedyOptimizer::new(self.patience, self.n_trials, usize::MAX, 0.0);
         optimizer.optimize(
             model,

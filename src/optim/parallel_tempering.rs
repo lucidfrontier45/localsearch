@@ -4,15 +4,13 @@ use ordered_float::NotNan;
 use rand::RngExt as _;
 use rayon::prelude::*;
 
-use super::{
-    LocalSearchOptimizer,
-    generic::StepResult,
-    metropolis::{calculate_temperature_from_acceptance_prob, gather_energy_diffs},
+use super::{LocalSearchLoop, LocalSearchOptimizer, Metropolis,
+    calculate_temperature_from_acceptance_prob, gather_energy_diffs,
 };
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
-    optim::metropolis::MetropolisOptimizer,
+    optim::StepResult,
 };
 
 /// Parallel Tempering (Replica Exchange) optimizer
@@ -71,16 +69,12 @@ impl ParallelTemperingOptimizer {
             betas.push(beta_min);
         } else {
             let ratio = (beta_max / beta_min).powf(1.0 / (n_replicas as f64 - 1.0));
-
             let mut b = beta_min;
-
             for _ in 0..n_replicas {
                 betas.push(b);
-
                 b *= ratio;
             }
         }
-
         Self::new(patience, n_trials, return_iter, betas, update_frequency)
     }
 
@@ -103,8 +97,10 @@ impl ParallelTemperingOptimizer {
         if energy_diffs.is_empty() {
             return self;
         }
-        let beta_max = calculate_temperature_from_acceptance_prob(&energy_diffs, target_max_prob);
-        let beta_min = calculate_temperature_from_acceptance_prob(&energy_diffs, target_min_prob);
+        let beta_max =
+            calculate_temperature_from_acceptance_prob(&energy_diffs, target_max_prob);
+        let beta_min =
+            calculate_temperature_from_acceptance_prob(&energy_diffs, target_min_prob);
         let n_replicas = self.betas.len();
         Self::with_geometric_betas(
             self.patience,
@@ -120,13 +116,6 @@ impl ParallelTemperingOptimizer {
 
 impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelTemperingOptimizer {
     /// Start optimization
-    ///
-    /// - `model`: the model to optimize
-    /// - `initial_solution`: the initial solution to start optimization
-    /// - `initial_score`: the initial score of the initial solution
-    /// - `n_iter`: maximum iterations
-    /// - `time_limit`: maximum iteration time
-    /// - `callback`: callback function that will be invoked at the end of each iteration
     fn optimize(
         &self,
         model: &M,
@@ -143,7 +132,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
 
         // Initialize replicas: first replica uses provided initial solution
         let mut replicas: Vec<(M::SolutionType, M::ScoreType)> =
-            vec![(initial_solution.clone(), initial_score,); n_replicas];
+            vec![(initial_solution.clone(), initial_score); n_replicas];
 
         let best_solution = Rc::new(RefCell::new(initial_solution.clone()));
         let mut best_score = initial_score;
@@ -170,24 +159,25 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
             let time_remaining = time_limit.saturating_sub(elapsed);
 
             // Keep a clone of current replicas for parallel processing
-            let step_results: Vec<StepResult<M::SolutionType, M::ScoreType>> = replicas
+            type ReplicaResult<M> = (
+                StepResult<<M as OptModel>::SolutionType, <M as OptModel>::ScoreType>,
+                Metropolis,
+            );
+            let step_results: Vec<ReplicaResult<M>> = replicas
                 .par_iter()
                 .enumerate()
                 .map(|(idx, (sol, score))| {
-                    let m = MetropolisOptimizer::new(
-                        self.patience,
-                        n_trials,
-                        self.return_iter,
-                        self.betas[idx],
-                    );
+                    let opt =
+                        LocalSearchLoop::new(self.patience, n_trials, self.return_iter);
                     let mut cb = &mut |_p: OptProgress<M::SolutionType, M::ScoreType>| {};
-                    m.step(
+                    opt.step(
                         model,
                         sol.clone(),
                         *score,
                         update_freq,
                         time_remaining,
                         &mut cb,
+                        Metropolis::new(self.betas[idx]),
                     )
                 })
                 .collect();
@@ -196,15 +186,14 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
             iter = iter.saturating_add(update_freq);
 
             // 2. Update best solution and score based on step_results
-            let best_step_result = step_results.iter().min_by_key(|r| r.best_score).unwrap();
-            if best_step_result.best_score < best_score {
-                best_score = best_step_result.best_score;
-                best_solution.replace(best_step_result.best_solution.clone());
+            let best_step_result = step_results.iter().min_by_key(|r| r.0.best_score).unwrap();
+            if best_step_result.0.best_score < best_score {
+                best_score = best_step_result.0.best_score;
+                best_solution.replace(best_step_result.0.best_solution.clone());
                 return_stagnation_counter = 0;
                 patience_stagnation_counter = 0;
             } else {
-                return_stagnation_counter =
-                    return_stagnation_counter.saturating_add(update_freq);
+                return_stagnation_counter = return_stagnation_counter.saturating_add(update_freq);
                 patience_stagnation_counter =
                     patience_stagnation_counter.saturating_add(update_freq);
             }
@@ -213,14 +202,14 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
             let acceptance_ratio = {
                 let mut sum = 0.0;
                 for r in step_results.iter() {
-                    sum += r.acceptance_counter.acceptance_ratio();
+                    sum += r.0.acceptance_counter.acceptance_ratio();
                 }
                 sum / n_replicas as f64
             };
 
             // 4. Update current solution and score from step results
             for (i, r) in step_results.into_iter().enumerate() {
-                replicas[i] = (r.last_solution, r.last_score);
+                replicas[i] = (r.0.last_solution, r.0.last_score);
             }
 
             // 5. Check and handle return to best

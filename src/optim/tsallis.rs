@@ -1,47 +1,26 @@
-use std::{cell::RefCell, num::NonZero, rc::Rc};
+use std::num::NonZero;
 
 use ordered_float::NotNan;
 
-use super::{AdaptiveScheduler, GenericLocalSearchOptimizer, LocalSearchOptimizer};
-use crate::{
-    Duration, OptModel,
-    callback::{OptCallbackFn, OptProgress},
+use super::{
+    AdaptiveScheduler, LocalSearchLoop, LocalSearchOptimizer, TargetAccScheduleMode,
+    TsallisAnnealing,
 };
-
-fn tsallis_transition_prob(
-    current_score: f64,
-    trial_score: f64,
-    offset: f64,
-    beta: f64,
-    q: f64,
-    xi: f64,
-) -> f64 {
-    let delta_e = trial_score - current_score;
-    let denominator = current_score - offset + xi;
-    let d = delta_e / denominator;
-    if delta_e <= 0.0 {
-        1.0
-    } else {
-        let arg = 1.0 - (1.0 - q) * beta * d;
-        arg.powf(1.0 / (1.0 - q)).max(0.01)
-    }
-}
+use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 /// Optimizer that implements Tsallis relative annealing algorithm
 /// This is a generalization of relative annealing using Tsallis statistics.
-/// The acceptance probability for worse solutions is [1 - (1-q) * beta * ΔE / (E - E_best + ξ)]^{1/(1-q)},
-/// where ΔE = trial - current, E = current, E_best = offset.
-/// Assumes q > 1.0.
+/// The acceptance probability for worse solutions is
+/// `[1 - (1-q) * beta * ΔE / (E - E_best + ξ)]^{1/(1-q)}`,
+/// where `ΔE = trial - current`, `E = current`, and `E_best` is the offset.
+/// Assumes `q > 1.0`.
 #[derive(Clone, Copy)]
 pub struct TsallisRelativeAnnealingOptimizer {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
-    initial_beta: f64,
-    scheduler: AdaptiveScheduler,
-    update_frequency: NonZero<usize>,
-    q: f64,
-    xi: f64,
+    /// Transition handler that holds the Tsallis parameters and the scheduler
+    handler: TsallisAnnealing,
 }
 
 impl TsallisRelativeAnnealingOptimizer {
@@ -57,7 +36,7 @@ impl TsallisRelativeAnnealingOptimizer {
     /// - `q` : Tsallis parameter, assumed to be > 1.0. Recommended value is 2.5.
     /// - `xi` : parameter ξ in the acceptance probability formula.
     ///   Recommended value is 1.0 for integer objective and 0.1% of the objective value for continuous objective.
-    pub fn new(
+    pub const fn new(
         patience: usize,
         n_trials: usize,
         return_iter: usize,
@@ -66,23 +45,18 @@ impl TsallisRelativeAnnealingOptimizer {
         q: f64,
         xi: f64,
     ) -> Self {
-        let scheduler =
-            AdaptiveScheduler::new(0.3, 0.3, super::TargetAccScheduleMode::Constant, 0.05);
+        let scheduler = AdaptiveScheduler::new(0.3, 0.3, TargetAccScheduleMode::Constant, 0.05);
         Self {
             patience,
             n_trials,
             return_iter,
-            initial_beta: beta,
-            update_frequency,
-            q,
-            xi,
-            scheduler,
+            handler: TsallisAnnealing::new(0.0, beta, q, xi, scheduler, update_frequency),
         }
     }
 
     /// Sets the scheduler for the optimizer.
-    pub fn with_scheduler(mut self, scheduler: AdaptiveScheduler) -> Self {
-        self.scheduler = scheduler;
+    pub const fn with_scheduler(mut self, scheduler: AdaptiveScheduler) -> Self {
+        self.handler.scheduler = scheduler;
         self
     }
 }
@@ -107,83 +81,20 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        // wrap current best score (offset) and beta (inverse temperature) in Rc<RefCell> to allow mutation in closure
-        let current_offset = Rc::new(RefCell::new(initial_score.into_inner()));
-        let current_beta = Rc::new(RefCell::new(self.initial_beta));
-
-        // create transition probability function
-        let transition_prob = {
-            let offset = current_offset.clone();
-            let beta = current_beta.clone();
-
-            move |current: NotNan<f64>, trial: NotNan<f64>| {
-                tsallis_transition_prob(
-                    current.into_inner(),
-                    trial.into_inner(),
-                    *offset.borrow(),
-                    *beta.borrow(),
-                    self.q,
-                    self.xi,
-                )
-            }
-        };
-
-        // wrap callback to update offset and beta based on update_frequency
-        let mut callback_with_updates = |progress: OptProgress<M::SolutionType, M::ScoreType>| {
-            // update offset
-            current_offset.replace(progress.score.into_inner());
-
-            // potentially update beta with scheduler
-            if progress.iter % self.update_frequency.get() == 0 {
-                let new_beta = self.scheduler.update_temperature(
-                    *current_beta.borrow(),
-                    progress.iter,
-                    n_iter,
-                    progress.acceptance_ratio,
-                );
-                current_beta.replace(new_beta);
-            }
-
-            // invoke original callback
-            callback(progress);
-        };
-
-        // create generic optimizer and run optimization
-        let optimizer = GenericLocalSearchOptimizer::new(
-            self.patience,
-            self.n_trials,
-            self.return_iter,
-            transition_prob,
-        );
-
-        optimizer.optimize(
+        // Seed the per-run working copy of the handler from this run's initial score;
+        // the offset then tracks the best score via `update`.
+        let mut handler = self.handler;
+        handler.offset = initial_score.into_inner();
+        let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
+        let (result, _) = opt.step(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
-            &mut callback_with_updates,
-        )
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::tsallis_transition_prob;
-
-    #[test]
-    fn test_tsallis_transition_prob() {
-        let beta = 1e1;
-        let q = 1.5;
-        let offset = 0.0;
-
-        // Improvement: should accept
-        let p = tsallis_transition_prob(1.0, 0.9, offset, beta, q, 1.0);
-        assert!(p >= 1.0);
-
-        // Worse: probability should decrease as d increases
-        let p1 = tsallis_transition_prob(1.0, 1.1, offset, beta, q, 1.0);
-        let p2 = tsallis_transition_prob(1.0, 1.2, offset, beta, q, 1.0);
-        assert!(p1 > p2);
+            callback,
+            handler,
+        );
+        (result.best_solution, result.best_score)
     }
 }

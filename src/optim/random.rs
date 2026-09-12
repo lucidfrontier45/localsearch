@@ -10,7 +10,7 @@ pub struct RandomSearchOptimizer {
 impl RandomSearchOptimizer {
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
-    pub fn new(patience: usize) -> Self {
+    pub const fn new(patience: usize) -> Self {
         Self { patience }
     }
 }
@@ -33,6 +33,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for RandomSearchOptimizer {
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
+        // Random search = epsilon-greedy with epsilon = 1 (accept every move)
         let optimizer = EpsilonGreedyOptimizer::new(self.patience, 1, usize::MAX, 1.0);
         optimizer.optimize(
             model,
