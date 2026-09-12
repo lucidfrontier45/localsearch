@@ -2,18 +2,11 @@ use std::num::NonZero;
 
 use ordered_float::NotNan;
 
-use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer, SimulatedAnnealing};
-use crate::{Duration, OptModel, callback::OptCallbackFn, optim::metropolis::tune_temperature};
+use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer, SimulatedAnnealing, tune_cooling_rate,
+    tune_temperature,
+};
+use crate::{Duration, OptModel, callback::OptCallbackFn};
 
-/// Tune cooling rate based on initial and final inverse temperatures and number of iterations
-/// initial beta will be cooled to final beta after n_iter iterations
-/// - `initial_beta` : initial inverse temperature
-/// - `final_beta` : final inverse temperature
-/// - `n_iter` : number of iterations
-/// - `returns` : cooling rate
-pub fn tune_cooling_rate(initial_beta: f64, final_beta: f64, n_iter: usize) -> f64 {
-    (final_beta / initial_beta).powf(1.0 / n_iter as f64)
-}
 
 /// Optimizer that implements the simulated annealing algorithm
 #[derive(Clone, Copy)]

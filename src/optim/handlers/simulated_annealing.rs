@@ -29,6 +29,17 @@ impl SimulatedAnnealing {
     }
 }
 
+/// Tune cooling rate based on initial and final inverse temperatures.
+///
+/// Initial beta will be cooled to final beta after `n_iter` iterations.
+/// - `initial_beta` : initial inverse temperature
+/// - `final_beta` : final inverse temperature
+/// - `n_iter` : number of iterations
+/// - `returns` : cooling rate
+pub fn tune_cooling_rate(initial_beta: f64, final_beta: f64, n_iter: usize) -> f64 {
+    (final_beta / initial_beta).powf(1.0 / n_iter as f64)
+}
+
 impl TransitionHandler<NotNan<f64>> for SimulatedAnnealing {
     fn update(&mut self, ctx: &UpdateCtx<'_, NotNan<f64>>) {
         if ctx.iter > 0 && ctx.iter.is_multiple_of(self.update_frequency.get()) {

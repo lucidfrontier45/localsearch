@@ -16,9 +16,11 @@ pub use adaptive_annealing::{AdaptiveAnnealing, AdaptiveScheduler, TargetAccSche
 pub use epsilon_greedy::EpsilonGreedy;
 pub use great_deluge::GreatDeluge;
 pub use logistic_annealing::LogisticAnnealing;
-pub use metropolis::Metropolis;
+pub use metropolis::{Metropolis, tune_temperature};
+pub(crate) use metropolis::{calculate_temperature_from_acceptance_prob, gather_energy_diffs};
 pub use relative_annealing::RelativeAnnealing;
 pub use simulated_annealing::SimulatedAnnealing;
+pub use simulated_annealing::tune_cooling_rate;
 pub use tsallis::TsallisAnnealing;
 
 /// Handler alias for [`AdaptiveAnnealing`].

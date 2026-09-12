@@ -28,8 +28,9 @@ pub use handlers::{
     EpsilonGreedyHandler, GreatDeluge, GreatDelugeHandler, LogisticAnnealing,
     LogisticAnnealingHandler, Metropolis, MetropolisHandler, RelativeAnnealing,
     RelativeAnnealingHandler, SimulatedAnnealing, SimulatedAnnealingHandler, TargetAccScheduleMode,
-    TsallisAnnealing, TsallisHandler,
+    TsallisAnnealing, TsallisHandler, tune_cooling_rate, tune_temperature,
 };
+pub(crate) use handlers::{calculate_temperature_from_acceptance_prob, gather_energy_diffs};
 pub use hill_climbing::HillClimbingOptimizer;
 pub use logistic_annealing::LogisticAnnealingOptimizer;
 pub use metropolis::MetropolisOptimizer;

@@ -2,10 +2,10 @@ use std::num::NonZero;
 
 use ordered_float::NotNan;
 
-use super::{
-    AdaptiveAnnealing, AdaptiveScheduler, GenericLocalSearchOptimizer, LocalSearchOptimizer,
+use super::{AdaptiveAnnealing, AdaptiveScheduler, GenericLocalSearchOptimizer, LocalSearchOptimizer,
+    tune_temperature,
 };
-use crate::{Duration, OptModel, callback::OptCallbackFn, optim::metropolis::tune_temperature};
+use crate::{Duration, OptModel, callback::OptCallbackFn};
 
 /// Optimizer that implements the adaptive annealing algorithm which tries to adapt temperature
 /// to realize target acceptance rate scheduling.
