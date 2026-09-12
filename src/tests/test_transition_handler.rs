@@ -137,8 +137,8 @@ fn generic_step_passes_acceptance_ratio_to_update_context() {
                 .push(context.acc);
         }
 
-        fn evaluate(&self, _current: i32, _trial: i32) -> f64 {
-            0.0
+        fn evaluate(&self, current: i32, trial: i32) -> f64 {
+            if trial < current { 1.0 } else { 0.0 }
         }
     }
 

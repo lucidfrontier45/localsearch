@@ -21,6 +21,9 @@ impl TransitionHandler<NotNan<f64>> for LogisticAnnealing {
     fn update(&mut self, _ctx: &UpdateCtx<'_, NotNan<f64>>) {}
 
     fn evaluate(&self, current: NotNan<f64>, trial: NotNan<f64>) -> f64 {
+        if trial < current {
+            return 1.0;
+        }
         let current = current.into_inner();
         let trial = trial.into_inner();
         let d = (trial - current) / current.abs().max(f64::EPSILON);

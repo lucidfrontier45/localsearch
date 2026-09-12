@@ -27,9 +27,8 @@ pub struct StepResult<S, ST> {
 
 /// Inner trial-and-accept loop shared by every local-search optimizer.
 ///
-/// Improving trials (`trial_score < current_score`) are always accepted.
-/// For equal or worsening trials, the handler converts
-/// `(current_score, trial_score)` into an acceptance probability:
+/// The handler converts `(current_score, trial_score)` into an acceptance
+/// probability (improving trials return `1.0` from the handler itself):
 ///
 /// 1. `p <- handler.evaluate(current_score, trial_score)`
 /// 2. accept if `p > rand(0, 1)`
@@ -136,13 +135,9 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
             }
 
             // 4. Update accepted counter and transitions
-            let accepted = if trial_score < current_score {
-                true
-            } else {
-                let p = handler.evaluate(current_score, trial_score);
-                let r: f64 = rng.random();
-                p > r
-            };
+            let p = handler.evaluate(current_score, trial_score);
+            let r: f64 = rng.random();
+            let accepted = p > r;
 
             acceptance_counter.enqueue(accepted);
 

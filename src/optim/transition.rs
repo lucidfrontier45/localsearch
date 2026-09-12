@@ -34,8 +34,9 @@ pub trait TransitionHandler<ST: Ord + Send + Sync + Copy>: Send + Sync {
     /// Use this to update cooling schedules, water levels, offsets, etc.
     fn update(&mut self, ctx: &UpdateCtx<'_, ST>);
 
-    /// Returns the acceptance probability for an equal or worsening transition
-    /// from `current` to `trial`. Improving transitions are accepted without
-    /// calling this method. Values `>= 1.0` mean "always accept".
+    /// Returns the acceptance probability for a transition
+    /// from `current` to `trial`. Improving transitions (`trial < current`)
+    /// are handled inside this method and must return `1.0`.
+    /// Values `>= 1.0` mean "always accept".
     fn evaluate(&self, current: ST, trial: ST) -> f64;
 }
