@@ -555,7 +555,7 @@ fn main() {
     );
     let generator = build_alns_generator();
     let optimizer: GenericLocalSearchOptimizer<ScoreType, TsallisAnnealing, _> =
-        GenericLocalSearchOptimizer::new(patience, 1, return_iter, handler)
+        GenericLocalSearchOptimizer::new(patience, 8, return_iter, handler)
             .with_trial_generator(generator);
 
     println!("run ALNS");
