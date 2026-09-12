@@ -98,7 +98,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             self.update_frequency,
         );
         let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
-        let (solution, score, _) = opt.optimize_with_handler(
+        let (result, _) = opt.step(
             model,
             initial_solution,
             initial_score,
@@ -107,6 +107,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             callback,
             handler,
         );
-        (solution, score)
+        (result.best_solution, result.best_score)
     }
 }

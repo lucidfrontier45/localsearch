@@ -77,7 +77,7 @@ where
             self.n_trials,
             self.return_iter,
         );
-        let (solution, score, _) = loop_.optimize_with_handler(
+        let (result, _) = loop_.step(
             model,
             initial_solution,
             initial_score,
@@ -86,6 +86,6 @@ where
             callback,
             handler,
         );
-        (solution, score)
+        (result.best_solution, result.best_score)
     }
 }

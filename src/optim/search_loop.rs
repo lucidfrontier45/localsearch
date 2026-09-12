@@ -37,8 +37,8 @@ pub struct StepResult<S, ST> {
 /// is invoked so it can adapt its internal state (cooling schedule, water
 /// level, …) before trials are evaluated.
 ///
-/// The handler is supplied per-call via [`Self::step`] and
-/// [`Self::optimize_with_handler`]; this loop stores no handler field.
+/// The handler is supplied per-call via [`Self::step`];
+/// this loop stores no handler field.
 pub struct LocalSearchLoop<ST: Ord + Sync + Send + Copy> {
     patience: usize,
     n_trials: usize,
@@ -180,34 +180,4 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
         (result, handler)
     }
 
-    /// Run optimization with the supplied handler.
-    ///
-    /// Returns `(best_solution, best_score, handler)` where `handler` is the
-    /// same instance passed in, with any per-iteration state mutations applied.
-    #[allow(clippy::too_many_arguments)]
-    pub fn optimize_with_handler<M, H>(
-        &self,
-        model: &M,
-        initial_solution: M::SolutionType,
-        initial_score: M::ScoreType,
-        n_iter: usize,
-        time_limit: Duration,
-        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        handler: H,
-    ) -> (M::SolutionType, M::ScoreType, H)
-    where
-        M: OptModel<ScoreType = ST>,
-        H: TransitionHandler<ST>,
-    {
-        let (result, handler) = self.step(
-            model,
-            initial_solution,
-            initial_score,
-            n_iter,
-            time_limit,
-            callback,
-            handler,
-        );
-        (result.best_solution, result.best_score, handler)
-    }
 }
