@@ -140,9 +140,15 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
     ///
     /// - `patience` : the loop will give up
     ///   if there is no improvement of the score after this number of iterations
-    /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
+    /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration; must be at least 1
     /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `n_trials == 0` — every iteration needs at least one
+    /// candidate for the best-of-`n_trials` selection to be well-defined.
     pub fn new(patience: usize, n_trials: usize, return_iter: usize) -> Self {
+        assert!(n_trials > 0, "n_trials must be at least 1");
         Self {
             patience,
             n_trials,
@@ -248,8 +254,9 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
             //    and keep the best-scoring one. Generation runs in parallel
             //    via rayon; each trial draws from a per-trial RNG fork seeded
             //    sequentially, so runs stay reproducible. Only the winner is
-            //    evaluated and fed back (winner-takes-all).
-            assert!(self.n_trials > 0, "n_trials must be at least 1");
+            //    evaluated and fed back (winner-takes-all). `n_trials >= 1`
+            //    is guaranteed by `LocalSearchLoop::new`, so `seeds` is never
+            //    empty.
             let seeds: Vec<u64> = (0..self.n_trials).map(|_| rng.random()).collect();
             let (trial_solution, trial_score, winner_token) = seeds
                 .into_par_iter()
@@ -263,7 +270,7 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
                     )
                 })
                 .min_by_key(|(_, score, _)| *score)
-                .expect("n_trials must be at least 1");
+                .expect("seeds is non-empty because LocalSearchLoop::new asserts n_trials >= 1");
 
             // 4. Classify the trial outcome and apply best-score bookkeeping.
             //    `previous_best` is captured before any updates so that the
