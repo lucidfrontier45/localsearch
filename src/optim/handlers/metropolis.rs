@@ -36,7 +36,7 @@ pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
 }
 
 /// Collect positive energy differences from warmup trials.
-pub(crate) fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
+pub fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
     model: &M,
     initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
     n_warmup: usize,
@@ -65,7 +65,7 @@ pub(crate) fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
 ///
 /// `p = exp(-beta * ds)` => `beta = -ln(p) / ds`.
 /// Average across all energy differences.
-pub(crate) fn calculate_temperature_from_acceptance_prob(
+pub fn calculate_temperature_from_acceptance_prob(
     energy_diffs: &[f64],
     target_acceptance_prob: f64,
 ) -> f64 {
@@ -75,7 +75,7 @@ pub(crate) fn calculate_temperature_from_acceptance_prob(
 }
 
 /// Calculate Metropolis acceptance probability for a transition.
-pub(crate) fn metropolis_probability(beta: f64, current: NotNan<f64>, trial: NotNan<f64>) -> f64 {
+pub fn metropolis_probability(beta: f64, current: NotNan<f64>, trial: NotNan<f64>) -> f64 {
     let ds = trial - current;
     if ds <= NotNan::new(0.0).unwrap() {
         1.0
