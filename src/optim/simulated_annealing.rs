@@ -1,15 +1,9 @@
-use std::{cell::RefCell, num::NonZero, rc::Rc};
+use std::num::NonZero;
 
 use ordered_float::NotNan;
 
-use super::{
-    GenericLocalSearchOptimizer, LocalSearchOptimizer,
-    metropolis::{metropolis_transition, tune_temperature},
-};
-use crate::{
-    Duration, OptModel,
-    callback::{OptCallbackFn, OptProgress},
-};
+use super::{GenericLocalSearchOptimizer, LocalSearchOptimizer, SimulatedAnnealing};
+use crate::{Duration, OptModel, callback::OptCallbackFn, optim::metropolis::tune_temperature};
 
 /// Tune cooling rate based on initial and final inverse temperatures and number of iterations
 /// initial beta will be cooled to final beta after n_iter iterations
@@ -48,7 +42,7 @@ impl SimulatedAnnealingOptimizer {
     /// - `initial_beta` : initial inverse temperature
     /// - `cooling_rate` : cooling rate
     /// - `update_frequency` : non-zero number of steps after which inverse temperature (beta) is updated
-    pub fn new(
+    pub const fn new(
         patience: usize,
         n_trials: usize,
         return_iter: usize,
@@ -116,34 +110,19 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for Simulated
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        let current_beta = Rc::new(RefCell::new(self.initial_beta));
-        let transition = {
-            let current_beta = Rc::clone(&current_beta);
-            move |current: NotNan<f64>, trial: NotNan<f64>| {
-                metropolis_transition(*current_beta.borrow())(current, trial)
-            }
-        };
-        let mut callback_with_update = |progress: OptProgress<M::SolutionType, M::ScoreType>| {
-            if progress.iter % self.update_frequency.get() == 0 && progress.iter > 0 {
-                let new_beta = *current_beta.borrow() * self.cooling_rate;
-                current_beta.replace(new_beta);
-            }
-            callback(progress);
-        };
-
-        let generic_optimizer = GenericLocalSearchOptimizer::new(
+        let optimizer = GenericLocalSearchOptimizer::new(
             self.patience,
             self.n_trials,
             self.return_iter,
-            transition,
+            SimulatedAnnealing::new(self.initial_beta, self.cooling_rate, self.update_frequency),
         );
-        generic_optimizer.optimize(
+        optimizer.optimize(
             model,
             initial_solution,
             initial_score,
             n_iter,
             time_limit,
-            &mut callback_with_update,
+            callback,
         )
     }
 }

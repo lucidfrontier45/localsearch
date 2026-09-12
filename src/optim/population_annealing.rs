@@ -5,12 +5,12 @@ use rand::{RngExt as _, distr::weighted::WeightedIndex, prelude::Distribution};
 use rayon::prelude::*;
 
 use super::{
-    LocalSearchOptimizer, metropolis, metropolis::tune_temperature,
-    simulated_annealing::tune_cooling_rate,
+    LocalSearchOptimizer, metropolis::tune_temperature, simulated_annealing::tune_cooling_rate,
 };
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
+    optim::MetropolisOptimizer,
 };
 
 /// Optimizer that implements the population annealing algorithm
@@ -39,12 +39,12 @@ impl PopulationAnnealingOptimizer {
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
-    /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
+    /// - `return_iter` : returns to the best solution if there is no improvement after this number of iterations.
     /// - `initial_beta` : initial inverse temperature
     /// - `cooling_rate` : cooling rate
     /// - `update_frequency` : non-zero number of steps to run each simulated annealing before updating the population
     /// - `population_size` : number of simulated annealing processes to run in parallel
-    pub fn new(
+    pub const fn new(
         patience: usize,
         n_trials: usize,
         return_iter: usize,
@@ -73,7 +73,6 @@ impl PopulationAnnealingOptimizer {
         target_initial_prob: f64,
     ) -> Self {
         let tuned_beta = tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
-
         Self {
             initial_beta: tuned_beta,
             ..self
@@ -84,7 +83,6 @@ impl PopulationAnnealingOptimizer {
     pub fn tune_cooling_rate(self, n_iter: usize) -> Self {
         let cooling_rate =
             tune_cooling_rate(self.initial_beta, 1e2, n_iter / self.update_frequency.get());
-
         Self {
             cooling_rate,
             ..self
@@ -151,7 +149,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 break;
             }
 
-            let metropolis = metropolis::MetropolisOptimizer::new(
+            let metropolis = MetropolisOptimizer::new(
                 self.patience,
                 self.n_trials,
                 self.return_iter,
@@ -167,7 +165,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                     let temp_callback =
                         &mut |_progress: OptProgress<M::SolutionType, M::ScoreType>| {};
 
-                    metropolis.step(
+                    metropolis.to_generic().step(
                         model,
                         solution.clone(),
                         *score,

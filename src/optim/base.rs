@@ -66,8 +66,3 @@ pub trait LocalSearchOptimizer<M: OptModel> {
         Ok((solution, score))
     }
 }
-
-/// Transition probability function
-pub trait TransitionProbabilityFn<ST: Ord + Sync + Send + Copy>: Fn(ST, ST) -> f64 {}
-
-impl<F, ST: Ord + Sync + Send + Copy> TransitionProbabilityFn<ST> for F where F: Fn(ST, ST) -> f64 {}

@@ -10,7 +10,7 @@ pub struct RandomSearchOptimizer {
 impl RandomSearchOptimizer {
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
-    pub fn new(patience: usize) -> Self {
+    pub const fn new(patience: usize) -> Self {
         Self { patience }
     }
 }

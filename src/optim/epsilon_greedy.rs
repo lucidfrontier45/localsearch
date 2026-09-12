@@ -1,12 +1,5 @@
-use super::{GenericLocalSearchOptimizer, base::LocalSearchOptimizer};
+use super::{EpsilonGreedy, GenericLocalSearchOptimizer, LocalSearchOptimizer};
 use crate::{Duration, OptModel, callback::OptCallbackFn};
-
-fn transition_prob<T: PartialOrd>(current: T, trial: T, epsilon: f64) -> f64 {
-    if trial < current {
-        return 1.0;
-    }
-    epsilon
-}
 
 /// Optimizer that implements epsilon-greedy algorithm.
 /// Unlike a total greedy algorithm such as hill climbing,
@@ -27,7 +20,7 @@ impl EpsilonGreedyOptimizer {
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
     /// - `epsilon` : probability to accept a transition that worsens the score. Must be in [0, 1].
-    pub fn new(patience: usize, n_trials: usize, return_iter: usize, epsilon: f64) -> Self {
+    pub const fn new(patience: usize, n_trials: usize, return_iter: usize, epsilon: f64) -> Self {
         Self {
             patience,
             n_trials,
@@ -59,7 +52,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
             self.patience,
             self.n_trials,
             self.return_iter,
-            |current, trial| transition_prob(current, trial, self.epsilon),
+            EpsilonGreedy::new(self.epsilon),
         );
         optimizer.optimize(
             model,

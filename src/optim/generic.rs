@@ -3,7 +3,7 @@ use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 use rand::RngExt as _;
 use rayon::prelude::*;
 
-use super::{LocalSearchOptimizer, TransitionProbabilityFn};
+use super::{LocalSearchOptimizer, transition::TransitionHandler};
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
@@ -25,52 +25,52 @@ pub struct StepResult<S, ST> {
     pub acceptance_counter: AcceptanceCounter,
 }
 
-/// Optimizer that implements local search algorithm
-/// Given a function f that converts a float number to probability,
-/// the trial solution is accepted by the following procedure
+/// Optimizer that implements local search algorithm using a [`TransitionHandler`].
 ///
-/// 1. p <- f(current_score, trial_score)
-/// 2. accept if p > rand(0, 1)
-#[derive(Clone, Copy)]
+/// Given a handler that converts `(current_score, trial_score)` into an
+/// acceptance probability, the trial solution is accepted by:
+///
+/// 1. `p <- handler.evaluate(current_score, trial_score)`
+/// 2. accept if `p > rand(0, 1)`
+///
+/// At the start of every iteration the handler's [`TransitionHandler::update`]
+/// is invoked so it can adapt its internal state (cooling schedule, water
+/// level, …) before trials are evaluated.
 pub struct GenericLocalSearchOptimizer<
     ST: Ord + Sync + Send + Copy,
-    FT: TransitionProbabilityFn<ST>,
+    H: TransitionHandler<ST> + Clone,
 > {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
-    score_func: FT,
+    handler: H,
     phantom: PhantomData<ST>,
 }
 
-impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
-    GenericLocalSearchOptimizer<ST, FT>
+impl<ST: Ord + Sync + Send + Copy, H: TransitionHandler<ST> + Clone>
+    GenericLocalSearchOptimizer<ST, H>
 {
-    /// Constructor of BaseLocalSearchOptimizer
+    /// Constructor of `GenericLocalSearchOptimizer`.
     ///
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
-    /// - `score_func` : score function to calculate transition probability.
-    pub fn new(patience: usize, n_trials: usize, return_iter: usize, score_func: FT) -> Self {
+    /// - `handler` : transition handler providing acceptance probabilities and per-iteration state updates.
+    pub fn new(patience: usize, n_trials: usize, return_iter: usize, handler: H) -> Self {
         Self {
             patience,
             n_trials,
             return_iter,
-            score_func,
+            handler,
             phantom: PhantomData,
         }
     }
 
-    /// Start optimization, returns the best solution and last solution
+    /// Perform one optimization step (up to `n_iter` iterations or `time_limit`).
     ///
-    /// - `model` : the model to optimize
-    /// - `initial_solution` : the initial solution to start optimization
-    /// - `initial_score` : the initial score of the initial solution
-    /// - `n_iter`: maximum iterations
-    /// - `time_limit`: maximum iteration time
-    /// - `callback` : callback function that will be invoked at the end of each iteration
+    /// Returns a [`StepResult`] containing the best and last solutions/scores
+    /// observed during this step along with the acceptance counter.
     pub fn step<M: OptModel<ScoreType = ST>>(
         &self,
         model: &M,
@@ -80,6 +80,7 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> StepResult<M::SolutionType, M::ScoreType> {
+        let mut handler = self.handler.clone();
         let start_time = Instant::now();
         let mut rng = rand::rng();
         let mut current_solution = initial_solution;
@@ -98,6 +99,15 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
                 break;
             }
 
+            // 2. Update handler state before trials, using the current best.
+            let ctx = super::transition::UpdateCtx {
+                iter: it,
+                total: n_iter,
+                acc: acceptance_counter.acceptance_ratio(),
+                best: &best_score,
+            };
+            handler.update(&ctx);
+
             let (trial_solution, trial_score) = (0..self.n_trials)
                 .into_par_iter()
                 .map(|_| {
@@ -112,7 +122,7 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
                 .min_by_key(|(_, score)| *score)
                 .unwrap();
 
-            // 2. Update best solution and score
+            // 3. Update best solution and score
             if trial_score < best_score {
                 best_solution.replace(trial_solution.clone());
                 best_score = trial_score;
@@ -123,36 +133,34 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
                 patience_stagnation_counter += 1;
             }
 
-            // 3. Update accepted counter and transitions
+            // 4. Update accepted counter and transitions
             let accepted = if trial_score < current_score {
                 true
             } else {
-                let p = (self.score_func)(current_score, trial_score);
+                let p = handler.evaluate(current_score, trial_score);
                 let r: f64 = rng.random();
                 p > r
             };
 
             acceptance_counter.enqueue(accepted);
 
-            // 4. Update current solution and score
+            // 5. Update current solution and score
             if accepted {
                 current_solution = trial_solution;
                 current_score = trial_score;
             }
 
-            // 5. Check and handle return to best
+            // 6. Check and handle return to best
             if return_stagnation_counter == self.return_iter {
                 current_solution = best_solution.borrow().clone();
                 current_score = best_score;
                 return_stagnation_counter = 0;
             }
 
-            // 6. Check patience
+            // 7. Check patience
             if patience_stagnation_counter == self.patience {
                 break;
             }
-
-            // 7. Update algorithm-specific state (none)
 
             // 8. Invoke callback
             let progress = OptProgress::new(
@@ -175,10 +183,10 @@ impl<ST: Ord + Sync + Send + Copy, FT: TransitionProbabilityFn<ST>>
     }
 }
 
-impl<ST, FT, M> LocalSearchOptimizer<M> for GenericLocalSearchOptimizer<ST, FT>
+impl<ST, H, M> LocalSearchOptimizer<M> for GenericLocalSearchOptimizer<ST, H>
 where
     ST: Ord + Sync + Send + Copy,
-    FT: TransitionProbabilityFn<ST>,
+    H: TransitionHandler<ST> + Clone,
     M: OptModel<ScoreType = ST>,
 {
     /// Start optimization

@@ -12,7 +12,7 @@ impl HillClimbingOptimizer {
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
-    pub fn new(patience: usize, n_trials: usize) -> Self {
+    pub const fn new(patience: usize, n_trials: usize) -> Self {
         Self { patience, n_trials }
     }
 }

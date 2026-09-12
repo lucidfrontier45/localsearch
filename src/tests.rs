@@ -70,4 +70,5 @@ mod test_relative_annealing;
 mod test_simulated_annealing;
 mod test_tabu_search;
 mod test_trait_object;
+mod test_transition_handler;
 mod test_tsallis;

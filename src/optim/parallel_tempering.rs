@@ -12,7 +12,7 @@ use super::{
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
-    optim::metropolis::MetropolisOptimizer,
+    optim::MetropolisOptimizer,
 };
 
 /// Parallel Tempering (Replica Exchange) optimizer
@@ -71,16 +71,12 @@ impl ParallelTemperingOptimizer {
             betas.push(beta_min);
         } else {
             let ratio = (beta_max / beta_min).powf(1.0 / (n_replicas as f64 - 1.0));
-
             let mut b = beta_min;
-
             for _ in 0..n_replicas {
                 betas.push(b);
-
                 b *= ratio;
             }
         }
-
         Self::new(patience, n_trials, return_iter, betas, update_frequency)
     }
 
@@ -143,7 +139,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
 
         // Initialize replicas: first replica uses provided initial solution
         let mut replicas: Vec<(M::SolutionType, M::ScoreType)> =
-            vec![(initial_solution.clone(), initial_score,); n_replicas];
+            vec![(initial_solution.clone(), initial_score); n_replicas];
 
         let best_solution = Rc::new(RefCell::new(initial_solution.clone()));
         let mut best_score = initial_score;
@@ -181,7 +177,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
                         self.betas[idx],
                     );
                     let mut cb = &mut |_p: OptProgress<M::SolutionType, M::ScoreType>| {};
-                    m.step(
+                    m.to_generic().step(
                         model,
                         sol.clone(),
                         *score,
@@ -203,8 +199,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
                 return_stagnation_counter = 0;
                 patience_stagnation_counter = 0;
             } else {
-                return_stagnation_counter =
-                    return_stagnation_counter.saturating_add(update_freq);
+                return_stagnation_counter = return_stagnation_counter.saturating_add(update_freq);
                 patience_stagnation_counter =
                     patience_stagnation_counter.saturating_add(update_freq);
             }
