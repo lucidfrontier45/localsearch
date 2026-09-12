@@ -74,15 +74,20 @@ pub(crate) fn calculate_temperature_from_acceptance_prob(
     -ln_prob / average_energy_diff.clamp(0.01, 100.0)
 }
 
+/// Calculate Metropolis acceptance probability for a transition.
+pub(crate) fn metropolis_probability(beta: f64, current: NotNan<f64>, trial: NotNan<f64>) -> f64 {
+    let ds = trial - current;
+    if ds <= NotNan::new(0.0).unwrap() {
+        1.0
+    } else {
+        (-beta * ds.into_inner()).exp()
+    }
+}
+
 impl TransitionHandler<NotNan<f64>> for Metropolis {
     fn update(&mut self, _ctx: &UpdateCtx<'_, NotNan<f64>>) {}
 
     fn evaluate(&self, current: NotNan<f64>, trial: NotNan<f64>) -> f64 {
-        let ds = trial - current;
-        if ds <= NotNan::new(0.0).unwrap() {
-            1.0
-        } else {
-            (-self.beta * ds.into_inner()).exp()
-        }
+        metropolis_probability(self.beta, current, trial)
     }
 }

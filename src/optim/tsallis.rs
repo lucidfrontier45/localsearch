@@ -12,7 +12,7 @@ use crate::{Duration, OptModel, callback::OptCallbackFn};
 /// This is a generalization of relative annealing using Tsallis statistics.
 /// The acceptance probability for worse solutions is
 /// `[1 - (1-q) * beta * ΔE / (E - E_best + ξ)]^{1/(1-q)}`,
-/// where `ΔE = trial - current`, `E = current`, `E = E_best` is the offset.
+/// where `ΔE = trial - current`, `E = current`, and `E_best` is the offset.
 /// Assumes `q > 1.0`.
 #[derive(Clone, Copy)]
 pub struct TsallisRelativeAnnealingOptimizer {

@@ -1,7 +1,7 @@
 //! Per-algorithm transition handlers.
 //!
-//! Each handler owns its state directly (no `Rc<RefCell>` wrappers) and
-//! implements [`crate::optim::transition::TransitionHandler`].
+//! Each handler owns its algorithm-specific state directly and implements
+//! [`crate::optim::transition::TransitionHandler`].
 
 mod adaptive_annealing;
 mod epsilon_greedy;

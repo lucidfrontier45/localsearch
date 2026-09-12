@@ -1,3 +1,4 @@
+use super::metropolis::metropolis_probability;
 use std::{f64::consts::PI, num::NonZero};
 
 use ordered_float::NotNan;
@@ -130,11 +131,6 @@ impl TransitionHandler<NotNan<f64>> for AdaptiveAnnealing {
     }
 
     fn evaluate(&self, current: NotNan<f64>, trial: NotNan<f64>) -> f64 {
-        let ds = trial - current;
-        if ds <= NotNan::new(0.0).unwrap() {
-            1.0
-        } else {
-            (-self.beta * ds.into_inner()).exp()
-        }
+        metropolis_probability(self.beta, current, trial)
     }
 }

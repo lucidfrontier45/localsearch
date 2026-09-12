@@ -546,7 +546,7 @@ fn main() {
                 print_usage(&program);
                 std::process::exit(2);
             }
-            parse_optimizer_list(&args[idx].clone(), &mut selected, &program);
+            parse_optimizer_list(&args[idx], &mut selected, &program);
         } else if let Some(value) = arg.strip_prefix("--optimizer=") {
             parse_optimizer_list(value, &mut selected, &program);
         } else if arg == "--all" {
