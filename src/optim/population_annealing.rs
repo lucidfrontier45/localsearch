@@ -4,8 +4,8 @@ use ordered_float::NotNan;
 use rand::{RngExt as _, distr::weighted::WeightedIndex, prelude::Distribution};
 use rayon::prelude::*;
 
-use super::{LocalSearchLoop, LocalSearchOptimizer, Metropolis, tune_cooling_rate,
-    tune_temperature,
+use super::{
+    LocalSearchLoop, LocalSearchOptimizer, Metropolis, tune_cooling_rate, tune_temperature,
 };
 use crate::{
     Duration, Instant, OptModel,
@@ -71,8 +71,7 @@ impl PopulationAnnealingOptimizer {
         n_warmup: usize,
         target_initial_prob: f64,
     ) -> Self {
-        let tuned_beta =
-            tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
+        let tuned_beta = tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
         Self {
             initial_beta: tuned_beta,
             ..self
@@ -81,11 +80,8 @@ impl PopulationAnnealingOptimizer {
 
     /// Tune cooling rate to reach high inverse temperature (beta ~ 1e2) at the end of optimization
     pub fn tune_cooling_rate(self, n_iter: usize) -> Self {
-        let cooling_rate = tune_cooling_rate(
-            self.initial_beta,
-            1e2,
-            n_iter / self.update_frequency.get(),
-        );
+        let cooling_rate =
+            tune_cooling_rate(self.initial_beta, 1e2, n_iter / self.update_frequency.get());
         Self {
             cooling_rate,
             ..self
@@ -145,8 +141,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 break;
             }
 
-            let opt =
-                LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
+            let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
             let update_freq = self.update_frequency.get();
 
             // Process each member of the population

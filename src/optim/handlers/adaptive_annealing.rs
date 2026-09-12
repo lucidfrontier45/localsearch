@@ -1,10 +1,12 @@
-use super::metropolis::{metropolis_probability, tune_temperature};
 use std::{f64::consts::PI, num::NonZero};
 
 use ordered_float::NotNan;
 
-use crate::OptModel;
-use crate::optim::transition::{TransitionHandler, UpdateCtx};
+use super::metropolis::{metropolis_probability, tune_temperature};
+use crate::{
+    OptModel,
+    optim::transition::{TransitionHandler, UpdateCtx},
+};
 
 /// Target acceptance-rate schedule used by [`AdaptiveScheduler`].
 #[derive(Clone, Copy, Debug, Default)]

@@ -6,12 +6,15 @@ use std::{
 
 use ordered_float::NotNan;
 
-use crate::optim::{
-    AdaptiveAnnealingHandler, AdaptiveScheduler, EpsilonGreedyHandler, LocalSearchLoop,
-    GreatDelugeHandler, LogisticAnnealingHandler, MetropolisHandler, RelativeAnnealingHandler,
-    SimulatedAnnealingHandler, TargetAccScheduleMode, TransitionHandler, TsallisHandler, UpdateCtx,
+use crate::{
+    LocalsearchError, OptModel,
+    optim::{
+        AdaptiveAnnealingHandler, AdaptiveScheduler, EpsilonGreedyHandler, GreatDelugeHandler,
+        LocalSearchLoop, LogisticAnnealingHandler, MetropolisHandler, RelativeAnnealingHandler,
+        SimulatedAnnealingHandler, TargetAccScheduleMode, TransitionHandler, TsallisHandler,
+        UpdateCtx,
+    },
 };
-use crate::{LocalsearchError, OptModel};
 
 fn score(value: f64) -> NotNan<f64> {
     NotNan::new(value).expect("finite test score")

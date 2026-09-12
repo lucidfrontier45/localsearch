@@ -14,8 +14,8 @@ use localsearch::{
         AdaptiveAnnealingOptimizer, AdaptiveScheduler, EpsilonGreedyOptimizer,
         GenericLocalSearchOptimizer, GreatDelugeOptimizer, HillClimbingOptimizer,
         LocalSearchOptimizer, ParallelTemperingOptimizer, PopulationAnnealingOptimizer,
-        RelativeAnnealingOptimizer, SimulatedAnnealingOptimizer, TabuList,
-        TabuSearchOptimizer, TargetAccScheduleMode, TsallisAnnealing,
+        RelativeAnnealingOptimizer, SimulatedAnnealingOptimizer, TabuList, TabuSearchOptimizer,
+        TargetAccScheduleMode, TsallisAnnealing,
     },
     utils::RingBuffer,
 };
@@ -237,8 +237,12 @@ fn print_usage(program: &str) {
     eprintln!("  [opt_route_file]      optional file with optimal route (one city id per line)");
     eprintln!();
     eprintln!("Options:");
-    eprintln!("  --optimizer <name>, -o <name>  run only this optimizer (repeatable, comma-separated OK)");
-    eprintln!("  --all                           run all optimizers (default when --optimizer is absent)");
+    eprintln!(
+        "  --optimizer <name>, -o <name>  run only this optimizer (repeatable, comma-separated OK)"
+    );
+    eprintln!(
+        "  --all                           run all optimizers (default when --optimizer is absent)"
+    );
     eprintln!("  --help, -h                    show this help");
     eprintln!();
     eprintln!("Available optimizers:");

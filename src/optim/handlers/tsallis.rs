@@ -2,9 +2,8 @@ use std::num::NonZero;
 
 use ordered_float::NotNan;
 
-use crate::optim::transition::{TransitionHandler, UpdateCtx};
-
 use super::adaptive_annealing::AdaptiveScheduler;
+use crate::optim::transition::{TransitionHandler, UpdateCtx};
 
 /// Tsallis relative-annealing handler.
 ///

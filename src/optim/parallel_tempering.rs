@@ -4,8 +4,9 @@ use ordered_float::NotNan;
 use rand::RngExt as _;
 use rayon::prelude::*;
 
-use super::{LocalSearchLoop, LocalSearchOptimizer, Metropolis,
-    calculate_temperature_from_acceptance_prob, gather_energy_diffs,
+use super::{
+    LocalSearchLoop, LocalSearchOptimizer, Metropolis, calculate_temperature_from_acceptance_prob,
+    gather_energy_diffs,
 };
 use crate::{
     Duration, Instant, OptModel,
@@ -97,10 +98,8 @@ impl ParallelTemperingOptimizer {
         if energy_diffs.is_empty() {
             return self;
         }
-        let beta_max =
-            calculate_temperature_from_acceptance_prob(&energy_diffs, target_max_prob);
-        let beta_min =
-            calculate_temperature_from_acceptance_prob(&energy_diffs, target_min_prob);
+        let beta_max = calculate_temperature_from_acceptance_prob(&energy_diffs, target_max_prob);
+        let beta_min = calculate_temperature_from_acceptance_prob(&energy_diffs, target_min_prob);
         let n_replicas = self.betas.len();
         Self::with_geometric_betas(
             self.patience,
@@ -167,8 +166,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
                 .par_iter()
                 .enumerate()
                 .map(|(idx, (sol, score))| {
-                    let opt =
-                        LocalSearchLoop::new(self.patience, n_trials, self.return_iter);
+                    let opt = LocalSearchLoop::new(self.patience, n_trials, self.return_iter);
                     let mut cb = &mut |_p: OptProgress<M::SolutionType, M::ScoreType>| {};
                     opt.step(
                         model,

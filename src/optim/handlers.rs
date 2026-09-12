@@ -19,8 +19,7 @@ pub use logistic_annealing::LogisticAnnealing;
 pub use metropolis::{Metropolis, tune_temperature};
 pub(crate) use metropolis::{calculate_temperature_from_acceptance_prob, gather_energy_diffs};
 pub use relative_annealing::RelativeAnnealing;
-pub use simulated_annealing::SimulatedAnnealing;
-pub use simulated_annealing::tune_cooling_rate;
+pub use simulated_annealing::{SimulatedAnnealing, tune_cooling_rate};
 pub use tsallis::TsallisAnnealing;
 
 /// Handler alias for [`AdaptiveAnnealing`].

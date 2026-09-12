@@ -72,11 +72,8 @@ where
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
         let handler = self.handler.clone();
-        let loop_ = LocalSearchLoop::<M::ScoreType>::new(
-            self.patience,
-            self.n_trials,
-            self.return_iter,
-        );
+        let loop_ =
+            LocalSearchLoop::<M::ScoreType>::new(self.patience, self.n_trials, self.return_iter);
         let (result, _) = loop_.step(
             model,
             initial_solution,

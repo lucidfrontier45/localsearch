@@ -1,10 +1,12 @@
-use super::metropolis::{metropolis_probability, tune_temperature};
 use std::num::NonZero;
 
 use ordered_float::NotNan;
 
-use crate::OptModel;
-use crate::optim::transition::{TransitionHandler, UpdateCtx};
+use super::metropolis::{metropolis_probability, tune_temperature};
+use crate::{
+    OptModel,
+    optim::transition::{TransitionHandler, UpdateCtx},
+};
 
 /// Simulated-annealing handler with geometric cooling of `beta`.
 ///
@@ -61,11 +63,7 @@ impl SimulatedAnnealing {
     /// - `returns` : handler with `cooling_rate` computed from the current `beta`
     pub fn tune_cooling_rate(self, n_iter: usize) -> Self {
         Self {
-            cooling_rate: tune_cooling_rate(
-                self.beta,
-                1e2,
-                n_iter / self.update_frequency.get(),
-            ),
+            cooling_rate: tune_cooling_rate(self.beta, 1e2, n_iter / self.update_frequency.get()),
             ..self
         }
     }

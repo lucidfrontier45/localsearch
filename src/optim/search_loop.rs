@@ -179,5 +179,4 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
         };
         (result, handler)
     }
-
 }
