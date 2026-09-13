@@ -8,15 +8,16 @@ pub struct RandomSearchOptimizer {
     /// RNG seed for bit-reproducible runs. `None` (default)
     /// preserves the entropy-driven behavior; set via [`Self::with_seed`].
     seed: Option<u64>,
-
 }
 
 impl RandomSearchOptimizer {
     /// - `patience` : the optimizer will give up
     ///   if there is no improvement of the score after this number of iterations
     pub const fn new(patience: usize) -> Self {
-        Self { patience,
-            seed: None, }
+        Self {
+            patience,
+            seed: None,
+        }
     }
 
     /// Pin the RNG seed so [`Self::optimize`] (and the tune helpers)
@@ -28,9 +29,7 @@ impl RandomSearchOptimizer {
         self.seed = Some(seed);
         self
     }
-
 }
-
 
 impl<M: OptModel> LocalSearchOptimizer<M> for RandomSearchOptimizer {
     fn rng_seed(&self) -> Option<u64> {

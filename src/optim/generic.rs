@@ -81,7 +81,6 @@ where
         self.seed = Some(seed);
         self
     }
-
 }
 
 impl<ST, H, G> GenericLocalSearchOptimizer<ST, H, G>
@@ -135,12 +134,12 @@ where
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-
         let handler = self.handler.clone();
         let generator = self.generator.clone();
         let loop_ = match self.seed {
-            Some(s) => LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter)
-                .with_seed(s),
+            Some(s) => {
+                LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter).with_seed(s)
+            }
             None => LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter),
         };
         let (result, _, _) = loop_.step_with_generator(

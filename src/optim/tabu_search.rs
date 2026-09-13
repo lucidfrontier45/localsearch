@@ -164,9 +164,7 @@ impl<T: TabuList> TabuSearchOptimizer<T> {
                 break;
             }
             let mut samples = vec![];
-            let trial_seeds: Vec<u64> = (0..self.n_trials)
-                .map(|_| master.random())
-                .collect();
+            let trial_seeds: Vec<u64> = (0..self.n_trials).map(|_| master.random()).collect();
             trial_seeds
                 .into_par_iter()
                 .map(|trial_seed| {
@@ -250,7 +248,6 @@ impl<T: TabuList, M: OptModel<TransitionType = T::Item>> LocalSearchOptimizer<M>
     fn rng_seed(&self) -> Option<u64> {
         self.seed
     }
-
 
     fn optimize(
         &self,

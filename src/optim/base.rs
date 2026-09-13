@@ -1,11 +1,11 @@
 use auto_impl::auto_impl;
+use rand::SeedableRng as _;
 
 use crate::{
     Duration, LocalsearchError, OptModel,
     callback::OptCallbackFn,
     optim::search_loop::{derive_seed, make_master_rng},
 };
-use rand::SeedableRng as _;
 
 /// Optimizer that implements local search algorithm.
 #[auto_impl(&, Box, Rc, Arc)]

@@ -4,8 +4,10 @@ use rayon::prelude::*;
 
 use crate::{
     OptModel,
-    optim::search_loop::make_master_rng,
-    optim::transition::{TransitionHandler, UpdateCtx},
+    optim::{
+        search_loop::make_master_rng,
+        transition::{TransitionHandler, UpdateCtx},
+    },
 };
 
 /// Classic Metropolis acceptance with a constant inverse temperature `beta`.

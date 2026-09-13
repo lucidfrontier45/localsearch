@@ -24,7 +24,6 @@ pub struct TsallisRelativeAnnealingOptimizer {
     /// RNG seed for bit-reproducible runs. `None` (default)
     /// preserves the entropy-driven behavior; set via [`Self::with_seed`].
     seed: Option<u64>,
-
 }
 
 impl TsallisRelativeAnnealingOptimizer {
@@ -74,9 +73,7 @@ impl TsallisRelativeAnnealingOptimizer {
         self.seed = Some(seed);
         self
     }
-
 }
-
 
 impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
     for TsallisRelativeAnnealingOptimizer
@@ -106,7 +103,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         // the offset then tracks the best score via `update`.
         let mut handler = self.handler;
         handler.offset = initial_score.into_inner();
-                let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
+        let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
         let opt = match self.seed {
             Some(s) => opt.with_seed(s),
             None => opt,

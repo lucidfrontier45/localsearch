@@ -6,8 +6,7 @@
 //! `QuadraticModel`. Also verify thread-count independence via
 //! `ThreadPool::install`, and reproducibility of the tuning helpers.
 
-use std::num::NonZero;
-use std::time::Duration;
+use std::{num::NonZero, time::Duration};
 
 use ordered_float::NotNan;
 use rayon::ThreadPoolBuilder;

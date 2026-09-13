@@ -22,7 +22,6 @@ pub struct GreatDelugeOptimizer {
     /// RNG seed for bit-reproducible runs. `None` (default)
     /// preserves the entropy-driven behavior; set via [`Self::with_seed`].
     seed: Option<u64>,
-
 }
 
 impl GreatDelugeOptimizer {
@@ -57,9 +56,7 @@ impl GreatDelugeOptimizer {
         self.seed = Some(seed);
         self
     }
-
 }
-
 
 impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for GreatDelugeOptimizer {
     fn rng_seed(&self) -> Option<u64> {
@@ -87,7 +84,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for GreatDelu
         let mut handler = self.handler;
         handler.initial_level = initial_score.into_inner() * self.level_factor;
         handler.level = handler.initial_level;
-                let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
+        let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
         let opt = match self.seed {
             Some(s) => opt.with_seed(s),
             None => opt,

@@ -8,7 +8,6 @@ use super::{
     LocalSearchLoop, LocalSearchOptimizer, Metropolis, calculate_temperature_from_acceptance_prob,
     search_loop::{derive_seed, make_master_rng},
 };
-
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
@@ -90,26 +89,26 @@ impl ParallelTemperingOptimizer {
         self
     }
 
-/// Build `n_replicas` betas geometrically spaced between `beta_min` and
-/// `beta_max`. Single-replica case collapses to `beta_min`. `n_replicas == 0`
-/// is a precondition violation shared by every caller.
-fn geometric_betas(n_replicas: usize, beta_min: f64, beta_max: f64) -> Vec<f64> {
-    let mut betas = Vec::with_capacity(n_replicas);
-    if n_replicas == 0 {
-        panic!("n_replicas must be >= 1");
-    }
-    if n_replicas == 1 {
-        betas.push(beta_min);
-    } else {
-        let ratio = (beta_max / beta_min).powf(1.0 / (n_replicas as f64 - 1.0));
-        let mut b = beta_min;
-        for _ in 0..n_replicas {
-            betas.push(b);
-            b *= ratio;
+    /// Build `n_replicas` betas geometrically spaced between `beta_min` and
+    /// `beta_max`. Single-replica case collapses to `beta_min`. `n_replicas == 0`
+    /// is a precondition violation shared by every caller.
+    fn geometric_betas(n_replicas: usize, beta_min: f64, beta_max: f64) -> Vec<f64> {
+        let mut betas = Vec::with_capacity(n_replicas);
+        if n_replicas == 0 {
+            panic!("n_replicas must be >= 1");
         }
+        if n_replicas == 1 {
+            betas.push(beta_min);
+        } else {
+            let ratio = (beta_max / beta_min).powf(1.0 / (n_replicas as f64 - 1.0));
+            let mut b = beta_min;
+            for _ in 0..n_replicas {
+                betas.push(b);
+                b *= ratio;
+            }
+        }
+        betas
     }
-    betas
-}
 
     /// Helper to create geometric spaced betas
     ///
@@ -235,8 +234,10 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
                 .enumerate()
                 .map(|(idx, (sol, score))| {
                     let opt = match replica_seeds.as_ref() {
-                        Some(seeds) => LocalSearchLoop::new(self.patience, n_trials, self.return_iter)
-                            .with_seed(seeds[idx]),
+                        Some(seeds) => {
+                            LocalSearchLoop::new(self.patience, n_trials, self.return_iter)
+                                .with_seed(seeds[idx])
+                        }
                         None => LocalSearchLoop::new(self.patience, n_trials, self.return_iter),
                     };
 

@@ -9,7 +9,6 @@ pub struct HillClimbingOptimizer {
     /// RNG seed for bit-reproducible runs. `None` (default)
     /// preserves the entropy-driven behavior; set via [`Self::with_seed`].
     seed: Option<u64>,
-
 }
 
 impl HillClimbingOptimizer {
@@ -17,8 +16,11 @@ impl HillClimbingOptimizer {
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     pub const fn new(patience: usize, n_trials: usize) -> Self {
-        Self { patience, n_trials,
-            seed: None, }
+        Self {
+            patience,
+            n_trials,
+            seed: None,
+        }
     }
 
     /// Pin the RNG seed so [`Self::optimize`] (and the tune helpers)
@@ -30,9 +32,7 @@ impl HillClimbingOptimizer {
         self.seed = Some(seed);
         self
     }
-
 }
-
 
 impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
     fn rng_seed(&self) -> Option<u64> {
@@ -58,7 +58,8 @@ impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
     ) -> (M::SolutionType, M::ScoreType) {
         // Hill climbing = epsilon-greedy with epsilon = 0 (never accept worsening moves)
         let optimizer = match self.seed {
-            Some(s) => EpsilonGreedyOptimizer::new(self.patience, self.n_trials, usize::MAX, 0.0).with_seed(s),
+            Some(s) => EpsilonGreedyOptimizer::new(self.patience, self.n_trials, usize::MAX, 0.0)
+                .with_seed(s),
             None => EpsilonGreedyOptimizer::new(self.patience, self.n_trials, usize::MAX, 0.0),
         };
         optimizer.optimize(

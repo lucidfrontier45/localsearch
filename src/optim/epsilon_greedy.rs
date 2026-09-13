@@ -13,7 +13,6 @@ pub struct EpsilonGreedyOptimizer {
     /// RNG seed for bit-reproducible runs. `None` (default)
     /// preserves the entropy-driven behavior; set via [`Self::with_seed`].
     seed: Option<u64>,
-
 }
 
 impl EpsilonGreedyOptimizer {
@@ -43,9 +42,7 @@ impl EpsilonGreedyOptimizer {
         self.seed = Some(seed);
         self
     }
-
 }
-
 
 impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
     fn rng_seed(&self) -> Option<u64> {
@@ -69,7 +66,7 @@ impl<M: OptModel> LocalSearchOptimizer<M> for EpsilonGreedyOptimizer {
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-                let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
+        let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
         let opt = match self.seed {
             Some(s) => opt.with_seed(s),
             None => opt,

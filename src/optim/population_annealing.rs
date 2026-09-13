@@ -9,7 +9,6 @@ use super::{
     search_loop::{derive_seed, make_master_rng},
     tune_cooling_rate, tune_temperature,
 };
-
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
@@ -176,9 +175,11 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
             // pre-par_iter draws keep the order deterministic; distinct draws
             // give each member its own RNG stream, and each round's fresh
             // batch prevents member walks from replaying across rounds.
-            let member_seeds: Option<Vec<u64>> = self
-                .seed
-                .map(|_| (0..self.population_size).map(|_| rng.random::<u64>()).collect());
+            let member_seeds: Option<Vec<u64>> = self.seed.map(|_| {
+                (0..self.population_size)
+                    .map(|_| rng.random::<u64>())
+                    .collect()
+            });
 
             let update_freq = self.update_frequency.get();
 
@@ -193,11 +194,9 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                             LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter)
                                 .with_seed(seeds[member_idx])
                         }
-                        None => LocalSearchLoop::new(
-                            self.patience,
-                            self.n_trials,
-                            self.return_iter,
-                        ),
+                        None => {
+                            LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter)
+                        }
                     };
                     let temp_callback =
                         &mut |_progress: OptProgress<M::SolutionType, M::ScoreType>| {};
@@ -212,7 +211,6 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                     )
                 })
                 .collect::<Vec<_>>();
-
 
             // 1. Update time and iteration counters
             iter = iter.saturating_add(update_freq);
