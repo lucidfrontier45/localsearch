@@ -112,6 +112,52 @@ impl OperatorStats {
     }
 }
 
+/// Destroy or repair operator pool with its adaptive selection state.
+///
+/// Operators and their [`OperatorStats`] live in one struct so selection,
+/// reward credit, and weight updates stay symmetric across both pools.
+#[derive(Clone)]
+struct OperatorPool<O> {
+    operators: Vec<O>,
+    stats: Vec<OperatorStats>,
+    rewards: Rewards,
+}
+
+impl<O> OperatorPool<O> {
+    /// Build a pool with every operator at weight `1.0`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `operators` is empty — an empty pool cannot select.
+    fn new(operators: Vec<O>, rewards: Rewards) -> Self {
+        assert!(!operators.is_empty(), "ALNS requires at least one operator");
+        let stats = (0..operators.len())
+            .map(|_| OperatorStats::new(1.0))
+            .collect();
+        Self {
+            operators,
+            stats,
+            rewards,
+        }
+    }
+
+    /// Pick an operator index by roulette-wheel sampling.
+    fn select<R: rand::Rng>(&self, rng: &mut R) -> usize {
+        select_by_weight(&self.stats, rng)
+    }
+
+    /// Accumulate the outcome reward for the operator at `idx`.
+    fn credit(&mut self, idx: usize, outcome: TrialOutcome) {
+        self.stats[idx].accumulated_score += self.rewards.reward_for(outcome);
+        self.stats[idx].usage_count += 1;
+    }
+
+    /// Blend weights with the reaction factor at a segment boundary.
+    fn update_weights(&mut self, reaction_factor: f64) {
+        apply_weight_update(&mut self.stats, reaction_factor);
+    }
+}
+
 /// Plug-in destroy operator for ALNS.
 ///
 /// A destroy operator returns a *partial* state of type `P`. The partial
@@ -180,10 +226,10 @@ impl<M: OptModel, P> Clone for Box<dyn RepairOperator<M, P>> {
 /// produced the winner is credited (winner-takes-all); the remaining
 /// candidates are discarded without reward.
 pub struct AlnsTrialGenerator<M: OptModel, P> {
-    destroy_operators: Vec<Box<dyn DestroyOperator<M, P>>>,
-    destroy_stats: Vec<OperatorStats>,
-    repair_operators: Vec<Box<dyn RepairOperator<M, P>>>,
-    repair_stats: Vec<OperatorStats>,
+    /// Destroy operators with their adaptive weights and reward table.
+    destroy_pool: OperatorPool<Box<dyn DestroyOperator<M, P>>>,
+    /// Repair operators with their adaptive weights and reward table.
+    repair_pool: OperatorPool<Box<dyn RepairOperator<M, P>>>,
     /// Number of trials per segment — weights are recomputed whenever this
     /// threshold is reached.
     segment_size: usize,
@@ -193,10 +239,6 @@ pub struct AlnsTrialGenerator<M: OptModel, P> {
     /// weight and the segment performance as
     /// `w_new = (1 - r) * w_old + r * (segment_score / usage_count)`.
     reaction_factor: f64,
-    /// Reward table applied to destroy operators.
-    destroy_rewards: Rewards,
-    /// Reward table applied to repair operators.
-    repair_rewards: Rewards,
 }
 
 impl<M: OptModel, P> AlnsTrialGenerator<M, P> {
@@ -212,26 +254,12 @@ impl<M: OptModel, P> AlnsTrialGenerator<M, P> {
         destroy_operators: Vec<Box<dyn DestroyOperator<M, P>>>,
         repair_operators: Vec<Box<dyn RepairOperator<M, P>>>,
     ) -> Self {
-        assert!(
-            !destroy_operators.is_empty(),
-            "ALNS requires at least one destroy operator"
-        );
-        assert!(
-            !repair_operators.is_empty(),
-            "ALNS requires at least one repair operator"
-        );
-        let n_d = destroy_operators.len();
-        let n_r = repair_operators.len();
         Self {
-            destroy_operators,
-            destroy_stats: (0..n_d).map(|_| OperatorStats::new(1.0)).collect(),
-            repair_operators,
-            repair_stats: (0..n_r).map(|_| OperatorStats::new(1.0)).collect(),
+            destroy_pool: OperatorPool::new(destroy_operators, Rewards::default()),
+            repair_pool: OperatorPool::new(repair_operators, Rewards::default()),
             segment_size: 100,
             trials_in_segment: 0,
             reaction_factor: 0.8,
-            destroy_rewards: Rewards::default(),
-            repair_rewards: Rewards::default(),
         }
     }
 
@@ -254,73 +282,23 @@ impl<M: OptModel, P> AlnsTrialGenerator<M, P> {
         self
     }
 
-    /// Replace the reward table applied to destroy operators.
-    pub fn with_destroy_rewards(mut self, rewards: Rewards) -> Self {
-        self.destroy_rewards = rewards;
-        self
-    }
-
-    /// Replace the reward table applied to repair operators.
-    pub fn with_repair_rewards(mut self, rewards: Rewards) -> Self {
-        self.repair_rewards = rewards;
-        self
-    }
-
     /// Replace the reward table applied to both destroy and repair operators.
     pub fn with_rewards(mut self, rewards: Rewards) -> Self {
-        self.destroy_rewards = rewards;
-        self.repair_rewards = rewards;
+        self.destroy_pool.rewards = rewards;
+        self.repair_pool.rewards = rewards;
         self
     }
 
-    /// Number of destroy operators registered with this generator.
-    pub fn n_destroy_operators(&self) -> usize {
-        self.destroy_operators.len()
+    /// Adaptive selection state (weight, accumulated reward, usage) of the
+    /// destroy-operator pool for the current segment.
+    pub fn destroy_stats(&self) -> &[OperatorStats] {
+        &self.destroy_pool.stats
     }
 
-    /// Number of repair operators registered with this generator.
-    pub fn n_repair_operators(&self) -> usize {
-        self.repair_operators.len()
-    }
-
-    /// Current roulette-wheel weights for destroy operators.
-    pub fn destroy_weights(&self) -> Vec<f64> {
-        self.destroy_stats.iter().map(|s| s.weight).collect()
-    }
-
-    /// Current roulette-wheel weights for repair operators.
-    pub fn repair_weights(&self) -> Vec<f64> {
-        self.repair_stats.iter().map(|s| s.weight).collect()
-    }
-
-    /// Number of trials applied to each destroy operator since the last
-    /// weight update.
-    pub fn destroy_usage(&self) -> Vec<usize> {
-        self.destroy_stats.iter().map(|s| s.usage_count).collect()
-    }
-
-    /// Number of trials applied to each repair operator since the last
-    /// weight update.
-    pub fn repair_usage(&self) -> Vec<usize> {
-        self.repair_stats.iter().map(|s| s.usage_count).collect()
-    }
-
-    /// Accumulated reward for each destroy operator since the last weight
-    /// update.
-    pub fn destroy_scores(&self) -> Vec<f64> {
-        self.destroy_stats
-            .iter()
-            .map(|s| s.accumulated_score)
-            .collect()
-    }
-
-    /// Accumulated reward for each repair operator since the last weight
-    /// update.
-    pub fn repair_scores(&self) -> Vec<f64> {
-        self.repair_stats
-            .iter()
-            .map(|s| s.accumulated_score)
-            .collect()
+    /// Adaptive selection state (weight, accumulated reward, usage) of the
+    /// repair-operator pool for the current segment.
+    pub fn repair_stats(&self) -> &[OperatorStats] {
+        &self.repair_pool.stats
     }
 
     /// Trials applied to operators during the current segment. Resets to
@@ -329,31 +307,15 @@ impl<M: OptModel, P> AlnsTrialGenerator<M, P> {
         self.trials_in_segment
     }
 
-    /// Pick a destroy-operator index by roulette-wheel sampling.
-    fn select_destroy<R: rand::Rng>(&self, rng: &mut R) -> usize {
-        select_by_weight(&self.destroy_stats, rng)
-    }
-
-    /// Pick a repair-operator index by roulette-wheel sampling.
-    fn select_repair<R: rand::Rng>(&self, rng: &mut R) -> usize {
-        select_by_weight(&self.repair_stats, rng)
-    }
-
     /// Credit one operator pair and advance the segment bookkeeping,
     /// updating weights at segment boundaries.
     fn credit(&mut self, d_idx: usize, r_idx: usize, outcome: TrialOutcome) {
-        let d_reward = self.destroy_rewards.reward_for(outcome);
-        let r_reward = self.repair_rewards.reward_for(outcome);
-
-        self.destroy_stats[d_idx].accumulated_score += d_reward;
-        self.destroy_stats[d_idx].usage_count += 1;
-        self.repair_stats[r_idx].accumulated_score += r_reward;
-        self.repair_stats[r_idx].usage_count += 1;
-
+        self.destroy_pool.credit(d_idx, outcome);
+        self.repair_pool.credit(r_idx, outcome);
         self.trials_in_segment += 1;
         if self.trials_in_segment >= self.segment_size {
-            apply_weight_update(&mut self.destroy_stats, self.reaction_factor);
-            apply_weight_update(&mut self.repair_stats, self.reaction_factor);
+            self.destroy_pool.update_weights(self.reaction_factor);
+            self.repair_pool.update_weights(self.reaction_factor);
             self.trials_in_segment = 0;
         }
     }
@@ -398,15 +360,11 @@ fn apply_weight_update(stats: &mut [OperatorStats], reaction_factor: f64) {
 impl<M: OptModel, P> Clone for AlnsTrialGenerator<M, P> {
     fn clone(&self) -> Self {
         Self {
-            destroy_operators: self.destroy_operators.clone(),
-            destroy_stats: self.destroy_stats.clone(),
-            repair_operators: self.repair_operators.clone(),
-            repair_stats: self.repair_stats.clone(),
+            destroy_pool: self.destroy_pool.clone(),
+            repair_pool: self.repair_pool.clone(),
             segment_size: self.segment_size,
             trials_in_segment: self.trials_in_segment,
             reaction_factor: self.reaction_factor,
-            destroy_rewards: self.destroy_rewards,
-            repair_rewards: self.repair_rewards,
         }
     }
 }
@@ -423,10 +381,10 @@ impl<M: OptModel, P> TrialGenerator<M> for AlnsTrialGenerator<M, P> {
         _current_score: M::ScoreType,
         rng: &mut StdRng,
     ) -> (M::SolutionType, M::ScoreType, Self::Token) {
-        let d_idx = self.select_destroy(rng);
-        let r_idx = self.select_repair(rng);
-        let partial = self.destroy_operators[d_idx].destroy(model, current_solution, rng);
-        let (solution, score) = self.repair_operators[r_idx].repair(model, partial, rng);
+        let d_idx = self.destroy_pool.select(rng);
+        let r_idx = self.repair_pool.select(rng);
+        let partial = self.destroy_pool.operators[d_idx].destroy(model, current_solution, rng);
+        let (solution, score) = self.repair_pool.operators[r_idx].repair(model, partial, rng);
         (solution, score, (d_idx, r_idx))
     }
 
@@ -582,9 +540,9 @@ mod tests {
         // the operator pair, so the loop can generate trials in parallel
         // and credit only the winner.
         generator.feedback((1, 1), TrialOutcome::NewBest);
-        assert_eq!(generator.destroy_usage(), vec![0, 1]);
-        assert_eq!(generator.repair_usage(), vec![0, 1]);
-        assert_eq!(generator.destroy_scores(), vec![0.0, 1.0]);
-        assert_eq!(generator.repair_scores(), vec![0.0, 1.0]);
+        assert_eq!(generator.destroy_stats()[1].usage_count, 1);
+        assert_eq!(generator.repair_stats()[1].usage_count, 1);
+        assert_eq!(generator.destroy_stats()[1].accumulated_score, 1.0);
+        assert_eq!(generator.repair_stats()[1].accumulated_score, 1.0);
     }
 }

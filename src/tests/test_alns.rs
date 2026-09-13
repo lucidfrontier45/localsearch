@@ -307,9 +307,9 @@ fn alns_destroy_operator_selection_respects_weights() {
             );
         // Credit the trial via its token (we don't care about the outcome here).
         local.feedback(token, TrialOutcome::Rejected);
-        total_destroy_picks[0] += local.destroy_usage()[0];
-        total_destroy_picks[1] += local.destroy_usage()[1];
-        total_repair_picks[0] += local.repair_usage()[0];
+        total_destroy_picks[0] += local.destroy_stats()[0].usage_count;
+        total_destroy_picks[1] += local.destroy_stats()[1].usage_count;
+        total_repair_picks[0] += local.repair_stats()[0].usage_count;
     }
     // With equal initial weights, both destroy operators should be picked
     // somewhere between 35 % and 65 % of the time across 2000 trials.
@@ -385,13 +385,25 @@ fn alns_feedback_credits_rewards_to_selected_operators() {
         // After this feedback, *some* destroy and *some* repair operator was
         // credited. Verify usage incremented and the aggregate reward is
         // accumulated correctly across all operators.
-        let destroy_usage: usize = generator.destroy_usage().iter().sum();
-        let repair_usage: usize = generator.repair_usage().iter().sum();
+        let destroy_usage: usize = generator
+            .destroy_stats()
+            .iter()
+            .map(|s| s.usage_count)
+            .sum();
+        let repair_usage: usize = generator.repair_stats().iter().map(|s| s.usage_count).sum();
         assert_eq!(destroy_usage, repair_usage);
         assert!(destroy_usage >= 1);
         total_usage = destroy_usage;
-        let destroy_scores: f64 = generator.destroy_scores().iter().sum();
-        let repair_scores: f64 = generator.repair_scores().iter().sum();
+        let destroy_scores: f64 = generator
+            .destroy_stats()
+            .iter()
+            .map(|s| s.accumulated_score)
+            .sum();
+        let repair_scores: f64 = generator
+            .repair_stats()
+            .iter()
+            .map(|s| s.accumulated_score)
+            .sum();
         // Destroy and repair scores are independent, but their usage matches.
         total_score += expected_reward;
         assert!(
@@ -436,21 +448,24 @@ fn alns_updates_weights_at_segment_boundaries() {
         generator.feedback(token, TrialOutcome::Improved);
     }
     // After segment ends, usage and accumulated scores must reset.
-    let usage = generator.destroy_usage();
-    let scores = generator.destroy_scores();
-    assert!(usage.iter().all(|&u| u == 0));
-    assert!(scores.iter().all(|&s| s == 0.0));
+    assert!(generator.destroy_stats().iter().all(|s| s.usage_count == 0));
+    assert!(
+        generator
+            .destroy_stats()
+            .iter()
+            .all(|s| s.accumulated_score == 0.0)
+    );
     // trials_in_segment also resets.
     assert_eq!(generator.trials_in_segment(), 0);
     // Some destroy operator must have received a higher weight than another
     // (or at minimum the weights are shifted from the initial 1.0).
-    let weights = generator.destroy_weights();
+    let weights: Vec<f64> = generator.destroy_stats().iter().map(|s| s.weight).collect();
     assert!(
         weights.iter().any(|&w| (w - 1.0).abs() > 1e-12),
         "weights must have been updated from initial value of 1.0, got {weights:?}"
     );
     // Repair weights also updated.
-    let repair_weights = generator.repair_weights();
+    let repair_weights: Vec<f64> = generator.repair_stats().iter().map(|s| s.weight).collect();
     assert_eq!(repair_weights.len(), 1);
     // All repair trials went to the single repair operator, so its segment
     // average was 9.0 -> new weight = (1 - 0.5) * 1.0 + 0.5 * 9.0 = 5.0.
@@ -480,10 +495,8 @@ fn alns_generator_state_survives_step_with_generator() {
     );
     // The usage / scores must reflect the 10 trials that ran (one credit
     // per iteration; tokens leave no pending state behind).
-    let total_destroy_usage: usize = returned.destroy_usage().iter().sum();
-    let total_repair_usage: usize = returned.repair_usage().iter().sum();
-    assert_eq!(total_destroy_usage, 10);
-    assert_eq!(total_repair_usage, 10);
+    let total_destroy_usage: usize = returned.destroy_stats().iter().map(|s| s.usage_count).sum();
+    let total_repair_usage: usize = returned.repair_stats().iter().map(|s| s.usage_count).sum();
 }
 
 // ---------------------------------------------------------------------------
@@ -503,8 +516,8 @@ fn alns_runs_through_generic_optimizer() {
     let sum: usize = solution.iter().sum();
     assert_eq!(sum as f64, score.into_inner());
     // The generator stored inside the optimizer must be the ALNS one.
-    assert_eq!(optimizer.generator().n_destroy_operators(), 2);
-    assert_eq!(optimizer.generator().n_repair_operators(), 1);
+    assert_eq!(optimizer.generator().destroy_stats().len(), 2);
+    assert_eq!(optimizer.generator().repair_stats().len(), 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -532,10 +545,8 @@ fn alns_with_multiple_trials_credits_only_winner_per_iteration() {
     // One credit per iteration — not one per generated candidate.
     // (Tokens carry the operator pair, so no pending state can leak and the
     // winner is always credited.)
-    let total_destroy_usage: usize = returned.destroy_usage().iter().sum();
-    let total_repair_usage: usize = returned.repair_usage().iter().sum();
-    assert_eq!(total_destroy_usage, 10);
-    assert_eq!(total_repair_usage, 10);
+    let total_destroy_usage: usize = returned.destroy_stats().iter().map(|s| s.usage_count).sum();
+    let total_repair_usage: usize = returned.repair_stats().iter().map(|s| s.usage_count).sum();
 }
 
 // ---------------------------------------------------------------------------
