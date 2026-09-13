@@ -21,7 +21,7 @@ mod transition;
 mod tsallis;
 
 pub use adaptive_annealing::AdaptiveAnnealingOptimizer;
-pub use alns::{AlnsTrialGenerator, DestroyOperator, RepairOperator, Rewards};
+pub use alns::{AlnsTrialGenerator, DestroyOperator, OperatorStats, RepairOperator, Rewards};
 pub use base::LocalSearchOptimizer;
 pub use epsilon_greedy::EpsilonGreedyOptimizer;
 pub use generic::GenericLocalSearchOptimizer;
