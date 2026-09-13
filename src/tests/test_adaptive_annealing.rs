@@ -36,7 +36,7 @@ fn test_handler_tune_initial_temperature() {
         AdaptiveScheduler::default(),
         NonZero::new(100).expect("update_frequency must be >= 1"),
     )
-    .tune_initial_temperature(&model, None, 1000);
+    .tune_initial_temperature(&model, None, 1000, None);
     assert!(
         handler.beta > 0.0,
         "tuned beta must be positive, got {}",

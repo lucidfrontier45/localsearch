@@ -40,6 +40,9 @@ pub struct GenericLocalSearchOptimizer<ST, H, G = DefaultTrialGenerator> {
     handler: H,
     generator: G,
     phantom: PhantomData<ST>,
+    /// RNG seed for bit-reproducible runs. `None` (default) preserves the
+    /// entropy-driven behavior; set via [`Self::with_seed`].
+    seed: Option<u64>,
 }
 
 impl<ST, H> GenericLocalSearchOptimizer<ST, H, DefaultTrialGenerator>
@@ -66,7 +69,17 @@ where
             handler,
             generator: DefaultTrialGenerator,
             phantom: PhantomData,
+            seed: None,
         }
+    }
+
+    /// Pin the RNG seed so [`Self::optimize`] yields bit-identical
+    /// `(solution, score)` across calls with the same inputs.
+    ///
+    /// `None` (the default) keeps the historical entropy-driven behavior.
+    pub const fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
+        self
     }
 }
 
@@ -96,6 +109,7 @@ where
             handler: self.handler,
             generator,
             phantom: PhantomData,
+            seed: self.seed,
         }
     }
 }
@@ -107,6 +121,10 @@ where
     H: TransitionHandler<M::ScoreType> + Clone,
     G: TrialGenerator<M> + Clone + Sync,
 {
+    fn rng_seed(&self) -> Option<u64> {
+        self.seed
+    }
+
     fn optimize(
         &self,
         model: &M,
@@ -118,7 +136,12 @@ where
     ) -> (M::SolutionType, M::ScoreType) {
         let handler = self.handler.clone();
         let generator = self.generator.clone();
-        let loop_ = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
+        let loop_ = match self.seed {
+            Some(s) => {
+                LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter).with_seed(s)
+            }
+            None => LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter),
+        };
         let (result, _, _) = loop_.step_with_generator(
             model,
             initial_solution,

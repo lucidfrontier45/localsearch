@@ -132,6 +132,7 @@ pub struct LocalSearchLoop {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
+    seed: Option<u64>,
 }
 
 impl LocalSearchLoop {
@@ -152,7 +153,26 @@ impl LocalSearchLoop {
             patience,
             n_trials,
             return_iter,
+            seed: None,
         }
+    }
+
+    /// Fix the RNG seed so [`Self::step`] / [`Self::step_with_generator`]
+    /// produce bit-identical results across calls with the same inputs.
+    ///
+    /// `None` (the default after [`Self::new`]) keeps the historical
+    /// entropy-driven behavior. When set, distinct phases (the master RNG
+    /// vs the initial-solution RNG) are domain-separated by a splitmix64
+    /// salt so they do not share an identical `seed_from_u64` stream.
+    pub const fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
+        self
+    }
+
+    /// Accessor for the configured seed, if any. Mirrors
+    /// [`crate::optim::LocalSearchOptimizer::rng_seed`].
+    pub const fn seed(&self) -> Option<u64> {
+        self.seed
     }
 
     /// Perform one optimization step (up to `n_iter` iterations or `time_limit`)
@@ -222,7 +242,10 @@ impl LocalSearchLoop {
         G: TrialGenerator<M> + Sync,
     {
         let start_time = Instant::now();
-        let mut rng = rand::rng();
+        // salt = 2: distinct from the initial-solution RNG (salt 1) so the two
+        // phases do not share a `seed_from_u64` stream even when the user seed
+        // is identical.
+        let mut rng = make_master_rng(self.seed.map(|s| derive_seed(s, 2)));
         let mut current_solution = initial_solution;
         let mut current_score = initial_score;
         let best_solution = Rc::new(RefCell::new(current_solution.clone()));
@@ -346,4 +369,28 @@ impl LocalSearchLoop {
         };
         (result, handler, generator)
     }
+}
+
+/// Build a master [`StdRng`] for a shared search loop.
+///
+/// When `seed` is `Some(s)` the RNG is deterministically seeded from `s`;
+/// when `None` it falls back to thread-local entropy, preserving the historical
+/// behavior for optimizers that do not opt into reproducibility.
+pub(crate) fn make_master_rng(seed: Option<u64>) -> rand::rngs::StdRng {
+    match seed {
+        Some(s) => rand::rngs::StdRng::seed_from_u64(s),
+        None => rand::rngs::StdRng::from_rng(&mut rand::rng()),
+    }
+}
+
+/// Domain-separate `(seed, salt)` so two phases that would otherwise be seeded
+/// with the same `seed_from_u64(seed)` stream get distinct, decorrelated
+/// streams. Uses the splitmix64 finalizer — 3 lines, no allocations, and
+/// independent of the master RNG so it is safe to call before the master is
+/// constructed.
+pub(crate) fn derive_seed(seed: u64, salt: u64) -> u64 {
+    let mut z = seed.wrapping_add(salt).wrapping_add(0x9E3779B97F4A7C15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D049BB133111EB);
+    z ^ (z >> 31)
 }

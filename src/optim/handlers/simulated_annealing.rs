@@ -32,19 +32,16 @@ impl SimulatedAnnealing {
         }
     }
 
-    /// Tune the initial inverse temperature `beta` based on random warmup trials.
-    ///
-    /// - `model` : the model to optimize
-    /// - `initial_solution_and_score` : the initial solution to start warmup from. If `None`, a random solution will be generated.
-    /// - `n_warmup` : number of warmup iterations to run
-    /// - `target_initial_prob` : target acceptance probability for uphill moves at the beginning
-    /// - `returns` : handler with `beta` tuned for the target initial acceptance probability
+    /// Tune the initial inverse temperature `beta` based on random warmup
+    /// trials. `seed = None` preserves the entropy-driven behavior;
+    /// `Some(s)` makes the warmup stream reproducible across calls.
     pub fn tune_initial_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
         self,
         model: &M,
         initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
         n_warmup: usize,
         target_initial_prob: f64,
+        seed: Option<u64>,
     ) -> Self {
         Self {
             beta: tune_temperature(
@@ -52,6 +49,7 @@ impl SimulatedAnnealing {
                 initial_solution_and_score,
                 n_warmup,
                 target_initial_prob,
+                seed,
             ),
             ..self
         }

@@ -6,7 +6,7 @@ use rayon::prelude::*;
 
 use super::{
     LocalSearchLoop, LocalSearchOptimizer, Metropolis, calculate_temperature_from_acceptance_prob,
-    gather_energy_diffs,
+    search_loop::{derive_seed, make_master_rng},
 };
 use crate::{
     Duration, Instant, OptModel,
@@ -27,6 +27,9 @@ pub struct ParallelTemperingOptimizer {
     betas: Vec<f64>,
     /// Non-zero number of Metropolis steps to run per replica between exchange attempts
     update_frequency: NonZero<usize>,
+    /// RNG seed for bit-reproducible runs. `None` (default) preserves the
+    /// entropy-driven behavior; set via [`Self::with_seed`].
+    seed: Option<u64>,
 }
 
 impl ParallelTemperingOptimizer {
@@ -47,21 +50,49 @@ impl ParallelTemperingOptimizer {
             return_iter,
             betas,
             update_frequency,
+            seed: None,
         }
     }
 
-    /// Helper to create geometric spaced betas
-    ///
-    /// Creates `n_replicas` betas geometrically spaced between `beta_min` and `beta_max`.
-    pub fn with_geometric_betas(
+    /// Private constructor used by both [`Self::new`] (which carries no seed)
+    /// and the seed-preserving `tune_temperature` rebuilds. Lets every code
+    /// path route through a single `Self { ... }` literal that does not
+    /// silently drop the seed.
+    fn new_with_seed(
         patience: usize,
         n_trials: usize,
         return_iter: usize,
-        n_replicas: usize,
-        beta_min: f64,
-        beta_max: f64,
+        betas: Vec<f64>,
         update_frequency: NonZero<usize>,
+        seed: Option<u64>,
     ) -> Self {
+        if betas.is_empty() {
+            panic!("betas must contain at least one replica");
+        }
+        Self {
+            patience,
+            n_trials,
+            return_iter,
+            betas,
+            update_frequency,
+            seed,
+        }
+    }
+
+    /// Pin the RNG seed so [`Self::optimize`] (and the seed-aware tune
+    /// helpers) yield bit-identical `(solution, score)` across calls with
+    /// the same inputs.
+    ///
+    /// `None` (the default) keeps the historical entropy-driven behavior.
+    pub const fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
+        self
+    }
+
+    /// Build `n_replicas` betas geometrically spaced between `beta_min` and
+    /// `beta_max`. Single-replica case collapses to `beta_min`. `n_replicas == 0`
+    /// is a precondition violation shared by every caller.
+    fn geometric_betas(n_replicas: usize, beta_min: f64, beta_max: f64) -> Vec<f64> {
         let mut betas = Vec::with_capacity(n_replicas);
         if n_replicas == 0 {
             panic!("n_replicas must be >= 1");
@@ -76,6 +107,22 @@ impl ParallelTemperingOptimizer {
                 b *= ratio;
             }
         }
+        betas
+    }
+
+    /// Helper to create geometric spaced betas
+    ///
+    /// Creates `n_replicas` betas geometrically spaced between `beta_min` and `beta_max`.
+    pub fn with_geometric_betas(
+        patience: usize,
+        n_trials: usize,
+        return_iter: usize,
+        n_replicas: usize,
+        beta_min: f64,
+        beta_max: f64,
+        update_frequency: NonZero<usize>,
+    ) -> Self {
+        let betas = Self::geometric_betas(n_replicas, beta_min, beta_max);
         Self::new(patience, n_trials, return_iter, betas, update_frequency)
     }
 
@@ -94,26 +141,38 @@ impl ParallelTemperingOptimizer {
         target_max_prob: f64,
         target_min_prob: f64,
     ) -> Self {
-        let energy_diffs = gather_energy_diffs(model, initial_solution, n_warmup);
+        // salt 4: warmup trial stream is decorrelated from any opt-phase
+        // stream; flows into the derived beta ladder so the LHS remains
+        // reproducible when `seed` is set.
+        let energy_diffs = super::gather_energy_diffs(
+            model,
+            initial_solution,
+            n_warmup,
+            self.seed.map(|s| derive_seed(s, 4)),
+        );
         if energy_diffs.is_empty() {
             return self;
         }
         let beta_max = calculate_temperature_from_acceptance_prob(&energy_diffs, target_max_prob);
         let beta_min = calculate_temperature_from_acceptance_prob(&energy_diffs, target_min_prob);
         let n_replicas = self.betas.len();
-        Self::with_geometric_betas(
+        let betas = Self::geometric_betas(n_replicas, beta_min, beta_max);
+        Self::new_with_seed(
             self.patience,
             self.n_trials,
             self.return_iter,
-            n_replicas,
-            beta_min,
-            beta_max,
+            betas,
             self.update_frequency,
+            self.seed,
         )
     }
 }
 
 impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelTemperingOptimizer {
+    fn rng_seed(&self) -> Option<u64> {
+        self.seed
+    }
+
     /// Start optimization
     fn optimize(
         &self,
@@ -125,7 +184,8 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
         let start_time = Instant::now();
-        let mut rng = rand::rng();
+        // salt 2: master RNG for replica swap and return-to-best decisions.
+        let mut rng = make_master_rng(self.seed.map(|s| derive_seed(s, 2)));
 
         let n_replicas = self.betas.len();
 
@@ -151,11 +211,18 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
             if elapsed > time_limit {
                 break;
             }
-
             // Run Metropolis on each replica in parallel
             let n_trials = self.n_trials;
             let update_freq = self.update_frequency.get();
             let time_remaining = time_limit.saturating_sub(elapsed);
+
+            // Sample per-replica child seeds from the master RNG. Sequential
+            // pre-par_iter draws keep the order deterministic; distinct draws
+            // give each replica its own RNG stream, and each round's fresh
+            // batch prevents replica walks from replaying across exchanges.
+            let replica_seeds: Option<Vec<u64>> = self
+                .seed
+                .map(|_| (0..n_replicas).map(|_| rng.random::<u64>()).collect());
 
             // Keep a clone of current replicas for parallel processing
             type ReplicaResult<M> = (
@@ -166,7 +233,14 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
                 .par_iter()
                 .enumerate()
                 .map(|(idx, (sol, score))| {
-                    let opt = LocalSearchLoop::new(self.patience, n_trials, self.return_iter);
+                    let opt = match replica_seeds.as_ref() {
+                        Some(seeds) => {
+                            LocalSearchLoop::new(self.patience, n_trials, self.return_iter)
+                                .with_seed(seeds[idx])
+                        }
+                        None => LocalSearchLoop::new(self.patience, n_trials, self.return_iter),
+                    };
+
                     let mut cb = &mut |_p: OptProgress<M::SolutionType, M::ScoreType>| {};
                     opt.step(
                         model,
