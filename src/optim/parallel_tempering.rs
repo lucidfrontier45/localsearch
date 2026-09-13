@@ -212,11 +212,18 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
             if elapsed > time_limit {
                 break;
             }
-
             // Run Metropolis on each replica in parallel
             let n_trials = self.n_trials;
             let update_freq = self.update_frequency.get();
             let time_remaining = time_limit.saturating_sub(elapsed);
+
+            // Sample per-replica child seeds from the master RNG. Sequential
+            // pre-par_iter draws keep the order deterministic; distinct draws
+            // give each replica its own RNG stream, and each round's fresh
+            // batch prevents replica walks from replaying across exchanges.
+            let replica_seeds: Option<Vec<u64>> = self
+                .seed
+                .map(|_| (0..n_replicas).map(|_| rng.random::<u64>()).collect());
 
             // Keep a clone of current replicas for parallel processing
             type ReplicaResult<M> = (
@@ -227,18 +234,12 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
                 .par_iter()
                 .enumerate()
                 .map(|(idx, (sol, score))| {
-                    // double-salt: per-replica loop RNG is decorrelated from
-                    // both the outer master (salt 2) AND from the warmup trial
-                    // stream (salt 4). Removing either downstream salt would not
-                    // silently alias replica 0 onto warmup.
-                    let loop_seed = self
-                        .seed
-                        .map(|s| derive_seed(derive_seed(s, 4), idx as u64));
-                    let opt = match loop_seed {
-                        Some(s) => LocalSearchLoop::new(self.patience, n_trials, self.return_iter)
-                            .with_seed(s),
+                    let opt = match replica_seeds.as_ref() {
+                        Some(seeds) => LocalSearchLoop::new(self.patience, n_trials, self.return_iter)
+                            .with_seed(seeds[idx]),
                         None => LocalSearchLoop::new(self.patience, n_trials, self.return_iter),
                     };
+
                     let mut cb = &mut |_p: OptProgress<M::SolutionType, M::ScoreType>| {};
                     opt.step(
                         model,

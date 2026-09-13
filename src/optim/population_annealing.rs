@@ -172,23 +172,35 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 break;
             }
 
-            // salt 4: per-iteration loop RNG is decorrelated from the master (salt 2)
-            // so the two streams do not share the same `seed_from_u64` walk.
-            let opt = match self.seed {
-                Some(s) => LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter)
-                    .with_seed(derive_seed(s, 4)),
-                None => LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter),
-            };
+            // Sample per-member child seeds from the master RNG. Sequential
+            // pre-par_iter draws keep the order deterministic; distinct draws
+            // give each member its own RNG stream, and each round's fresh
+            // batch prevents member walks from replaying across rounds.
+            let member_seeds: Option<Vec<u64>> = self
+                .seed
+                .map(|_| (0..self.population_size).map(|_| rng.random::<u64>()).collect());
+
             let update_freq = self.update_frequency.get();
 
             // Process each member of the population
+
             let step_results = population
                 .par_iter()
-                .map(|(solution, score)| {
-                    // Run SA for n_population_update steps
+                .enumerate()
+                .map(|(member_idx, (solution, score))| {
+                    let opt = match member_seeds.as_ref() {
+                        Some(seeds) => {
+                            LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter)
+                                .with_seed(seeds[member_idx])
+                        }
+                        None => LocalSearchLoop::new(
+                            self.patience,
+                            self.n_trials,
+                            self.return_iter,
+                        ),
+                    };
                     let temp_callback =
                         &mut |_progress: OptProgress<M::SolutionType, M::ScoreType>| {};
-
                     opt.step(
                         model,
                         solution.clone(),
@@ -200,6 +212,7 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                     )
                 })
                 .collect::<Vec<_>>();
+
 
             // 1. Update time and iteration counters
             iter = iter.saturating_add(update_freq);
