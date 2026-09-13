@@ -1,6 +1,7 @@
 //! Optimization Algorithm
 
 mod adaptive_annealing;
+mod alns;
 mod base;
 mod epsilon_greedy;
 mod generic;
@@ -20,6 +21,7 @@ mod transition;
 mod tsallis;
 
 pub use adaptive_annealing::AdaptiveAnnealingOptimizer;
+pub use alns::{AlnsTrialGenerator, DestroyOperator, RepairOperator, Rewards};
 pub use base::LocalSearchOptimizer;
 pub use epsilon_greedy::EpsilonGreedyOptimizer;
 pub use generic::GenericLocalSearchOptimizer;
@@ -39,7 +41,9 @@ pub use parallel_tempering::ParallelTemperingOptimizer;
 pub use population_annealing::PopulationAnnealingOptimizer;
 pub use random::RandomSearchOptimizer;
 pub use relative_annealing::RelativeAnnealingOptimizer;
-pub use search_loop::{LocalSearchLoop, StepResult};
+pub use search_loop::{
+    DefaultTrialGenerator, LocalSearchLoop, StepResult, TrialGenerator, TrialOutcome,
+};
 pub use simulated_annealing::SimulatedAnnealingOptimizer;
 pub use tabu_search::{TabuList, TabuSearchOptimizer};
 pub use transition::{TransitionHandler, UpdateCtx};

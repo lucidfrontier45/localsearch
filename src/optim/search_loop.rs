@@ -1,6 +1,6 @@
-use std::{cell::RefCell, marker::PhantomData, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
-use rand::RngExt as _;
+use rand::{RngExt as _, SeedableRng as _};
 use rayon::prelude::*;
 
 use super::transition::TransitionHandler;
@@ -25,6 +25,95 @@ pub struct StepResult<S, ST> {
     pub acceptance_counter: AcceptanceCounter,
 }
 
+/// Outcome classification for an attempt at a new trial solution.
+///
+/// Adaptive generators (such as ALNS) use this classification to credit the
+/// operators that produced the trial.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrialOutcome {
+    /// Trial produced a new global best solution. Classified independently
+    /// of acceptance: the global best is recorded before the acceptance
+    /// check, so a rejected trial that beat the best still earns this credit.
+    NewBest,
+    /// Trial improved over the current solution and was accepted, but did
+    /// not improve the global best.
+    Improved,
+    /// Trial was accepted but did not improve the current solution.
+    Accepted,
+    /// Trial was rejected by the acceptance criterion (and did not beat the
+    /// global best — see [`TrialOutcome::NewBest`]).
+    Rejected,
+}
+
+/// Pluggable trial-generation abstraction that decouples neighborhood
+/// generation from the accept/reject loop.
+///
+/// A generator produces candidate solutions from the current one, then
+/// receives a [`TrialOutcome`] for the winning candidate via
+/// [`TrialGenerator::feedback`] after the loop has decided what to do with
+/// it. Adaptive generators (e.g. ALNS) use that feedback to update their
+/// internal state — operator weights, scores, or anything else.
+///
+/// [`TrialGenerator::generate_trial`] takes `&self`, so the search loop can
+/// invoke it from multiple rayon worker threads in parallel. The returned
+/// [`TrialGenerator::Token`] identifies which operators produced the trial;
+/// the loop hands the winner's token back to [`TrialGenerator::feedback`]
+/// (winner-takes-all) while losers are discarded without reward.
+///
+/// The default behavior of [`OptModel::generate_trial_solution`] is
+/// recovered by [`DefaultTrialGenerator`], so existing optimizers keep
+/// their previous semantics.
+pub trait TrialGenerator<M: OptModel> {
+    /// Identifies the operators that produced a trial. The loop keeps each
+    /// candidate's token and hands only the winner's token to
+    /// [`TrialGenerator::feedback`]. Must be `Send` so candidates can be
+    /// generated on rayon worker threads.
+    type Token: Send;
+
+    /// Generate a single trial solution, its score, and its token from the
+    /// current solution. Called concurrently from rayon worker threads —
+    /// implementations must be `Sync` and use only the supplied `rng`
+    /// (a per-trial fork) for randomness.
+    fn generate_trial(
+        &self,
+        model: &M,
+        current_solution: &M::SolutionType,
+        current_score: M::ScoreType,
+        rng: &mut rand::rngs::StdRng,
+    ) -> (M::SolutionType, M::ScoreType, Self::Token);
+
+    /// Notify the generator about the outcome of the winning trial.
+    /// Generators without adaptive state can ignore this call.
+    fn feedback(&mut self, token: Self::Token, outcome: TrialOutcome);
+}
+
+/// Default trial generator that simply delegates to
+/// [`OptModel::generate_trial_solution`].
+///
+/// This keeps the historical behavior of [`LocalSearchLoop::step`]: every
+/// iteration's `n_trials` candidates come straight from the model's own
+/// neighborhood generator and `feedback` is a no-op.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DefaultTrialGenerator;
+
+impl<M: OptModel> TrialGenerator<M> for DefaultTrialGenerator {
+    type Token = ();
+
+    fn generate_trial(
+        &self,
+        model: &M,
+        current_solution: &M::SolutionType,
+        current_score: M::ScoreType,
+        rng: &mut rand::rngs::StdRng,
+    ) -> (M::SolutionType, M::ScoreType, Self::Token) {
+        let (solution, _transition, score) =
+            model.generate_trial_solution(current_solution.clone(), current_score, rng);
+        (solution, score, ())
+    }
+
+    fn feedback(&mut self, _token: Self::Token, _outcome: TrialOutcome) {}
+}
+
 /// Inner trial-and-accept loop shared by every local-search optimizer.
 ///
 /// The handler converts `(current_score, trial_score)` into an acceptance
@@ -39,26 +128,30 @@ pub struct StepResult<S, ST> {
 ///
 /// The handler is supplied per-call via [`Self::step`];
 /// this loop stores no handler field.
-pub struct LocalSearchLoop<ST: Ord + Sync + Send + Copy> {
+pub struct LocalSearchLoop {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
-    phantom: PhantomData<ST>,
 }
 
-impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
+impl LocalSearchLoop {
     /// Constructor of `LocalSearchLoop`.
     ///
     /// - `patience` : the loop will give up
     ///   if there is no improvement of the score after this number of iterations
-    /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
+    /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration; must be at least 1
     /// - `return_iter` : returns to the current best solution if there is no improvement after this number of iterations.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `n_trials == 0` — every iteration needs at least one
+    /// candidate for the best-of-`n_trials` selection to be well-defined.
     pub fn new(patience: usize, n_trials: usize, return_iter: usize) -> Self {
+        assert!(n_trials > 0, "n_trials must be at least 1");
         Self {
             patience,
             n_trials,
             return_iter,
-            phantom: PhantomData,
         }
     }
 
@@ -66,7 +159,9 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
     /// with the supplied handler.
     ///
     /// Returns the [`StepResult`] alongside the (possibly mutated) handler so
-    /// per-iteration state survives the call.
+    /// per-iteration state survives the call. Trial generation goes through the
+    /// built-in [`DefaultTrialGenerator`]; pass a custom generator via
+    /// [`Self::step_with_generator`] to use ALNS or any other adaptive scheme.
     #[allow(clippy::too_many_arguments)]
     pub fn step<M, H>(
         &self,
@@ -76,11 +171,55 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
         n_iter: usize,
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
-        mut handler: H,
+        handler: H,
     ) -> (StepResult<M::SolutionType, M::ScoreType>, H)
     where
-        M: OptModel<ScoreType = ST>,
-        H: TransitionHandler<ST>,
+        M: OptModel,
+        M::ScoreType: Ord + Send + Sync + Copy,
+        H: TransitionHandler<M::ScoreType>,
+    {
+        let (result, handler, _generator) = self.step_with_generator(
+            model,
+            initial_solution,
+            initial_score,
+            n_iter,
+            time_limit,
+            callback,
+            handler,
+            DefaultTrialGenerator,
+        );
+        (result, handler)
+    }
+
+    /// Perform one optimization step that drives trial generation through a
+    /// caller-supplied [`TrialGenerator`].
+    ///
+    /// The generator is invoked `n_trials` times per iteration, each call
+    /// produces one candidate, and the best candidate is fed through the
+    /// acceptance machinery. After the trial's outcome is known, the generator
+    /// receives a [`TrialOutcome`] via [`TrialGenerator::feedback`] so adaptive
+    /// schemes (ALNS, hyper-heuristics, …) can update their internal state.
+    ///
+    /// Returns the [`StepResult`], the (possibly mutated) handler, and the
+    /// (possibly mutated) generator — so callers can inspect or reuse their
+    /// adapted state after the step.
+    #[allow(clippy::too_many_arguments)]
+    pub fn step_with_generator<M, H, G>(
+        &self,
+        model: &M,
+        initial_solution: M::SolutionType,
+        initial_score: M::ScoreType,
+        n_iter: usize,
+        time_limit: Duration,
+        callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
+        handler: H,
+        generator: G,
+    ) -> (StepResult<M::SolutionType, M::ScoreType>, H, G)
+    where
+        M: OptModel,
+        M::ScoreType: Ord + Send + Sync + Copy,
+        H: TransitionHandler<M::ScoreType>,
+        G: TrialGenerator<M> + Sync,
     {
         let start_time = Instant::now();
         let mut rng = rand::rng();
@@ -92,6 +231,8 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
         // Separate stagnation counters: one for triggering a return to best, one for early stopping (patience)
         let mut return_stagnation_counter = 0;
         let mut patience_stagnation_counter = 0;
+        let mut handler = handler;
+        let mut generator = generator;
 
         for it in 0..n_iter {
             // 1. Update time and iteration counters
@@ -109,21 +250,33 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
             };
             handler.update(&ctx);
 
-            let (trial_solution, trial_score) = (0..self.n_trials)
+            // 3. Generate `n_trials` candidates through the supplied generator
+            //    and keep the best-scoring one. Generation runs in parallel
+            //    via rayon; each trial draws from a per-trial RNG fork seeded
+            //    sequentially, so runs stay reproducible. Only the winner is
+            //    evaluated and fed back (winner-takes-all). `n_trials >= 1`
+            //    is guaranteed by `LocalSearchLoop::new`, so `seeds` is never
+            //    empty.
+            let seeds: Vec<u64> = (0..self.n_trials).map(|_| rng.random()).collect();
+            let (trial_solution, trial_score, winner_token) = seeds
                 .into_par_iter()
-                .map(|_| {
-                    let mut rng = rand::rng();
-                    let (solution, _, score) = model.generate_trial_solution(
-                        current_solution.clone(),
+                .map(|seed| {
+                    let mut local_rng = rand::rngs::StdRng::seed_from_u64(seed);
+                    generator.generate_trial(
+                        model,
+                        &current_solution,
                         current_score,
-                        &mut rng,
-                    );
-                    (solution, score)
+                        &mut local_rng,
+                    )
                 })
-                .min_by_key(|(_, score)| *score)
-                .unwrap();
+                .min_by_key(|(_, score, _)| *score)
+                .expect("seeds is non-empty because LocalSearchLoop::new asserts n_trials >= 1");
 
-            // 3. Update best solution and score
+            // 4. Classify the trial outcome and apply best-score bookkeeping.
+            //    `previous_best` is captured before any updates so that the
+            //    "new best" credit is given to the operators that actually
+            //    produced the new global best.
+            let previous_best = best_score;
             if trial_score < best_score {
                 best_solution.replace(trial_solution.clone());
                 best_score = trial_score;
@@ -134,32 +287,47 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
                 patience_stagnation_counter += 1;
             }
 
-            // 4. Update accepted counter and transitions
+            // 5. Acceptance.
             let p = handler.evaluate(current_score, trial_score);
             let r: f64 = rng.random();
             let accepted = p > r;
-
             acceptance_counter.enqueue(accepted);
 
-            // 5. Update current solution and score
+            // 6. Tell the generator what happened so adaptive schemes can
+            //    update their internal state. `NewBest` is classified
+            //    independently of acceptance: the global best is recorded
+            //    before the acceptance check, so a rejected trial that
+            //    nonetheless beat the previous best still earns the credit.
+            let outcome = if trial_score < previous_best {
+                TrialOutcome::NewBest
+            } else if accepted && trial_score < current_score {
+                TrialOutcome::Improved
+            } else if accepted {
+                TrialOutcome::Accepted
+            } else {
+                TrialOutcome::Rejected
+            };
+            generator.feedback(winner_token, outcome);
+
+            // 7. Update current solution and score.
             if accepted {
                 current_solution = trial_solution;
                 current_score = trial_score;
             }
 
-            // 6. Check and handle return to best
+            // 8. Check and handle return to best.
             if return_stagnation_counter == self.return_iter {
                 current_solution = best_solution.borrow().clone();
                 current_score = best_score;
                 return_stagnation_counter = 0;
             }
 
-            // 7. Check patience
+            // 9. Check patience.
             if patience_stagnation_counter == self.patience {
                 break;
             }
 
-            // 8. Invoke callback
+            // 10. Invoke callback.
             let progress = OptProgress::new(
                 it,
                 acceptance_counter.acceptance_ratio(),
@@ -169,14 +337,13 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
             callback(progress);
         }
 
-        let best_solution = (*best_solution.borrow()).clone();
         let result = StepResult {
-            best_solution,
+            best_solution: (*best_solution.borrow()).clone(),
             best_score,
             last_solution: current_solution,
             last_score: current_score,
             acceptance_counter,
         };
-        (result, handler)
+        (result, handler, generator)
     }
 }
