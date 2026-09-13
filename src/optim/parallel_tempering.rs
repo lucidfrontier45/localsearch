@@ -85,6 +85,27 @@ impl ParallelTemperingOptimizer {
         self
     }
 
+/// Build `n_replicas` betas geometrically spaced between `beta_min` and
+/// `beta_max`. Single-replica case collapses to `beta_min`. `n_replicas == 0`
+/// is a precondition violation shared by every caller.
+fn geometric_betas(n_replicas: usize, beta_min: f64, beta_max: f64) -> Vec<f64> {
+    let mut betas = Vec::with_capacity(n_replicas);
+    if n_replicas == 0 {
+        panic!("n_replicas must be >= 1");
+    }
+    if n_replicas == 1 {
+        betas.push(beta_min);
+    } else {
+        let ratio = (beta_max / beta_min).powf(1.0 / (n_replicas as f64 - 1.0));
+        let mut b = beta_min;
+        for _ in 0..n_replicas {
+            betas.push(b);
+            b *= ratio;
+        }
+    }
+    betas
+}
+
     /// Helper to create geometric spaced betas
     ///
     /// Creates `n_replicas` betas geometrically spaced between `beta_min` and `beta_max`.
@@ -97,20 +118,7 @@ impl ParallelTemperingOptimizer {
         beta_max: f64,
         update_frequency: NonZero<usize>,
     ) -> Self {
-        let mut betas = Vec::with_capacity(n_replicas);
-        if n_replicas == 0 {
-            panic!("n_replicas must be >= 1");
-        }
-        if n_replicas == 1 {
-            betas.push(beta_min);
-        } else {
-            let ratio = (beta_max / beta_min).powf(1.0 / (n_replicas as f64 - 1.0));
-            let mut b = beta_min;
-            for _ in 0..n_replicas {
-                betas.push(b);
-                b *= ratio;
-            }
-        }
+        let betas = Self::geometric_betas(n_replicas, beta_min, beta_max);
         Self::new(patience, n_trials, return_iter, betas, update_frequency)
     }
 
@@ -144,17 +152,7 @@ impl ParallelTemperingOptimizer {
         let beta_max = calculate_temperature_from_acceptance_prob(&energy_diffs, target_max_prob);
         let beta_min = calculate_temperature_from_acceptance_prob(&energy_diffs, target_min_prob);
         let n_replicas = self.betas.len();
-        let mut betas = Vec::with_capacity(n_replicas);
-        if n_replicas == 1 {
-            betas.push(beta_min);
-        } else {
-            let ratio = (beta_max / beta_min).powf(1.0 / (n_replicas as f64 - 1.0));
-            let mut b = beta_min;
-            for _ in 0..n_replicas {
-                betas.push(b);
-                b *= ratio;
-            }
-        }
+        let betas = Self::geometric_betas(n_replicas, beta_min, beta_max);
         Self::new_with_seed(
             self.patience,
             self.n_trials,
