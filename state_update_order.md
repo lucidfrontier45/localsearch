@@ -4,27 +4,28 @@ This document outlines the unified order for updating state variables after the 
 
 ## Unified Update Order
 
-After calling the internal step function (e.g., `metropolis.step`, `generic.step`, etc.), update state variables in the following sequence:
+After each iteration of the shared trial-and-accept loop (`LocalSearchLoop::step` / `step_with_generator` in `src/optim/search_loop.rs`), update state variables in the following sequence. Optimizers with their own outer loops (`tabu_search.rs`, `parallel_tempering.rs`, `population_annealing.rs`) apply the same order around their inner steps:
 
-1. **Update time and iteration counters** (e.g., elapsed time checks, iter increments).
-2. **Update best solution and score** if the step result's best is an improvement (e.g., `if step_result.best_score < best_score { ... }`), and reset stagnation counter if improved. If no best solution was updated, increment stagnation counters.
-3. **Update accepted counter and transitions** (e.g., accumulate accepted transitions and increment counter).
-4. **Update current solution and score** from the step result (e.g., `current_solution = step_result.last_solution; current_score = step_result.last_score;`).
-5. **Check and handle return to best** (if stagnation >= return_iter, reset current to best).
-6. **Check patience** (if stagnation >= patience, break).
-7. (optional) **Update algorithm-specific state** (e.g., temperature cooling, tabu list append, population resampling). This does not have to be strictly here. Should be in some other place if that is more suitable.
-8. **Invoke callback** with progress.
+1. **Check the time budget** (elapsed vs `time_limit`; break if exceeded) and note the iteration index.
+2. **Refresh proposal state before trials** via `handler.update(ctx)` with `ctx = { iter, total, acc, best }` (cooling schedules, water level, Tsallis offset, ...).
+3. **Generate trials and keep the winner** (`n_trials` candidates in parallel via the `TrialGenerator`; best by score).
+4. **Update best solution and score** if the winner improves on it (`if trial_score < best_score { ... }`), resetting both stagnation counters; otherwise increment them. Classify the `TrialOutcome` (`NewBest` / `Improved` / `Accepted` / `Rejected`) against the pre-iteration best and feed it back to the generator.
+5. **Accept or reject** (`p = handler.evaluate(current, trial)`; accept iff `p > rand(0, 1)`) and enqueue the result in the sliding-window `AcceptanceCounter`.
+6. **Update current solution and score** from the accepted trial (on reject, keep the current values).
+7. **Check and handle return to best** (if return-stagnation reaches `return_iter`, reset current to best and clear that counter).
+8. **Check patience** (if patience-stagnation reaches `patience`, break).
+9. (optional) **Update outer-loop algorithm state** (e.g., tabu list append on accept, replica exchange, population resampling with `beta *= cooling_rate`).
+10. **Invoke callback** with `OptProgress { iter, acceptance_ratio, best_solution, best_score }`.
 
 ## Rationale
 
 - **Logical Flow**: Core state (current/best) is updated first, followed by counters, checks, and side effects.
 - **Consistency**: All optimizers now follow the same pattern, reducing bugs from inconsistent ordering.
 - **Dependencies**: Updates are sequenced to avoid using stale or partially updated values.
-- **Preservation of Behavior**: Transition logging uses pre-update values where necessary (e.g., old current_score for accepted transitions).
+- **Preservation of Behavior**: outcome classification uses pre-update values where necessary (e.g., `NewBest` is judged against the pre-iteration best, and acceptance is judged against the pre-update current score).
 
 ## Implementation Notes
 
-- For optimizers with their own loops (e.g., `generic.rs`), apply this order inside the iteration loop.
-- For optimizers calling external steps (e.g., `simulated_annealing.rs`), apply after the step call.
-- Ensure cloning is used where ownership moves occur to avoid borrow errors (e.g., in `tabu_search.rs`).</content>
-<parameter name="filePath">state_update_order.md
+- `src/optim/search_loop.rs` is the reference implementation of this order; keep it in sync when changing the loop.
+- Outer-loop optimizers (`parallel_tempering.rs`, `population_annealing.rs`) aggregate per-replica/member `StepResult`s and then apply the same steps, advancing stagnation counters by `update_frequency` and comparing with `>=`; `tabu_search.rs` appends the accepted transition to the tabu list at step 9.
+- Ensure cloning is used where ownership moves occur to avoid borrow errors (e.g., in `tabu_search.rs`).
