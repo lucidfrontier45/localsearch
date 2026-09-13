@@ -33,10 +33,10 @@ pub trait LocalSearchOptimizer<M: OptModel> {
     /// Returning `Some(seed)` makes the optimizer deterministic across calls:
     /// the same seed with the same inputs yields the same `(solution, score)`.
     /// Returning `None` (the default) preserves the previous entropy-driven
-    /// behavior. Implementations should derive any sub-seeds via the
-    /// `make_master_rng` / `fork_seed` / `derive_seed` helpers in
-    /// [`crate::optim::search_loop`] so that distinct phases (initial solution,
-    /// loop, warmup, …) do not share a single `seed_from_u64` stream.
+    /// behavior. Implementations that split work across phases (initial
+    /// solution, loop, warmup, replica swap, etc.) must feed each phase a
+    /// distinct seeded stream so the same user `seed` never flows through two
+    /// phases via an identical `seed_from_u64` chain.
     fn rng_seed(&self) -> Option<u64> {
         None
     }
