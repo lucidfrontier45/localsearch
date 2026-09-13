@@ -9,7 +9,13 @@ pub struct OptProgress<S, SC> {
     pub iter: usize,
     /// acceptance ratio
     pub acceptance_ratio: f64,
-    /// current best solution
+    /// Live shared view of the optimizer's current best solution.
+    ///
+    /// The `Rc<RefCell<S>>` is shared with the optimizer: reading it after
+    /// the callback returns reflects the *then-current* best, not the value
+    /// at emit time. Clone the inner solution (`borrow().clone()`) before
+    /// retaining it, and never hold a `Ref` guard past the callback
+    /// invocation — later best updates mutate through the `RefCell`.
     pub solution: Rc<RefCell<S>>,
     /// current best score
     pub score: SC,
