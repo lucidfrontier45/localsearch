@@ -164,12 +164,12 @@ impl<T: TabuList> TabuSearchOptimizer<T> {
                 break;
             }
             let mut samples = vec![];
-            let trial_seeds: Vec<(usize, u64)> = (0..self.n_trials)
-                .map(|i| (i, master.random()))
+            let trial_seeds: Vec<u64> = (0..self.n_trials)
+                .map(|_| master.random())
                 .collect();
             trial_seeds
                 .into_par_iter()
-                .map(|(_, trial_seed)| {
+                .map(|trial_seed| {
                     let mut rng = rand::rngs::StdRng::seed_from_u64(trial_seed);
                     let (solution, transitions, score) = model.generate_trial_solution(
                         current_solution.clone(),

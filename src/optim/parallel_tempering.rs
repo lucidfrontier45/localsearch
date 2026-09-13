@@ -222,12 +222,13 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
                 .par_iter()
                 .enumerate()
                 .map(|(idx, (sol, score))| {
-                    // salt 4 + idx: per-replica loop RNG is decorrelated
-                    // from the outer master (salt 2); each replica gets a
-                    // distinct seed so worker-thread swap is also deterministic.
+                    // double-salt: per-replica loop RNG is decorrelated from
+                    // both the outer master (salt 2) AND from the warmup trial
+                    // stream (salt 4). Removing either downstream salt would not
+                    // silently alias replica 0 onto warmup.
                     let loop_seed = self
                         .seed
-                        .map(|s| derive_seed(s, 4).wrapping_add(idx as u64));
+                        .map(|s| derive_seed(derive_seed(s, 4), idx as u64));
                     let opt = match loop_seed {
                         Some(s) => LocalSearchLoop::new(self.patience, n_trials, self.return_iter)
                             .with_seed(s),

@@ -58,10 +58,10 @@ pub fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
         None => model.generate_random_solution(&mut master).unwrap(),
     };
     // Pre-allocate per-warmup seeds; deterministic sequence from master.
-    let warmup_seeds: Vec<(usize, u64)> = (0..n_warmup).map(|i| (i, master.random())).collect();
+    let warmup_seeds: Vec<u64> = (0..n_warmup).map(|_| master.random()).collect();
     warmup_seeds
         .into_par_iter()
-        .map(|(_, ws)| {
+        .map(|ws| {
             let mut rng = rand::rngs::StdRng::seed_from_u64(ws);
             let (_, _, trial_score) =
                 model.generate_trial_solution(current_solution.clone(), current_score, &mut rng);
