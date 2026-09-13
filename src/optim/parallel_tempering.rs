@@ -18,10 +18,15 @@ use crate::{
 /// Parallel Tempering (Replica Exchange) optimizer
 /// Runs multiple Metropolis replicas at different inverse temperatures (betas).
 pub struct ParallelTemperingOptimizer {
+    /// The optimizer will give up if there is no improvement of the score after this number of iterations
     patience: usize,
+    /// Number of trial solutions to generate and evaluate at each Metropolis step
     n_trials: usize,
+    /// Returns to the best solution if there is no improvement after this number of iterations
     return_iter: usize,
+    /// Vector of inverse temperatures (beta) for replicas
     betas: Vec<f64>,
+    /// Non-zero number of Metropolis steps to run per replica between exchange attempts
     update_frequency: NonZero<usize>,
     /// RNG seed for bit-reproducible runs. `None` (default) preserves the
     /// entropy-driven behavior; set via [`Self::with_seed`].

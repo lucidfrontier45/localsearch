@@ -19,12 +19,19 @@ use crate::{
 /// It runs multiple simulated annealing processes and periodically updates the population
 /// by discarding bad candidates and copying good ones.
 pub struct PopulationAnnealingOptimizer {
+    /// The optimizer will give up if there is no improvement of the score after this number of iterations
     patience: usize,
+    /// Number of trial solutions to generate and evaluate at each iteration
     n_trials: usize,
+    /// Number of iterations without improvement before reverting to the best solution
     return_iter: usize,
+    /// Initial inverse temperature
     initial_beta: f64,
+    /// Cooling rate
     cooling_rate: f64,
+    /// Non-zero number of steps to run each simulated annealing before updating the population
     update_frequency: NonZero<usize>,
+    /// Number of simulated annealing processes to run in parallel
     population_size: usize,
     /// RNG seed for bit-reproducible runs. `None` (default) preserves the
     /// entropy-driven behavior; set via [`Self::with_seed`].
