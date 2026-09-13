@@ -30,8 +30,6 @@
 //!
 //! See `src/tests/test_alns.rs` for a complete example.
 
-use std::marker::PhantomData;
-
 use rand::{RngExt as _, rngs::StdRng};
 
 use super::search_loop::{TrialGenerator, TrialOutcome};
@@ -199,7 +197,6 @@ pub struct AlnsTrialGenerator<M: OptModel, P> {
     destroy_rewards: Rewards,
     /// Reward table applied to repair operators.
     repair_rewards: Rewards,
-    _phantom: PhantomData<(M, P)>,
 }
 
 impl<M: OptModel, P> AlnsTrialGenerator<M, P> {
@@ -235,7 +232,6 @@ impl<M: OptModel, P> AlnsTrialGenerator<M, P> {
             reaction_factor: 0.8,
             destroy_rewards: Rewards::default(),
             repair_rewards: Rewards::default(),
-            _phantom: PhantomData,
         }
     }
 
@@ -411,7 +407,6 @@ impl<M: OptModel, P> Clone for AlnsTrialGenerator<M, P> {
             reaction_factor: self.reaction_factor,
             destroy_rewards: self.destroy_rewards,
             repair_rewards: self.repair_rewards,
-            _phantom: PhantomData,
         }
     }
 }

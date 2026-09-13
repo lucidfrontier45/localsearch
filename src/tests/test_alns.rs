@@ -618,5 +618,5 @@ fn rejected_trial_beating_best_reports_new_best() {
 #[should_panic(expected = "n_trials must be at least 1")]
 fn local_search_loop_rejects_zero_trials() {
     // Fail fast at construction instead of on the first iteration.
-    let _: LocalSearchLoop<NotNan<f64>> = LocalSearchLoop::new(10, 0, usize::MAX);
+    let _: LocalSearchLoop = LocalSearchLoop::new(10, 0, usize::MAX);
 }

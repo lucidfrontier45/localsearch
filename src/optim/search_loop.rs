@@ -1,4 +1,4 @@
-use std::{cell::RefCell, marker::PhantomData, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use rand::{RngExt as _, SeedableRng as _};
 use rayon::prelude::*;
@@ -128,14 +128,13 @@ impl<M: OptModel> TrialGenerator<M> for DefaultTrialGenerator {
 ///
 /// The handler is supplied per-call via [`Self::step`];
 /// this loop stores no handler field.
-pub struct LocalSearchLoop<ST: Ord + Sync + Send + Copy> {
+pub struct LocalSearchLoop {
     patience: usize,
     n_trials: usize,
     return_iter: usize,
-    phantom: PhantomData<ST>,
 }
 
-impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
+impl LocalSearchLoop {
     /// Constructor of `LocalSearchLoop`.
     ///
     /// - `patience` : the loop will give up
@@ -153,7 +152,6 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
             patience,
             n_trials,
             return_iter,
-            phantom: PhantomData,
         }
     }
 
@@ -176,8 +174,9 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
         handler: H,
     ) -> (StepResult<M::SolutionType, M::ScoreType>, H)
     where
-        M: OptModel<ScoreType = ST>,
-        H: TransitionHandler<ST>,
+        M: OptModel,
+        M::ScoreType: Ord + Send + Sync + Copy,
+        H: TransitionHandler<M::ScoreType>,
     {
         let (result, handler, _generator) = self.step_with_generator(
             model,
@@ -217,8 +216,9 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
         generator: G,
     ) -> (StepResult<M::SolutionType, M::ScoreType>, H, G)
     where
-        M: OptModel<ScoreType = ST>,
-        H: TransitionHandler<ST>,
+        M: OptModel,
+        M::ScoreType: Ord + Send + Sync + Copy,
+        H: TransitionHandler<M::ScoreType>,
         G: TrialGenerator<M> + Sync,
     {
         let start_time = Instant::now();

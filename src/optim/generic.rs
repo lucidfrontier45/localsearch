@@ -118,8 +118,7 @@ where
     ) -> (M::SolutionType, M::ScoreType) {
         let handler = self.handler.clone();
         let generator = self.generator.clone();
-        let loop_ =
-            LocalSearchLoop::<M::ScoreType>::new(self.patience, self.n_trials, self.return_iter);
+        let loop_ = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
         let (result, _, _) = loop_.step_with_generator(
             model,
             initial_solution,

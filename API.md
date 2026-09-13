@@ -83,7 +83,7 @@ The acceptance/scheduling logic of each algorithm lives in a `TransitionHandler`
 
 ## Loop and generic optimizer
 
-- `LocalSearchLoop<ST>` (`src/optim/search_loop.rs`) — the trial-and-accept loop shared by every local-search optimizer. Constructed with `LocalSearchLoop::new(patience, n_trials, return_iter)`:
+- `LocalSearchLoop` (`src/optim/search_loop.rs`) — the trial-and-accept loop shared by every local-search optimizer. Constructed with `LocalSearchLoop::new(patience, n_trials, return_iter)`:
   - `patience` — give up (early stop) if the score has not improved for this many iterations.
   - `n_trials` — number of trial candidates generated per iteration; the best is kept.
   - `return_iter` — return to the best solution after this many non-improving iterations.
