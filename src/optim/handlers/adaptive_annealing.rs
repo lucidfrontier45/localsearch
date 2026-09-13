@@ -130,6 +130,8 @@ impl AdaptiveAnnealing {
     /// - `model` : the model to optimize
     /// - `initial_solution_and_score` : the initial solution to start warmup from. If `None`, a random solution will be generated.
     /// - `n_warmup` : number of warmup iterations to run
+    /// - `seed` : RNG seed for the warmup trials. `None` preserves the
+    ///   entropy-driven behavior; `Some(s)` is reproducible across calls.
     /// - `returns` : handler with `beta` tuned for the scheduler's initial target acceptance rate
     pub fn tune_initial_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
         self,

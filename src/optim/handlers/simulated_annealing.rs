@@ -32,9 +32,9 @@ impl SimulatedAnnealing {
         }
     }
 
-    /// Seed-aware variant of [`Self::tune_initial_temperature`]. `seed = None`
-    /// preserves the entropy-driven behavior; `Some(s)` makes the warmup
-    /// stream reproducible across calls.
+    /// Tune the initial inverse temperature `beta` based on random warmup
+    /// trials. `seed = None` preserves the entropy-driven behavior;
+    /// `Some(s)` makes the warmup stream reproducible across calls.
     pub fn tune_initial_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
         self,
         model: &M,

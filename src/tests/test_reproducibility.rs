@@ -127,13 +127,13 @@ fn population_annealing_same_seed_is_bit_identical() {
 }
 
 #[test]
-fn tune_temperature_with_seed_is_bit_identical() {
+fn tune_temperature_seeded_is_bit_identical() {
     let model = QuadraticModel::new(3, vec![2.0, 0.0, -3.5], (-10.0, 10.0));
     let beta_a = tune_temperature(&model, None, 200, 0.8, Some(2024));
     let beta_b = tune_temperature(&model, None, 200, 0.8, Some(2024));
     assert_eq!(
         beta_a, beta_b,
-        "tune_temperature_with_seed must be deterministic for the same seed"
+        "tune_temperature must be deterministic for the same seed"
     );
     assert!(beta_a.is_finite() && beta_a > 0.0, "beta must be positive");
 }
