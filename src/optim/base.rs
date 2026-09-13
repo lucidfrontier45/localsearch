@@ -1,6 +1,11 @@
 use auto_impl::auto_impl;
 
-use crate::{Duration, LocalsearchError, OptModel, callback::OptCallbackFn};
+use crate::{
+    Duration, LocalsearchError, OptModel,
+    callback::OptCallbackFn,
+    optim::search_loop::{derive_seed, make_master_rng},
+};
+use rand::SeedableRng as _;
 
 /// Optimizer that implements local search algorithm.
 #[auto_impl(&, Box, Rc, Arc)]
@@ -23,6 +28,19 @@ pub trait LocalSearchOptimizer<M: OptModel> {
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType);
 
+    /// Seed for reproducible, bit-identical runs.
+    ///
+    /// Returning `Some(seed)` makes the optimizer deterministic across calls:
+    /// the same seed with the same inputs yields the same `(solution, score)`.
+    /// Returning `None` (the default) preserves the previous entropy-driven
+    /// behavior. Implementations should derive any sub-seeds via the
+    /// `make_master_rng` / `fork_seed` / `derive_seed` helpers in
+    /// [`crate::optim::search_loop`] so that distinct phases (initial solution,
+    /// loop, warmup, …) do not share a single `seed_from_u64` stream.
+    fn rng_seed(&self) -> Option<u64> {
+        None
+    }
+
     /// generate initial solution if not given and run optimization with callback
     fn run_with_callback(
         &self,
@@ -35,7 +53,13 @@ pub trait LocalSearchOptimizer<M: OptModel> {
         let (initial_solution, initial_score) = match initial_solution_and_score {
             Some((solution, score)) => (solution, score),
             None => {
-                let mut rng = rand::rng();
+                // salt = 1: independent from the loop's master RNG stream (salt 2)
+                // so the two phases do not share an identical `seed_from_u64`
+                // stream even when both derive from the same user seed.
+                let mut rng = match self.rng_seed() {
+                    Some(seed) => rand::rngs::StdRng::seed_from_u64(derive_seed(seed, 1)),
+                    None => make_master_rng(None),
+                };
                 model.generate_random_solution(&mut rng)?
             }
         };

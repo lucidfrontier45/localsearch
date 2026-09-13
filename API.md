@@ -130,8 +130,9 @@ Each optimizer instantiates its `TransitionHandler` in the constructor and store
 - Use `TransitionType` to capture reversible moves (useful for Tabu lists, undoing moves, or efficient incremental scoring).
 - Implement `preprocess_solution` to prepare inputs for the optimizer (e.g., build lookup tables) and `postprocess_solution` to convert internal representations back to user-facing solutions.
 - Prefer implementing a new algorithm as a `TransitionHandler` and running it through `GenericLocalSearchOptimizer`; only implement `LocalSearchOptimizer` directly when the algorithm needs a different loop structure (e.g., Tabu, Parallel Tempering).
-- Make callbacks lightweight and non-blocking; they run inside optimization loops and can impact performance.
 
+- **Reproducibility:** every optimizer exposes `pub const fn with_seed(u64)` (and `LocalSearchLoop` / `LocalSearchOptimizer` expose the same builder). When set, the same `(solution, score)` is produced bit-for-bit across two calls with identical inputs, including across different rayon thread counts (the parallel trial streams are distributed via sequential forks of the master RNG). Tuning helpers in handlers (e.g. `tune_temperature_with_seed`, `tune_initial_temperature_with_seed`, `gather_energy_diffs_with_seed`) follow the same pattern. The `_with_seed` free fns are pub(crate); user code should go through the optimizer `with_seed` builder which routes the seed into every phase (initial solution, loop, warmup).
+  - Residual nondeterminism that seeding cannot fix: wall-clock `time_limit` cutoff varies iteration count; user models with internal RNGs must draw only from a supplied `rng`.
 ## Example usage (outline)
 - Implement `OptModel` for a problem type, providing `generate_random_solution` and `generate_trial_solution`.
 - Choose an optimizer (e.g., `SimulatedAnnealingOptimizer`) and call `run` or `run_with_callback` to execute the search.

@@ -21,6 +21,10 @@ pub struct RelativeAnnealingOptimizer {
     return_iter: usize,
     /// Transition handler that holds the inverse temperature
     handler: RelativeAnnealing,
+    /// RNG seed for bit-reproducible runs. `None` (default)
+    /// preserves the entropy-driven behavior; set via [`Self::with_seed`].
+    seed: Option<u64>,
+
 }
 
 impl RelativeAnnealingOptimizer {
@@ -37,11 +41,28 @@ impl RelativeAnnealingOptimizer {
             n_trials,
             return_iter,
             handler: RelativeAnnealing::new(beta),
+            seed: None,
         }
     }
+
+    /// Pin the RNG seed so [`Self::optimize`] (and the tune helpers)
+    /// yield bit-identical `(solution, score)` across calls with the
+    /// same inputs.
+    ///
+    /// `None` (the default) keeps the historical entropy-driven behavior.
+    pub const fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
+        self
+    }
+
 }
 
+
 impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeAnnealingOptimizer {
+    fn rng_seed(&self) -> Option<u64> {
+        self.seed
+    }
+
     /// Start optimization
     ///
     /// - `model` : the model to optimize
@@ -59,7 +80,12 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for RelativeA
         time_limit: Duration,
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
-        let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
+                let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
+        let opt = match self.seed {
+            Some(s) => opt.with_seed(s),
+            None => opt,
+        };
+
         let (result, _) = opt.step(
             model,
             initial_solution,

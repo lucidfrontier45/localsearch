@@ -6,8 +6,9 @@ use rayon::prelude::*;
 
 use super::{
     LocalSearchLoop, LocalSearchOptimizer, Metropolis, calculate_temperature_from_acceptance_prob,
-    gather_energy_diffs,
+    search_loop::{derive_seed, make_master_rng},
 };
+
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
@@ -17,16 +18,14 @@ use crate::{
 /// Parallel Tempering (Replica Exchange) optimizer
 /// Runs multiple Metropolis replicas at different inverse temperatures (betas).
 pub struct ParallelTemperingOptimizer {
-    /// The optimizer will give up if there is no improvement of the score after this number of iterations
     patience: usize,
-    /// Number of trial solutions to generate and evaluate at each Metropolis step
     n_trials: usize,
-    /// Returns to the best solution if there is no improvement after this number of iterations
     return_iter: usize,
-    /// Vector of inverse temperatures (beta) for replicas
     betas: Vec<f64>,
-    /// Non-zero number of Metropolis steps to run per replica between exchange attempts
     update_frequency: NonZero<usize>,
+    /// RNG seed for bit-reproducible runs. `None` (default) preserves the
+    /// entropy-driven behavior; set via [`Self::with_seed`].
+    seed: Option<u64>,
 }
 
 impl ParallelTemperingOptimizer {
@@ -47,7 +46,43 @@ impl ParallelTemperingOptimizer {
             return_iter,
             betas,
             update_frequency,
+            seed: None,
         }
+    }
+
+    /// Private constructor used by both [`Self::new`] (which carries no seed)
+    /// and the seed-preserving `tune_temperature` rebuilds. Lets every code
+    /// path route through a single `Self { ... }` literal that does not
+    /// silently drop the seed.
+    fn new_with_seed(
+        patience: usize,
+        n_trials: usize,
+        return_iter: usize,
+        betas: Vec<f64>,
+        update_frequency: NonZero<usize>,
+        seed: Option<u64>,
+    ) -> Self {
+        if betas.is_empty() {
+            panic!("betas must contain at least one replica");
+        }
+        Self {
+            patience,
+            n_trials,
+            return_iter,
+            betas,
+            update_frequency,
+            seed,
+        }
+    }
+
+    /// Pin the RNG seed so [`Self::optimize`] (and the seed-aware tune
+    /// helpers) yield bit-identical `(solution, score)` across calls with
+    /// the same inputs.
+    ///
+    /// `None` (the default) keeps the historical entropy-driven behavior.
+    pub const fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
+        self
     }
 
     /// Helper to create geometric spaced betas
@@ -94,26 +129,48 @@ impl ParallelTemperingOptimizer {
         target_max_prob: f64,
         target_min_prob: f64,
     ) -> Self {
-        let energy_diffs = gather_energy_diffs(model, initial_solution, n_warmup);
+        // salt 4: warmup trial stream is decorrelated from any opt-phase
+        // stream; flows into the derived beta ladder so the LHS remains
+        // reproducible when `seed` is set.
+        let energy_diffs = super::gather_energy_diffs(
+            model,
+            initial_solution,
+            n_warmup,
+            self.seed.map(|s| derive_seed(s, 4)),
+        );
         if energy_diffs.is_empty() {
             return self;
         }
         let beta_max = calculate_temperature_from_acceptance_prob(&energy_diffs, target_max_prob);
         let beta_min = calculate_temperature_from_acceptance_prob(&energy_diffs, target_min_prob);
         let n_replicas = self.betas.len();
-        Self::with_geometric_betas(
+        let mut betas = Vec::with_capacity(n_replicas);
+        if n_replicas == 1 {
+            betas.push(beta_min);
+        } else {
+            let ratio = (beta_max / beta_min).powf(1.0 / (n_replicas as f64 - 1.0));
+            let mut b = beta_min;
+            for _ in 0..n_replicas {
+                betas.push(b);
+                b *= ratio;
+            }
+        }
+        Self::new_with_seed(
             self.patience,
             self.n_trials,
             self.return_iter,
-            n_replicas,
-            beta_min,
-            beta_max,
+            betas,
             self.update_frequency,
+            self.seed,
         )
     }
 }
 
 impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelTemperingOptimizer {
+    fn rng_seed(&self) -> Option<u64> {
+        self.seed
+    }
+
     /// Start optimization
     fn optimize(
         &self,
@@ -125,7 +182,8 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
         let start_time = Instant::now();
-        let mut rng = rand::rng();
+        // salt 2: master RNG for replica swap and return-to-best decisions.
+        let mut rng = make_master_rng(self.seed.map(|s| derive_seed(s, 2)));
 
         let n_replicas = self.betas.len();
 
@@ -166,7 +224,17 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for ParallelT
                 .par_iter()
                 .enumerate()
                 .map(|(idx, (sol, score))| {
-                    let opt = LocalSearchLoop::new(self.patience, n_trials, self.return_iter);
+                    // salt 4 + idx: per-replica loop RNG is decorrelated
+                    // from the outer master (salt 2); each replica gets a
+                    // distinct seed so worker-thread swap is also deterministic.
+                    let loop_seed = self
+                        .seed
+                        .map(|s| derive_seed(s, 4).wrapping_add(idx as u64));
+                    let opt = match loop_seed {
+                        Some(s) => LocalSearchLoop::new(self.patience, n_trials, self.return_iter)
+                            .with_seed(s),
+                        None => LocalSearchLoop::new(self.patience, n_trials, self.return_iter),
+                    };
                     let mut cb = &mut |_p: OptProgress<M::SolutionType, M::ScoreType>| {};
                     opt.step(
                         model,

@@ -21,6 +21,10 @@ pub struct TsallisRelativeAnnealingOptimizer {
     return_iter: usize,
     /// Transition handler that holds the Tsallis parameters and the scheduler
     handler: TsallisAnnealing,
+    /// RNG seed for bit-reproducible runs. `None` (default)
+    /// preserves the entropy-driven behavior; set via [`Self::with_seed`].
+    seed: Option<u64>,
+
 }
 
 impl TsallisRelativeAnnealingOptimizer {
@@ -51,6 +55,7 @@ impl TsallisRelativeAnnealingOptimizer {
             n_trials,
             return_iter,
             handler: TsallisAnnealing::new(0.0, beta, q, xi, scheduler, update_frequency),
+            seed: None,
         }
     }
 
@@ -59,11 +64,27 @@ impl TsallisRelativeAnnealingOptimizer {
         self.handler.scheduler = scheduler;
         self
     }
+
+    /// Pin the RNG seed so [`Self::optimize`] (and the tune helpers)
+    /// yield bit-identical `(solution, score)` across calls with the
+    /// same inputs.
+    ///
+    /// `None` (the default) keeps the historical entropy-driven behavior.
+    pub const fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
+        self
+    }
+
 }
+
 
 impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
     for TsallisRelativeAnnealingOptimizer
 {
+    fn rng_seed(&self) -> Option<u64> {
+        self.seed
+    }
+
     /// Start optimization
     ///
     /// - `model` : the model to optimize
@@ -85,7 +106,12 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         // the offset then tracks the best score via `update`.
         let mut handler = self.handler;
         handler.offset = initial_score.into_inner();
-        let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
+                let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
+        let opt = match self.seed {
+            Some(s) => opt.with_seed(s),
+            None => opt,
+        };
+
         let (result, _) = opt.step(
             model,
             initial_solution,

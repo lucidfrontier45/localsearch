@@ -17,6 +17,9 @@ pub struct AdaptiveAnnealingOptimizer {
     return_iter: usize,
     /// Transition handler that holds the temperature and target-acceptance scheduler
     handler: AdaptiveAnnealing,
+    /// RNG seed for bit-reproducible runs. `None` (default)
+    /// preserves the entropy-driven behavior; set via [`Self::with_seed`].
+    seed: Option<u64>,
 }
 
 impl AdaptiveAnnealingOptimizer {
@@ -34,6 +37,7 @@ impl AdaptiveAnnealingOptimizer {
             n_trials,
             return_iter,
             handler: AdaptiveAnnealing::new(initial_beta, scheduler, update_frequency),
+            seed: None,
         }
     }
 
@@ -44,16 +48,35 @@ impl AdaptiveAnnealingOptimizer {
         initial_solution: Option<(M::SolutionType, M::ScoreType)>,
         n_warmup: usize,
     ) -> Self {
+        // salt 4: warmup stream is decorrelated from any opt-phase stream.
         Self {
-            handler: self
-                .handler
-                .tune_initial_temperature(model, initial_solution, n_warmup),
+            handler: self.handler.tune_initial_temperature(
+                model,
+                initial_solution,
+                n_warmup,
+                self.seed
+                    .map(|s| crate::optim::search_loop::derive_seed(s, 4)),
+            ),
             ..self
         }
+    }
+
+    /// Pin the RNG seed so [`Self::optimize`] (and the tune helpers)
+    /// yield bit-identical `(solution, score)` across calls with the
+    /// same inputs.
+    ///
+    /// `None` (the default) keeps the historical entropy-driven behavior.
+    pub const fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
+        self
     }
 }
 
 impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveAnnealingOptimizer {
+    fn rng_seed(&self) -> Option<u64> {
+        self.seed
+    }
+
     /// Start optimization
     ///
     /// - `model` : the model to optimize
@@ -72,6 +95,11 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M> for AdaptiveA
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
         let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
+        let opt = match self.seed {
+            Some(s) => opt.with_seed(s),
+            None => opt,
+        };
+
         let (result, _) = opt.step(
             model,
             initial_solution,

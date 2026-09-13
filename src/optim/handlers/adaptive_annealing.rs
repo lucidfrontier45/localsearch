@@ -136,6 +136,7 @@ impl AdaptiveAnnealing {
         model: &M,
         initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
         n_warmup: usize,
+        seed: Option<u64>,
     ) -> Self {
         Self {
             beta: tune_temperature(
@@ -143,6 +144,7 @@ impl AdaptiveAnnealing {
                 initial_solution_and_score,
                 n_warmup,
                 self.scheduler.initial_target_acc,
+                seed,
             ),
             ..self
         }

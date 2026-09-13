@@ -1,8 +1,10 @@
 use ordered_float::NotNan;
+use rand::{RngExt as _, SeedableRng as _};
 use rayon::prelude::*;
 
 use crate::{
     OptModel,
+    optim::search_loop::make_master_rng,
     optim::transition::{TransitionHandler, UpdateCtx},
 };
 
@@ -20,14 +22,17 @@ impl Metropolis {
     }
 }
 
-/// Tune inverse temperature `beta` based on initial random trials.
+/// Tune inverse temperature with an explicit RNG seed. `seed = None`
+/// preserves the entropy-driven behavior; `Some(s)` makes the warmup
+/// trial stream bit-reproducible across calls with the same inputs.
 pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
     model: &M,
     initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
     n_warmup: usize,
     target_prob: f64,
+    seed: Option<u64>,
 ) -> f64 {
-    let energy_diffs = gather_energy_diffs(model, initial_solution_and_score, n_warmup);
+    let energy_diffs = gather_energy_diffs(model, initial_solution_and_score, n_warmup, seed);
     if energy_diffs.is_empty() {
         1.0
     } else {
@@ -35,20 +40,29 @@ pub fn tune_temperature<M: OptModel<ScoreType = NotNan<f64>>>(
     }
 }
 
-/// Collect positive energy differences from warmup trials.
+/// Collect positive energy differences from warmup trials, with an
+/// explicit RNG seed. `seed = None` preserves entropy-driven behavior;
+/// `Some(s)` makes the warmup stream reproducible (independent of
+/// rayon worker-thread count).
 pub fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
     model: &M,
     initial_solution_and_score: Option<(M::SolutionType, M::ScoreType)>,
     n_warmup: usize,
+    seed: Option<u64>,
 ) -> Vec<f64> {
-    let mut rng = rand::rng();
-    let (current_solution, current_score) =
-        initial_solution_and_score.unwrap_or(model.generate_random_solution(&mut rng).unwrap());
-
-    (0..n_warmup)
+    // Seeded master RNG; threads fork off sequentially so the collection
+    // stays reproducible regardless of worker-thread count.
+    let mut master = make_master_rng(seed);
+    let (current_solution, current_score) = match initial_solution_and_score {
+        Some(cs) => cs,
+        None => model.generate_random_solution(&mut master).unwrap(),
+    };
+    // Pre-allocate per-warmup seeds; deterministic sequence from master.
+    let warmup_seeds: Vec<(usize, u64)> = (0..n_warmup).map(|i| (i, master.random())).collect();
+    warmup_seeds
         .into_par_iter()
-        .filter_map(|_| {
-            let mut rng = rand::rng();
+        .map(|(_, ws)| {
+            let mut rng = rand::rngs::StdRng::seed_from_u64(ws);
             let (_, _, trial_score) =
                 model.generate_trial_solution(current_solution.clone(), current_score, &mut rng);
             let ds = trial_score - current_score;
@@ -58,6 +72,7 @@ pub fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
                 None
             }
         })
+        .flatten()
         .collect()
 }
 

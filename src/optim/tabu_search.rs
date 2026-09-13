@@ -1,5 +1,6 @@
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
+use rand::{RngExt as _, SeedableRng as _};
 use rayon::prelude::*;
 
 use super::LocalSearchOptimizer;
@@ -30,6 +31,9 @@ pub struct TabuSearchOptimizer<T: TabuList> {
     n_trials: usize,
     return_iter: usize,
     default_tabu_size: usize,
+    /// RNG seed for bit-reproducible runs. `None` (default) preserves the
+    /// entropy-driven behavior; set via [`Self::with_seed`].
+    seed: Option<u64>,
     phantom: PhantomData<T>,
 }
 
@@ -76,8 +80,19 @@ impl<T: TabuList> TabuSearchOptimizer<T> {
             n_trials,
             return_iter,
             default_tabu_size,
+            seed: None,
             phantom: PhantomData,
         }
+    }
+
+    /// Pin the RNG seed so [`Self::optimize`] and [`Self::optimize_with_handler`]
+    /// yield bit-identical `(solution, score)` across calls with the same
+    /// inputs — independent of the rayon worker-thread count.
+    ///
+    /// `None` (the default) keeps the historical entropy-driven behavior.
+    pub const fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
+        self
     }
 
     /// Convenience: build a fresh `T::default()` tabu list with the optimizer's
@@ -138,17 +153,24 @@ impl<T: TabuList> TabuSearchOptimizer<T> {
         let mut return_stagnation_counter = 0;
         let mut patience_stagnation_counter = 0;
         let mut acceptance_counter = AcceptanceCounter::new(100);
-
+        // Master RNG for sequential forks. Salted (3) so the trial stream
+        // does not correlate with any other phase that hashes the same seed.
+        let mut master = super::search_loop::make_master_rng(
+            self.seed.map(|s| super::search_loop::derive_seed(s, 3)),
+        );
         for it in 0..n_iter {
             let duration = Instant::now().duration_since(start_time);
             if duration > time_limit {
                 break;
             }
             let mut samples = vec![];
-            (0..self.n_trials)
+            let trial_seeds: Vec<(usize, u64)> = (0..self.n_trials)
+                .map(|i| (i, master.random()))
+                .collect();
+            trial_seeds
                 .into_par_iter()
-                .map(|_| {
-                    let mut rng = rand::rng();
+                .map(|(_, trial_seed)| {
+                    let mut rng = rand::rngs::StdRng::seed_from_u64(trial_seed);
                     let (solution, transitions, score) = model.generate_trial_solution(
                         current_solution.clone(),
                         current_score,
@@ -225,6 +247,11 @@ impl<T: TabuList> TabuSearchOptimizer<T> {
 impl<T: TabuList, M: OptModel<TransitionType = T::Item>> LocalSearchOptimizer<M>
     for TabuSearchOptimizer<T>
 {
+    fn rng_seed(&self) -> Option<u64> {
+        self.seed
+    }
+
+
     fn optimize(
         &self,
         model: &M,

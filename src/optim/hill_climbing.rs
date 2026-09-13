@@ -6,6 +6,10 @@ use crate::{Duration, OptModel, callback::OptCallbackFn};
 pub struct HillClimbingOptimizer {
     patience: usize,
     n_trials: usize,
+    /// RNG seed for bit-reproducible runs. `None` (default)
+    /// preserves the entropy-driven behavior; set via [`Self::with_seed`].
+    seed: Option<u64>,
+
 }
 
 impl HillClimbingOptimizer {
@@ -13,11 +17,28 @@ impl HillClimbingOptimizer {
     ///   if there is no improvement of the score after this number of iterations
     /// - `n_trials` : number of trial solutions to generate and evaluate at each iteration
     pub const fn new(patience: usize, n_trials: usize) -> Self {
-        Self { patience, n_trials }
+        Self { patience, n_trials,
+            seed: None, }
     }
+
+    /// Pin the RNG seed so [`Self::optimize`] (and the tune helpers)
+    /// yield bit-identical `(solution, score)` across calls with the
+    /// same inputs.
+    ///
+    /// `None` (the default) keeps the historical entropy-driven behavior.
+    pub const fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
+        self
+    }
+
 }
 
+
 impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
+    fn rng_seed(&self) -> Option<u64> {
+        self.seed
+    }
+
     /// Start optimization
     ///
     /// - `model` : the model to optimize
@@ -36,7 +57,10 @@ impl<M: OptModel> LocalSearchOptimizer<M> for HillClimbingOptimizer {
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
         // Hill climbing = epsilon-greedy with epsilon = 0 (never accept worsening moves)
-        let optimizer = EpsilonGreedyOptimizer::new(self.patience, self.n_trials, usize::MAX, 0.0);
+        let optimizer = match self.seed {
+            Some(s) => EpsilonGreedyOptimizer::new(self.patience, self.n_trials, usize::MAX, 0.0).with_seed(s),
+            None => EpsilonGreedyOptimizer::new(self.patience, self.n_trials, usize::MAX, 0.0),
+        };
         optimizer.optimize(
             model,
             initial_solution,

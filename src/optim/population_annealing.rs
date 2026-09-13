@@ -5,8 +5,11 @@ use rand::{RngExt as _, distr::weighted::WeightedIndex, prelude::Distribution};
 use rayon::prelude::*;
 
 use super::{
-    LocalSearchLoop, LocalSearchOptimizer, Metropolis, tune_cooling_rate, tune_temperature,
+    LocalSearchLoop, LocalSearchOptimizer, Metropolis,
+    search_loop::{derive_seed, make_master_rng},
+    tune_cooling_rate, tune_temperature,
 };
+
 use crate::{
     Duration, Instant, OptModel,
     callback::{OptCallbackFn, OptProgress},
@@ -16,20 +19,16 @@ use crate::{
 /// It runs multiple simulated annealing processes and periodically updates the population
 /// by discarding bad candidates and copying good ones.
 pub struct PopulationAnnealingOptimizer {
-    /// The optimizer will give up if there is no improvement of the score after this number of iterations
     patience: usize,
-    /// Number of trial solutions to generate and evaluate at each iteration
     n_trials: usize,
-    /// Number of iterations without improvement before reverting to the best solution
     return_iter: usize,
-    /// Initial inverse temperature
     initial_beta: f64,
-    /// Cooling rate
     cooling_rate: f64,
-    /// Non-zero number of steps to run each simulated annealing before updating the population
     update_frequency: NonZero<usize>,
-    /// Number of simulated annealing processes to run in parallel
     population_size: usize,
+    /// RNG seed for bit-reproducible runs. `None` (default) preserves the
+    /// entropy-driven behavior; set via [`Self::with_seed`].
+    seed: Option<u64>,
 }
 
 impl PopulationAnnealingOptimizer {
@@ -60,7 +59,18 @@ impl PopulationAnnealingOptimizer {
             cooling_rate,
             update_frequency,
             population_size,
+            seed: None,
         }
+    }
+
+    /// Pin the RNG seed so [`Self::optimize`] (and the seed-aware tune
+    /// helpers) yield bit-identical `(solution, score)` across calls with
+    /// the same inputs.
+    ///
+    /// `None` (the default) keeps the historical entropy-driven behavior.
+    pub const fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
+        self
     }
 
     /// Tune initial inverse temperature by drawing random trials
@@ -71,7 +81,16 @@ impl PopulationAnnealingOptimizer {
         n_warmup: usize,
         target_initial_prob: f64,
     ) -> Self {
-        let tuned_beta = tune_temperature(model, initial_solution, n_warmup, target_initial_prob);
+        // salt 4: warmup trial stream is decorrelated from any opt-phase
+        // stream; flows into `initial_beta` so the LHS remains reproducible
+        // when `seed` is set.
+        let tuned_beta = tune_temperature(
+            model,
+            initial_solution,
+            n_warmup,
+            target_initial_prob,
+            self.seed.map(|s| derive_seed(s, 4)),
+        );
         Self {
             initial_beta: tuned_beta,
             ..self
@@ -92,6 +111,10 @@ impl PopulationAnnealingOptimizer {
 impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
     for PopulationAnnealingOptimizer
 {
+    fn rng_seed(&self) -> Option<u64> {
+        self.seed
+    }
+
     /// Start optimization
     fn optimize(
         &self,
@@ -103,7 +126,8 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         callback: &mut dyn OptCallbackFn<M::SolutionType, M::ScoreType>,
     ) -> (M::SolutionType, M::ScoreType) {
         let start_time = Instant::now();
-        let mut rng = rand::rng();
+        // salt 2: master RNG for initial population + resample + return-to-best idx.
+        let mut rng = make_master_rng(self.seed.map(|s| derive_seed(s, 2)));
 
         // Initialize population with random solutions or copies of the initial solution
         let mut population: Vec<(M::SolutionType, M::ScoreType)> =
@@ -141,7 +165,13 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
                 break;
             }
 
-            let opt = LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter);
+            // salt 4: per-iteration loop RNG is decorrelated from the master (salt 2)
+            // so the two streams do not share the same `seed_from_u64` walk.
+            let opt = match self.seed {
+                Some(s) => LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter)
+                    .with_seed(derive_seed(s, 4)),
+                None => LocalSearchLoop::new(self.patience, self.n_trials, self.return_iter),
+            };
             let update_freq = self.update_frequency.get();
 
             // Process each member of the population
