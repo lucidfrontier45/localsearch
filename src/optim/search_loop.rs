@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 use rand::{RngExt as _, SeedableRng as _};
 use rayon::prelude::*;
@@ -225,7 +225,7 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
         let mut rng = rand::rng();
         let mut current_solution = initial_solution;
         let mut current_score = initial_score;
-        let mut best_solution = current_solution.clone();
+        let best_solution = Rc::new(RefCell::new(current_solution.clone()));
         let mut best_score = current_score;
         let mut acceptance_counter = AcceptanceCounter::new(100);
         // Separate stagnation counters: one for triggering a return to best, one for early stopping (patience)
@@ -278,7 +278,7 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
             //    produced the new global best.
             let previous_best = best_score;
             if trial_score < best_score {
-                best_solution = trial_solution.clone();
+                best_solution.replace(trial_solution.clone());
                 best_score = trial_score;
                 return_stagnation_counter = 0;
                 patience_stagnation_counter = 0;
@@ -317,7 +317,7 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
 
             // 8. Check and handle return to best.
             if return_stagnation_counter == self.return_iter {
-                current_solution = best_solution.clone();
+                current_solution = best_solution.borrow().clone();
                 current_score = best_score;
                 return_stagnation_counter = 0;
             }
@@ -331,14 +331,14 @@ impl<ST: Ord + Sync + Send + Copy> LocalSearchLoop<ST> {
             let progress = OptProgress::new(
                 it,
                 acceptance_counter.acceptance_ratio(),
-                std::rc::Rc::new(std::cell::RefCell::new(best_solution.clone())),
+                best_solution.clone(),
                 best_score,
             );
             callback(progress);
         }
 
         let result = StepResult {
-            best_solution,
+            best_solution: (*best_solution.borrow()).clone(),
             best_score,
             last_solution: current_solution,
             last_score: current_score,
