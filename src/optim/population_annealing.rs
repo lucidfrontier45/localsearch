@@ -1,7 +1,7 @@
 use std::{cell::RefCell, num::NonZero, rc::Rc};
 
 use ordered_float::NotNan;
-use rand::{RngExt as _, distr::weighted::WeightedIndex, prelude::Distribution};
+use rand::{RngExt as _, SeedableRng as _, distr::weighted::WeightedIndex, prelude::Distribution};
 use rayon::prelude::*;
 
 use super::{
@@ -135,16 +135,18 @@ impl<M: OptModel<ScoreType = NotNan<f64>>> LocalSearchOptimizer<M>
         // salt 2: master RNG for initial population + resample + return-to-best idx.
         let mut rng = make_master_rng(self.seed.map(|s| derive_seed(s, 2)));
 
-        // Initialize population with random solutions or copies of the initial solution
-        let mut population: Vec<(M::SolutionType, M::ScoreType)> =
-            Vec::with_capacity(self.population_size);
-
-        for _ in 0..self.population_size {
-            // Generate a random solution for other members
-            let (solution, _, score) =
-                model.generate_trial_solution(initial_solution.clone(), initial_score, &mut rng);
-            population.push((solution, score));
-        }
+        // Initialize population with random solutions or copies of the initial solution.
+        // Per-member RNGs are forked sequentially, then consumed as one batch.
+        let initial_seeds: Vec<u64> = (0..self.population_size).map(|_| rng.random()).collect();
+        let mut initial_rngs: Vec<_> = initial_seeds
+            .into_iter()
+            .map(rand::rngs::StdRng::seed_from_u64)
+            .collect();
+        let mut population: Vec<(M::SolutionType, M::ScoreType)> = model
+            .generate_trial_solutions(initial_solution.clone(), initial_score, &mut initial_rngs)
+            .into_iter()
+            .map(|(solution, _transition, score)| (solution, score))
+            .collect();
 
         // Track the best solution found
         let best_solution = Rc::new(RefCell::new(initial_solution.clone()));

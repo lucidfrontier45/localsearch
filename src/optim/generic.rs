@@ -27,12 +27,12 @@ use crate::{Duration, OptModel, callback::OptCallbackFn};
 ///
 /// # Trial generation
 ///
-/// By default the optimizer uses [`DefaultTrialGenerator`], which simply
-/// delegates to [`OptModel::generate_trial_solution`]. To plug in an
-/// adaptive scheme (such as ALNS), call
-/// [`Self::with_trial_generator`] with a custom generator. The generator
-/// must implement [`Clone`] because it is cloned for each `optimize`
-/// call, just like the handler.
+/// By default the optimizer uses [`DefaultTrialGenerator`], which delegates
+/// batch generation to [`OptModel::generate_trial_solutions`]. That method's
+/// default implementation preserves the single-trial behavior. To plug in an
+/// adaptive scheme (such as ALNS), call [`Self::with_trial_generator`] with a
+/// custom generator. The generator must implement [`Clone`] because it is
+/// cloned for each `optimize` call, just like the handler.
 pub struct GenericLocalSearchOptimizer<ST, H, G = DefaultTrialGenerator> {
     patience: usize,
     n_trials: usize,

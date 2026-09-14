@@ -1,7 +1,6 @@
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 use rand::{RngExt as _, SeedableRng as _};
-use rayon::prelude::*;
 
 use super::LocalSearchOptimizer;
 use crate::{
@@ -163,20 +162,16 @@ impl<T: TabuList> TabuSearchOptimizer<T> {
             if duration > time_limit {
                 break;
             }
-            let mut samples = vec![];
             let trial_seeds: Vec<u64> = (0..self.n_trials).map(|_| master.random()).collect();
-            trial_seeds
-                .into_par_iter()
-                .map(|trial_seed| {
-                    let mut rng = rand::rngs::StdRng::seed_from_u64(trial_seed);
-                    let (solution, transitions, score) = model.generate_trial_solution(
-                        current_solution.clone(),
-                        current_score,
-                        &mut rng,
-                    );
-                    (solution, transitions, score)
-                })
-                .collect_into_vec(&mut samples);
+            let mut trial_rngs: Vec<_> = trial_seeds
+                .into_iter()
+                .map(rand::rngs::StdRng::seed_from_u64)
+                .collect();
+            let mut samples = model.generate_trial_solutions(
+                current_solution.clone(),
+                current_score,
+                &mut trial_rngs,
+            );
 
             samples.sort_unstable_by_key(|(_, _, score)| *score);
 
