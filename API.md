@@ -13,7 +13,7 @@ flowchart TD
     HasInitial -- "No (not provided)" --> Pre
     Pre --> Optim["Optimizer: optimize(...)"]
     Optim --> Update["handler.update(ctx) each iteration"]
-    Update --> LoopStart["generator.generate_trial(...) x n_trials; keep best"]
+    Update --> LoopStart["generator.generate_trials(...) once; keep best"]
     LoopStart --> Eval["p = handler.evaluate(current, trial)"]
     Eval --> Decide{"accept? (p > rand(0, 1))"}
     Decide -- "Accept" --> Apply["apply trial -> new current"]
@@ -28,7 +28,7 @@ flowchart TD
 - Notes on the flow:
   - `generate_random_solution` is used when a caller does not provide an initial solution (helpers such as `LocalSearchOptimizer::run` call it). Implementations should produce a valid solution and its score.
   - `preprocess_solution` is executed before handing the solution to the optimizer (use for repairs, caching, or building auxiliary data structures).
-  - Inside the optimizer, trial candidates come from a `TrialGenerator`. By default the loop drives `OptModel::generate_trial_solution` through `DefaultTrialGenerator`; the `n_trials` candidates per iteration are evaluated and the best-scoring one is kept. ALNS (and other adaptive schemes) plug in via `LocalSearchLoop::step_with_generator` or `GenericLocalSearchOptimizer::with_trial_generator` to drive trial generation through destroy/repair operators instead.
+  - Inside the optimizer, trial candidates come from a `TrialGenerator`. By default the loop calls `DefaultTrialGenerator::generate_trials` once per iteration, which delegates to `OptModel::generate_trial_solutions`; the `n_trials` candidates are evaluated and the best-scoring one is kept. ALNS (and other adaptive schemes) plug in via `LocalSearchLoop::step_with_generator` or `GenericLocalSearchOptimizer::with_trial_generator` to drive trial generation through destroy/repair operators instead.
   - Acceptance is decided by a `TransitionHandler`: `handler.update` is invoked once per iteration before trials are generated (cooling schedules, water levels, etc.), then `handler.evaluate(current_score, trial_score)` returns the acceptance probability; the trial is accepted when `p > rand(0, 1)`. Improving transitions return `1.0` from the handler itself.
   - After optimization completes, `postprocess_solution` is called to finalize or decode the result for the user.
 
@@ -42,7 +42,8 @@ flowchart TD
   - `TransitionType`: describes a transition (move) between solutions; bound `Clone + Sync + Send`.
 - Core required methods:
   - `generate_random_solution<R: rand::Rng>(&self, rng: &mut R) -> Result<(SolutionType, ScoreType), LocalsearchError>` — produce an initial random solution and its score. Returns `Result<..., LocalsearchError>` so implementations can report errors.
-  - `generate_trial_solution<R: rand::Rng>(&self, current_solution: SolutionType, current_score: ScoreType, rng: &mut R) -> (SolutionType, TransitionType, ScoreType)` — given a current solution, generate a candidate trial solution, the transition describing the change, and the candidate score.
+  - `generate_trial_solution<R: rand::Rng>(&self, current_solution: SolutionType, current_score: ScoreType, rng: &mut R) -> (SolutionType, TransitionType, ScoreType)` — mandatory compatibility method for one candidate. Batch-native models still implement it, but may document a panic when callers use only batch APIs.
+  - `generate_trial_solutions<R: rand::Rng + Send>(&self, current_solution: SolutionType, current_score: ScoreType, rngs: &mut [R]) -> Vec<(SolutionType, TransitionType, ScoreType)>` — generate one candidate per RNG. The default implementation calls `generate_trial_solution` in parallel with Rayon, preserves input RNG order, and returns an empty vector for an empty slice. Override this method for native batch generation. Built-in optimizers using `DefaultTrialGenerator` call the batch method; direct callers of a dummy single-trial implementation must avoid `generate_trial_solution`.
 - Optional overrides with defaults:
   - `preprocess_solution(&self, solution, score) -> Result<(SolutionType, ScoreType), LocalsearchError>` — default is identity; called before running the optimizer to allow model-level setup (e.g., repair, normalization, caching).
   - `postprocess_solution(&self, solution, score) -> (SolutionType, ScoreType)` — default identity; called after optimization to finalize solution (e.g., decode internal format).
@@ -88,18 +89,18 @@ The acceptance/scheduling logic of each algorithm lives in a `TransitionHandler`
   - `patience` — give up (early stop) if the score has not improved for this many iterations.
   - `n_trials` — number of trial candidates generated per iteration; the best is kept.
   - `return_iter` — return to the best solution after this many non-improving iterations.
-- `LocalSearchLoop::step(model, initial_solution, initial_score, n_iter, time_limit, callback, handler) -> (StepResult<...>, H)` — runs up to `n_iter` iterations with the supplied handler and returns the `StepResult` plus the (possibly mutated) handler so per-run state survives the call. Trial generation goes through `DefaultTrialGenerator` (a thin wrapper over `OptModel::generate_trial_solution`). `LocalSearchLoop` itself stores no handler.
+- `LocalSearchLoop::step(model, initial_solution, initial_score, n_iter, time_limit, callback, handler) -> (StepResult<...>, H)` — runs up to `n_iter` iterations with the supplied handler and returns the `StepResult` plus the (possibly mutated) handler so per-run state survives the call. Trial generation goes through `DefaultTrialGenerator`, which delegates batches to `OptModel::generate_trial_solutions`. `LocalSearchLoop` itself stores no handler.
 - `StepResult<S, ST>` fields: `best_solution`, `best_score`, `last_solution`, `last_score`, `acceptance_counter: AcceptanceCounter`.
 - `GenericLocalSearchOptimizer<ST, H, G = DefaultTrialGenerator>` (`src/optim/generic.rs`) — owns a handler *blueprint* and an optional trial generator; each `optimize` call clones both, so the stored values stay untouched across runs and can be reused. Implements `LocalSearchOptimizer<M>` for any `M: OptModel` / `H: TransitionHandler<M::ScoreType> + Clone` / `G: TrialGenerator<M> + Clone`. Use it to drive an arbitrary handler through the standard optimizer interface; use `LocalSearchLoop` directly when you need the handler's or generator's post-run state.
 - `AcceptanceCounter` (`src/counter.rs`, re-exported at crate root) — sliding-window acceptance counter (`new(window_size)`, `enqueue(accepted)`, `acceptance_ratio()`); window size 100 by default.
 
 ## Trial generators and ALNS
 
-The trial-generation side of the search loop is pluggable through the `TrialGenerator` trait (`src/optim/search_loop.rs`). `generate_trial` takes `&self`, so the loop generates the `n_trials` candidates of each iteration in parallel via rayon — each trial draws from a per-trial `StdRng` fork seeded sequentially for reproducibility. Each trial returns a `Token` identifying its operators; only the winner's token is handed to `feedback(token, outcome)` (winner-takes-all).
+The trial-generation side of the search loop is pluggable through the `TrialGenerator` trait (`src/optim/search_loop.rs`). The loop supplies the full batch of `n_trials` `StdRng` forks once per iteration; seeds are generated sequentially for reproducibility. The default `generate_trials` implementation calls `generate_trial` once per RNG in parallel, while custom generators may override batch generation. Each trial returns a `Token` identifying its operators; only the winner's token is handed to `feedback(token, outcome)` (winner-takes-all).
 
 - `TrialOutcome` (`src/optim/search_loop.rs`) — classifies the trial as `NewBest`, `Improved`, `Accepted`, or `Rejected`. Adaptive generators (ALNS) use this to credit operator weights.
-- `TrialGenerator<M: OptModel>` (`src/optim/search_loop.rs`) — `generate_trial(&self, model, &solution, score, rng) -> (solution, score, Token)` with `type Token: Send`, plus `feedback(&mut self, token, outcome)`. Implementations must be `Sync`.
-- `DefaultTrialGenerator` (`src/optim/search_loop.rs`) — the default generator; just calls `OptModel::generate_trial_solution` and ignores feedback.
+- `TrialGenerator<M: OptModel>` (`src/optim/search_loop.rs`) — `generate_trial(&self, model, &solution, score, rng) -> (solution, score, Token)` and `generate_trials(&self, model, &solution, score, rngs) -> Vec<(solution, score, Token)>`, with `type Token: Send`, plus `feedback(&mut self, token, outcome)`. Implementations must be `Sync`.
+- `DefaultTrialGenerator` (`src/optim/search_loop.rs`) — the default generator; delegates `generate_trials` to `OptModel::generate_trial_solutions`, discards transitions, and ignores feedback.
 - `LocalSearchLoop::step_with_generator(model, initial_solution, initial_score, n_iter, time_limit, callback, handler, generator) -> (StepResult<...>, H, G)` — same loop as `step`, but trial generation is driven by the supplied `generator`. The generator is returned alongside the result so its adapted state (e.g. ALNS weights) can be inspected.
 
 ALNS is built on top of this trait:
@@ -135,7 +136,7 @@ Each optimizer instantiates its `TransitionHandler` in the constructor and store
 - **Reproducibility:** every optimizer exposes `pub const fn with_seed(u64)` (and `LocalSearchLoop` / `LocalSearchOptimizer` expose the same builder). When set, the same `(solution, score)` is produced bit-for-bit across two calls with identical inputs, including across different rayon thread counts (the parallel trial streams are distributed via sequential forks of the master RNG). The public tuning helpers (`tune_temperature`, `gather_energy_diffs`, and the handler `tune_initial_temperature` builders) take an explicit `seed: Option<u64>` argument — `None` keeps the entropy-driven behavior, `Some(s)` makes the warmup reproducible. For end-to-end determinism prefer the optimizer `with_seed` builder, which derives sub-seeds for every phase (initial solution, loop, warmup).
   - Residual nondeterminism that seeding cannot fix: wall-clock `time_limit` cutoff varies iteration count; user models with internal RNGs must draw only from a supplied `rng`.
 ## Example usage (outline)
-- Implement `OptModel` for a problem type, providing `generate_random_solution` and `generate_trial_solution`.
+- Implement `OptModel` for a problem type, providing `generate_random_solution` and `generate_trial_solution`; override `generate_trial_solutions` when native batch generation is available.
 - Choose an optimizer (e.g., `SimulatedAnnealingOptimizer`) and call `run` or `run_with_callback` to execute the search.
 - To use a custom acceptance policy, implement `TransitionHandler<ScoreType>` and wrap it in `GenericLocalSearchOptimizer::new(patience, n_trials, return_iter, handler)`.
 

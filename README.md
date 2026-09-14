@@ -118,6 +118,10 @@ let (solution, score) = opt
     .unwrap();
 ```
 
+### Batch Trial Generation
+
+`OptModel::generate_trial_solutions` generates all trial candidates for one iteration. Its default implementation calls `generate_trial_solution` in parallel with Rayon and preserves RNG input order. Models with native batch operations can override it; built-in optimizers use this batch method for model-based trial generation.
+
 ## Advanced Examples
 
 ### Traveling Salesman Problem
