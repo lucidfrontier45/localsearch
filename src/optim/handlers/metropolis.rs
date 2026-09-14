@@ -1,6 +1,5 @@
 use ordered_float::NotNan;
 use rand::{RngExt as _, SeedableRng as _};
-use rayon::prelude::*;
 
 use crate::{
     OptModel,
@@ -52,8 +51,8 @@ pub fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
     n_warmup: usize,
     seed: Option<u64>,
 ) -> Vec<f64> {
-    // Seeded master RNG; threads fork off sequentially so the collection
-    // stays reproducible regardless of worker-thread count.
+    // Seeded master RNG; per-trial RNGs are forked sequentially so the
+    // collection stays reproducible regardless of worker-thread count.
     let mut master = make_master_rng(seed);
     let (current_solution, current_score) = match initial_solution_and_score {
         Some(cs) => cs,
@@ -61,20 +60,21 @@ pub fn gather_energy_diffs<M: OptModel<ScoreType = NotNan<f64>>>(
     };
     // Pre-allocate per-warmup seeds; deterministic sequence from master.
     let warmup_seeds: Vec<u64> = (0..n_warmup).map(|_| master.random()).collect();
-    warmup_seeds
-        .into_par_iter()
-        .map(|ws| {
-            let mut rng = rand::rngs::StdRng::seed_from_u64(ws);
-            let (_, _, trial_score) =
-                model.generate_trial_solution(current_solution.clone(), current_score, &mut rng);
+    let mut warmup_rngs: Vec<_> = warmup_seeds
+        .into_iter()
+        .map(rand::rngs::StdRng::seed_from_u64)
+        .collect();
+    model
+        .generate_trial_solutions(current_solution, current_score, &mut warmup_rngs)
+        .into_iter()
+        .filter_map(|(_, _, trial_score)| {
             let ds = trial_score - current_score;
-            if ds > NotNan::new(0.0).unwrap() {
+            if ds > NotNan::new(0.0).expect("zero is a valid NotNan value") {
                 Some(ds.into_inner())
             } else {
                 None
             }
         })
-        .flatten()
         .collect()
 }
 

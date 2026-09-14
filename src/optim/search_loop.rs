@@ -60,9 +60,11 @@ pub enum TrialOutcome {
 /// the loop hands the winner's token back to [`TrialGenerator::feedback`]
 /// (winner-takes-all) while losers are discarded without reward.
 ///
-/// The default behavior of [`OptModel::generate_trial_solution`] is
-/// recovered by [`DefaultTrialGenerator`], so existing optimizers keep
-/// their previous semantics.
+/// [`TrialGenerator::generate_trials`] batches one iteration's RNGs. Its
+/// default implementation preserves the single-trial behavior, while
+/// [`DefaultTrialGenerator`] delegates the batch to
+/// [`OptModel::generate_trial_solutions`]. This lets batch-native models avoid
+/// reaching their mandatory single-trial implementation in built-in loops.
 pub trait TrialGenerator<M: OptModel> {
     /// Identifies the operators that produced a trial. The loop keeps each
     /// candidate's token and hands only the winner's token to
@@ -82,13 +84,36 @@ pub trait TrialGenerator<M: OptModel> {
         rng: &mut rand::rngs::StdRng,
     ) -> (M::SolutionType, M::ScoreType, Self::Token);
 
+    /// Generate all candidates for one iteration.
+    ///
+    /// The input RNGs are seeded in trial order by [`LocalSearchLoop`]. The
+    /// default implementation invokes [`Self::generate_trial`] once per RNG
+    /// in parallel and preserves that order in the returned vector. Custom
+    /// generators may override this to provide a batch implementation.
+    ///
+    /// The returned vector must contain one candidate for each input RNG.
+    fn generate_trials(
+        &self,
+        model: &M,
+        current_solution: &M::SolutionType,
+        current_score: M::ScoreType,
+        rngs: &mut [rand::rngs::StdRng],
+    ) -> Vec<(M::SolutionType, M::ScoreType, Self::Token)>
+    where
+        Self: Sync,
+    {
+        rngs.par_iter_mut()
+            .map(|rng| self.generate_trial(model, current_solution, current_score, rng))
+            .collect()
+    }
+
     /// Notify the generator about the outcome of the winning trial.
     /// Generators without adaptive state can ignore this call.
     fn feedback(&mut self, token: Self::Token, outcome: TrialOutcome);
 }
 
-/// Default trial generator that simply delegates to
-/// [`OptModel::generate_trial_solution`].
+/// Default trial generator that delegates batch generation to
+/// [`OptModel::generate_trial_solutions`].
 ///
 /// This keeps the historical behavior of [`LocalSearchLoop::step`]: every
 /// iteration's `n_trials` candidates come straight from the model's own
@@ -109,6 +134,20 @@ impl<M: OptModel> TrialGenerator<M> for DefaultTrialGenerator {
         let (solution, _transition, score) =
             model.generate_trial_solution(current_solution.clone(), current_score, rng);
         (solution, score, ())
+    }
+
+    fn generate_trials(
+        &self,
+        model: &M,
+        current_solution: &M::SolutionType,
+        current_score: M::ScoreType,
+        rngs: &mut [rand::rngs::StdRng],
+    ) -> Vec<(M::SolutionType, M::ScoreType, Self::Token)> {
+        model
+            .generate_trial_solutions(current_solution.clone(), current_score, rngs)
+            .into_iter()
+            .map(|(solution, _transition, score)| (solution, score, ()))
+            .collect()
     }
 
     fn feedback(&mut self, _token: Self::Token, _outcome: TrialOutcome) {}
@@ -214,11 +253,13 @@ impl LocalSearchLoop {
     /// Perform one optimization step that drives trial generation through a
     /// caller-supplied [`TrialGenerator`].
     ///
-    /// The generator is invoked `n_trials` times per iteration, each call
-    /// produces one candidate, and the best candidate is fed through the
-    /// acceptance machinery. After the trial's outcome is known, the generator
-    /// receives a [`TrialOutcome`] via [`TrialGenerator::feedback`] so adaptive
-    /// schemes (ALNS, hyper-heuristics, …) can update their internal state.
+    /// The generator receives all `n_trials` RNGs once per iteration. Its default
+    /// [`TrialGenerator::generate_trials`] implementation invokes the single-trial
+    /// method once per RNG in parallel; custom generators can provide a batch
+    /// implementation. The best candidate is fed through the acceptance machinery.
+    /// After the trial's outcome is known, the generator receives a
+    /// [`TrialOutcome`] via [`TrialGenerator::feedback`] so adaptive schemes (ALNS,
+    /// hyper-heuristics, …) can update their internal state.
     ///
     /// Returns the [`StepResult`], the (possibly mutated) handler, and the
     /// (possibly mutated) generator — so callers can inspect or reuse their
@@ -274,26 +315,23 @@ impl LocalSearchLoop {
             handler.update(&ctx);
 
             // 3. Generate `n_trials` candidates through the supplied generator
-            //    and keep the best-scoring one. Generation runs in parallel
-            //    via rayon; each trial draws from a per-trial RNG fork seeded
-            //    sequentially, so runs stay reproducible. Only the winner is
-            //    evaluated and fed back (winner-takes-all). `n_trials >= 1`
-            //    is guaranteed by `LocalSearchLoop::new`, so `seeds` is never
-            //    empty.
+            //    and keep the best-scoring one. RNGs are forked sequentially so
+            //    trial streams and result ordering remain reproducible. The
+            //    generator receives the whole batch once per iteration; its
+            //    default implementation still runs single-trial generators in
+            //    parallel. Only the winner is evaluated and fed back.
             let seeds: Vec<u64> = (0..self.n_trials).map(|_| rng.random()).collect();
-            let (trial_solution, trial_score, winner_token) = seeds
-                .into_par_iter()
-                .map(|seed| {
-                    let mut local_rng = rand::rngs::StdRng::seed_from_u64(seed);
-                    generator.generate_trial(
-                        model,
-                        &current_solution,
-                        current_score,
-                        &mut local_rng,
-                    )
-                })
+            let mut trial_rngs: Vec<_> = seeds
+                .into_iter()
+                .map(rand::rngs::StdRng::seed_from_u64)
+                .collect();
+            let (trial_solution, trial_score, winner_token) = generator
+                .generate_trials(model, &current_solution, current_score, &mut trial_rngs)
+                .into_iter()
                 .min_by_key(|(_, score, _)| *score)
-                .expect("seeds is non-empty because LocalSearchLoop::new asserts n_trials >= 1");
+                .expect(
+                    "trial RNGs are non-empty because LocalSearchLoop::new asserts n_trials >= 1",
+                );
 
             // 4. Classify the trial outcome and apply best-score bookkeeping.
             //    `previous_best` is captured before any updates so that the
