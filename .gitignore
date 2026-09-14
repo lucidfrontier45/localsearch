@@ -20,3 +20,5 @@ Cargo.lock
 .qwen
 
 .todos
+.codegraph
+.pi
