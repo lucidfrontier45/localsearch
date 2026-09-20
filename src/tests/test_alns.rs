@@ -497,6 +497,8 @@ fn alns_generator_state_survives_step_with_generator() {
     // per iteration; tokens leave no pending state behind).
     let total_destroy_usage: usize = returned.destroy_stats().iter().map(|s| s.usage_count).sum();
     let total_repair_usage: usize = returned.repair_stats().iter().map(|s| s.usage_count).sum();
+    assert_eq!(total_destroy_usage, 10);
+    assert_eq!(total_repair_usage, 10);
 }
 
 // ---------------------------------------------------------------------------
@@ -547,6 +549,8 @@ fn alns_with_multiple_trials_credits_only_winner_per_iteration() {
     // winner is always credited.)
     let total_destroy_usage: usize = returned.destroy_stats().iter().map(|s| s.usage_count).sum();
     let total_repair_usage: usize = returned.repair_stats().iter().map(|s| s.usage_count).sum();
+    assert_eq!(total_destroy_usage, 10);
+    assert_eq!(total_repair_usage, 10);
 }
 
 // ---------------------------------------------------------------------------

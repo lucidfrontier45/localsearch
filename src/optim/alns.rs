@@ -128,9 +128,13 @@ impl<O> OperatorPool<O> {
     ///
     /// # Panics
     ///
-    /// Panics if `operators` is empty — an empty pool cannot select.
-    fn new(operators: Vec<O>, rewards: Rewards) -> Self {
-        assert!(!operators.is_empty(), "ALNS requires at least one operator");
+    /// Panics if `operators` is empty — an empty pool cannot select. The
+    /// `role` label names the offending pool in the panic message.
+    fn new(operators: Vec<O>, rewards: Rewards, role: &'static str) -> Self {
+        assert!(
+            !operators.is_empty(),
+            "ALNS requires at least one {role} operator"
+        );
         let stats = (0..operators.len())
             .map(|_| OperatorStats::new(1.0))
             .collect();
@@ -255,8 +259,8 @@ impl<M: OptModel, P> AlnsTrialGenerator<M, P> {
         repair_operators: Vec<Box<dyn RepairOperator<M, P>>>,
     ) -> Self {
         Self {
-            destroy_pool: OperatorPool::new(destroy_operators, Rewards::default()),
-            repair_pool: OperatorPool::new(repair_operators, Rewards::default()),
+            destroy_pool: OperatorPool::new(destroy_operators, Rewards::default(), "destroy"),
+            repair_pool: OperatorPool::new(repair_operators, Rewards::default(), "repair"),
             segment_size: 100,
             trials_in_segment: 0,
             reaction_factor: 0.8,
